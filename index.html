@@ -38,6 +38,22 @@
         window.__PWA_INSTALLED__ = true;
         window.dispatchEvent(new Event('pwa-app-installed'));
       });
+      // Force path migration in localStorage
+      try {
+        const raw = localStorage.getItem('cs2freitag_maps_v3');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.some(m => m.image && m.image.startsWith('/'))) {
+             const migrated = parsed.map(m => ({
+               ...m,
+               image: m.image.startsWith('/') ? m.image.substring(1) : m.image,
+               lowerImage: m.lowerImage && m.lowerImage.startsWith('/') ? m.lowerImage.substring(1) : m.lowerImage
+             }));
+             localStorage.setItem('cs2freitag_maps_v3', JSON.stringify(migrated));
+             window.location.reload();
+          }
+        }
+      } catch (e) {}
     </script>
   </head>
   <body class="bg-zinc-950 text-zinc-100 antialiased selection:bg-zinc-200 selection:text-zinc-900 min-h-screen">
