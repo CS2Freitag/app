@@ -7,7 +7,7 @@ export const INITIAL_MAPS: MapData[] = [
     name: 'Mirage',
     slug: 'mirage',
     category: 'active',
-    image: './maps/mirage.png',
+    image: 'maps/mirage.png',
     descriptionDe: 'Die beliebteste CS2-Wettkampfkarte im nahöstlichen Wüstenstil mit klassischer Dreispur-Struktur.',
     descriptionEn: 'The most popular CS2 competitive map with an iconic Middle Eastern town layout and three-lane structure.',
     callouts: [
@@ -374,7 +374,7 @@ export const INITIAL_MAPS: MapData[] = [
     name: 'Inferno',
     slug: 'inferno',
     category: 'active',
-    image: './maps/inferno.png',
+    image: 'maps/inferno.png',
     descriptionDe: 'Klassisches italienisches Dorf mit legendärer Banana, engen Gassen und explosiven Retakes.',
     descriptionEn: 'Classic Italian village featuring the iconic Banana choke point and intense executes.',
     callouts: [
@@ -601,7 +601,7 @@ export const INITIAL_MAPS: MapData[] = [
     name: 'Dust II',
     slug: 'dust2',
     category: 'active',
-    image: './maps/dust2.png',
+    image: 'maps/dust2.png',
     descriptionDe: 'Die berühmteste Shooter-Karte aller Zeiten in der marokkanischen Wüste.',
     descriptionEn: 'The most iconic FPS map ever made set in a sunbaked Moroccan landscape.',
     callouts: [
@@ -766,8 +766,8 @@ export const INITIAL_MAPS: MapData[] = [
     name: 'Nuke',
     slug: 'nuke',
     category: 'active',
-    image: './maps/nuke.png',
-    lowerImage: './maps/nuke_lower.png',
+    image: 'maps/nuke.png',
+    lowerImage: 'maps/nuke_lower.png',
     descriptionDe: 'Amerikanisches Atomkraftwerk mit zweistöckigen Bombenplätzen (A oben, B unten) und weitem Außenbereich.',
     descriptionEn: 'American nuclear facility featuring vertical stacked bombsites (A Upper, B Lower) and huge Outside area.',
     callouts: [
@@ -898,7 +898,7 @@ export const INITIAL_MAPS: MapData[] = [
     name: 'Ancient',
     slug: 'ancient',
     category: 'active',
-    image: './maps/ancient.png',
+    image: 'maps/ancient.png',
     descriptionDe: 'Mittelamerikanische Maya-Ruinen im Dschungel mit Donut, Cheetah und dichtem Grün.',
     descriptionEn: 'Mesoamerican jungle ruins featuring the central Donut room and lush temple corridors.',
     callouts: [
@@ -1007,7 +1007,7 @@ export const INITIAL_MAPS: MapData[] = [
     name: 'Anubis',
     slug: 'anubis',
     category: 'active',
-    image: './maps/anubis.png',
+    image: 'maps/anubis.png',
     descriptionDe: 'Ägyptische Stadt am Nil mit Wasserkanälen, Holzbrücke und vielen vertikalen Winkeln.',
     descriptionEn: 'Egyptian settlement along the Nile featuring waterways, central bridge, and vertical angles.',
     callouts: [
@@ -1102,7 +1102,7 @@ export const INITIAL_MAPS: MapData[] = [
     name: 'Cache',
     slug: 'cache',
     category: 'active',
-    image: './maps/cache.png',
+    image: 'maps/cache.png',
     descriptionDe: 'Tschernobyl-Industriegelände mit markantem Schornstein, Sun Room und Vent-Boosts.',
     descriptionEn: 'Chernobyl industrial site with landmark cooling tower, Sun Room, and Mid vents.',
     callouts: [
@@ -1199,7 +1199,7 @@ export const INITIAL_MAPS: MapData[] = [
     name: 'Overpass',
     slug: 'overpass',
     category: 'reserve',
-    image: './maps/overpass.png',
+    image: 'maps/overpass.png',
     descriptionDe: 'Berliner Parkgelände mit Autobahnbrücke, Wasserkanal und Spielplatz.',
     descriptionEn: 'Berlin parkland featuring elevated highway, water canals, and playground.',
     callouts: [
@@ -1308,8 +1308,8 @@ export const INITIAL_MAPS: MapData[] = [
     name: 'Vertigo',
     slug: 'vertigo',
     category: 'reserve',
-    image: './maps/vertigo.png',
-    lowerImage: './maps/vertigo_lower.png',
+    image: 'maps/vertigo.png',
+    lowerImage: 'maps/vertigo_lower.png',
     descriptionDe: 'Wolkenkratzer im Bau im 51. Stockwerk mit Ramp-Kämpfen und Abgrundgefahr.',
     descriptionEn: 'Skyscraper under construction on the 51st floor with aggressive ramp duels.',
     callouts: [
@@ -1410,8 +1410,8 @@ export const INITIAL_MAPS: MapData[] = [
     name: 'Train',
     slug: 'train',
     category: 'reserve',
-    image: './maps/train.png',
-    lowerImage: './maps/train_lower.png',
+    image: 'maps/train.png',
+    lowerImage: 'maps/train_lower.png',
     descriptionDe: 'Der legendäre russische Rangierbahnhof mit Zügen, Popdog und engen Gassen.',
     descriptionEn: 'Legendary train yard featuring railway cars, Popdog ladder room, and sniper lanes.',
     callouts: [
@@ -1512,7 +1512,7 @@ export const INITIAL_MAPS: MapData[] = [
     name: 'Office',
     slug: 'office',
     category: 'hostage',
-    image: './maps/office.png',
+    image: 'maps/office.png',
     descriptionDe: 'Verschneites Bürogebäude im Hostage-Rescue-Modus (Geiselrettung).',
     descriptionEn: 'Snowy office corporate complex with hostage rescue scenarios.',
     callouts: [
@@ -1593,7 +1593,7 @@ export const INITIAL_MAPS: MapData[] = [
     name: 'Italy',
     slug: 'italy',
     category: 'hostage',
-    image: './maps/italy.png',
+    image: 'maps/italy.png',
     descriptionDe: 'Historische italienische Altstadt mit Weinkeller, Marktplatz und Geiseln.',
     descriptionEn: 'Historic Italian mountain town with wine cellars, market, and opera house.',
     callouts: [
@@ -1674,7 +1674,7 @@ export const INITIAL_MAPS: MapData[] = [
     name: 'Boulder',
     slug: 'boulder',
     category: 'reserve',
-    image: './maps/boulder.png',
+    image: 'maps/boulder.png',
     descriptionDe: 'Wettkampfkarte in bergiger Felslandschaft mit Steinbrüchen und engen Höhlenpassagen.',
     descriptionEn: 'Mountainous quarry map with stone excavations, mines, and tight rock tunnels.',
     callouts: [
@@ -1755,7 +1755,7 @@ export const INITIAL_MAPS: MapData[] = [
     name: 'Fachwerk',
     slug: 'fachwerk',
     category: 'reserve',
-    image: './maps/fachwerk.png',
+    image: 'maps/fachwerk.png',
     descriptionDe: 'Deutsche historische Fachwerkstadt mit Marktplatz, engen Gassen und Kopfsteinpflaster.',
     descriptionEn: 'Historic German timber-framed town with market square and cobblestone alleys.',
     callouts: [
@@ -1836,7 +1836,7 @@ export const INITIAL_MAPS: MapData[] = [
     name: 'Shelter',
     slug: 'shelter',
     category: 'reserve',
-    image: './maps/shelter.png',
+    image: 'maps/shelter.png',
     descriptionDe: 'Unterirdische Bunkerkammer und Notunterkunft mit Geiselrettungsszenario.',
     descriptionEn: 'Underground fallout shelter and bunker facility featuring hostage rescue gameplay.',
     callouts: [
@@ -1917,7 +1917,7 @@ export const INITIAL_MAPS: MapData[] = [
     name: 'Memento',
     slug: 'memento',
     category: 'reserve',
-    image: './maps/memento.png',
+    image: 'maps/memento.png',
     descriptionDe: 'Mediterrane Hochzeitsvilla am See mit Terrassen und eleganter Architektur.',
     descriptionEn: 'Scenic Mediterranean wedding villa on a lake with terraces and lush grounds.',
     callouts: [
@@ -1998,7 +1998,7 @@ export const INITIAL_MAPS: MapData[] = [
     name: 'Thera (Santorini)',
     slug: 'thera',
     category: 'reserve',
-    image: './maps/thera.png',
+    image: 'maps/thera.png',
     descriptionDe: 'Griechische Vulkaninsel mit weißen Häusern, blauem Meer und engen Gassen.',
     descriptionEn: 'Greek volcanic island featuring whitewashed buildings and scenic vistas.',
     callouts: [
@@ -2079,7 +2079,7 @@ export const INITIAL_MAPS: MapData[] = [
     name: 'Mills',
     slug: 'mills',
     category: 'reserve',
-    image: './maps/mills.png',
+    image: 'maps/mills.png',
     descriptionDe: 'Niederländisches Mühlendorf mit Grachten, Windmühle und Bäckerei.',
     descriptionEn: 'Dutch canal village with windmills, canals, and tight townhouses.',
     callouts: [
@@ -2162,7 +2162,7 @@ export const INITIAL_MAPS: MapData[] = [
     name: 'Debris',
     slug: 'debris',
     category: 'wingman',
-    image: './maps/debris.png',
+    image: 'maps/debris.png',
     descriptionDe: 'Kompakte Wingman-Karte in industriellen Trümmerfeldern mit vertikalen Gefechten.',
     descriptionEn: 'Fast-paced Wingman map set in industrial construction ruins and rubble.',
     callouts: [
@@ -2215,7 +2215,7 @@ export const INITIAL_MAPS: MapData[] = [
     name: 'El Dorado',
     slug: 'eldorado',
     category: 'wingman',
-    image: './maps/eldorado.png',
+    image: 'maps/eldorado.png',
     descriptionDe: 'Südamerikanische Goldminenstadt für 2v2-Wingman-Matches.',
     descriptionEn: 'South American colonial mining town built for intense 2v2 Wingman duels.',
     callouts: [
@@ -2268,7 +2268,7 @@ export const INITIAL_MAPS: MapData[] = [
     name: 'Lake',
     slug: 'lake',
     category: 'wingman',
-    image: './maps/lake.png',
+    image: 'maps/lake.png',
     descriptionDe: 'Modernes Luxushaus am See für Wingman- und Wettrüsten-Duelle.',
     descriptionEn: 'Modern luxury lakeside home with boat dock, roof access and glass patio.',
     callouts: [
@@ -2323,7 +2323,7 @@ export const INITIAL_MAPS: MapData[] = [
     name: 'Cobblestone',
     slug: 'cobblestone',
     category: 'reserve',
-    image: './maps/cobblestone.png',
+    image: 'maps/cobblestone.png',
     descriptionDe: 'Historische französische Schlossanlage mit weitem B-Plat, gefürchtetem Drop Room und Sniper-Tower.',
     descriptionEn: 'Expansive French castle featuring the iconic B platform, Drop room, and tactical courtyard.',
     callouts: [
@@ -2443,7 +2443,7 @@ export const INITIAL_MAPS: MapData[] = [
     name: 'Agency',
     slug: 'agency',
     category: 'hostage',
-    image: './maps/agency.png',
+    image: 'maps/agency.png',
     descriptionDe: 'Moderner Hochhaus-Bürokomplex mit Helipad, Konferenzräumen und zwei Geiseln auf der Chefetage.',
     descriptionEn: 'Modern corporate penthouse skyscraper featuring rooftop helipad, conference rooms, and high-stakes hostage rescue.',
     callouts: [
@@ -2548,7 +2548,7 @@ export const INITIAL_MAPS: MapData[] = [
     name: 'Tuscan',
     slug: 'tuscan',
     category: 'reserve',
-    image: './maps/tuscan.png',
+    image: 'maps/tuscan.png',
     descriptionDe: 'Beliebter Klassiker im italienischen Küstenort-Stil mit A Courtyard, B Square, Banana, Sewers und Catwalk.',
     descriptionEn: 'Beloved competitive classic set in a seaside Italian town featuring A Courtyard, B Square, Banana, and Sewers.',
     callouts: [
@@ -2683,7 +2683,7 @@ export const INITIAL_MAPS: MapData[] = [
     name: 'Assault',
     slug: 'assault',
     category: 'hostage',
-    image: './maps/assault.png',
+    image: 'maps/assault.png',
     descriptionDe: 'Kultige Industrie-Geiselbefreiung in einer riesigen Lagerhalle mit Lüftungsschächten, Brücke, Bahnhof und Highway.',
     descriptionEn: 'Iconic industrial hostage rescue inside a fortified shipping warehouse with ventilation ducts, bridge, and train yard.',
     callouts: [
@@ -2834,7 +2834,7 @@ export const INITIAL_MAPS: MapData[] = [
     name: 'Rialto',
     slug: 'rialto',
     category: 'wingman',
-    image: './maps/rialto.png',
+    image: 'maps/rialto.png',
     descriptionDe: 'Wingman 2v2 Taktikkarte auf der berühmten venezianischen Rialtobrücke mit Kanal und Baustelle.',
     descriptionEn: 'Dedicated Wingman 2v2 map centered on the iconic Rialto bridge spanning the Venetian canal.',
     callouts: [
