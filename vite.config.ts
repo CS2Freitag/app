@@ -27,7 +27,7 @@ export default defineConfig(() => {
           'manifest.json'
         ],
         manifest: {
-          id: '/',
+          id: './',
           name: 'CS2Freitag - Counter-Strike 2 Callouts',
           short_name: 'CS2Freitag',
           description: 'Moderne PWA für CS2 Callouts aller offiziellen Karten mit interaktiver Taktik-Karte, Offline-Funktion, Suche und Favoriten.',
@@ -36,8 +36,8 @@ export default defineConfig(() => {
           display: 'standalone',
           display_override: ['standalone', 'window-controls-overlay'],
           orientation: 'any',
-          start_url: '/',
-          scope: '/',
+          start_url: './',
+          scope: './',
           lang: 'de',
           categories: ['games', 'utilities'],
           icons: [
