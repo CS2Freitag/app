@@ -1,0 +1,91 @@
+export type Language = 'de' | 'en';
+export type Theme = 'dark' | 'light';
+
+export type ZoneType = 'a_site' | 'b_site' | 'mid' | 't_spawn' | 'ct_spawn' | 'other';
+export type DangerLevel = 'high' | 'medium' | 'low';
+export type ColorMode = 'zone' | 'danger';
+
+export interface CalloutArea {
+  x: number; // top-left x in percent (-50 to 50)
+  y: number; // top-left y in percent (-50 to 50)
+  width: number; // width in percent (0-100)
+  height: number; // height in percent (0-100)
+  customColor?: string;
+  shape?: 'rect' | 'polygon';
+  points?: { x: number; y: number }[]; // custom drawn vertices in percent (-50 to 50)
+}
+
+export type CalloutDisplayMode = 'text' | 'image' | 'both';
+export type CalloutLevel = 'upper' | 'lower' | 'both';
+
+export interface Callout {
+  id: string;
+  name: string; // Competitive English callout name (e.g., "Palace", "Banana")
+  alternativeNames?: string[]; // e.g. ["Apps", "Apartments"]
+  x: number; // percentage 0-100% on the radar map (pin position)
+  y: number; // percentage 0-100% on the radar map (pin position)
+  level?: CalloutLevel; // for multi-level maps: 'upper' (O), 'lower' (U), or 'both'
+  rotation?: number; // rotation angle in degrees for the area box
+  textRotation?: number; // rotation angle in degrees for the callout text label separately
+  fontSize?: number; // custom font size in pixels (e.g. 6 to 24)
+  fontFamily?: string; // custom font family ('mono' | 'rajdhani' | 'orbitron' | 'russo' | 'teko' | 'sans' | 'serif')
+  displayMode?: CalloutDisplayMode; // 'text' | 'image' | 'both'
+  customImage?: string; // image path or data URL (e.g. '/ct.png' or '/T.png')
+  imageSize?: number; // image diameter/size in pixels (e.g. 16 to 96, default 36)
+  hidePin?: boolean; // when true, hides the circular pin dot / emblem while keeping text label visible
+  area?: CalloutArea; // optional semi-transparent rectangular area like totalcsgo.com
+  zone: ZoneType;
+  danger: DangerLevel;
+  descriptionDe: string;
+  descriptionEn: string;
+  tacticalTipDe: string;
+  tacticalTipEn: string;
+  commonAnglesDe: string;
+  commonAnglesEn: string;
+  isCustom?: boolean;
+}
+
+export type MapCategory = 'active' | 'reserve' | 'wingman' | 'hostage' | 'community' | string;
+
+export interface MapData {
+  id: string;
+  name: string;
+  slug: string;
+  category: MapCategory;
+  image: string; // path or base64 data URL
+  lowerImage?: string; // for multi-level maps like Nuke, Vertigo, Train
+  descriptionDe: string;
+  descriptionEn: string;
+  callouts: Callout[];
+  isCustom?: boolean;
+  updatedAt?: number;
+}
+
+export type UtilityType = 'smoke' | 'flash' | 'molotov' | 'he' | 'decoy';
+
+export interface UtilityMarker {
+  id: string;
+  type: UtilityType;
+  x: number;
+  y: number;
+  label?: string;
+}
+
+export interface PlayerToken {
+  id: string;
+  side: 'ct' | 't';
+  number: number;
+  x: number;
+  y: number;
+  hasBomb?: boolean;
+}
+
+export interface TacticalDrawingLine {
+  id: string;
+  points: { x: number; y: number }[];
+  color: string;
+  width: number;
+  hasArrow?: boolean;
+}
+
+export type TacticalTool = 'select' | 'pen' | 'arrow' | 'eraser' | 'utility' | 'player';

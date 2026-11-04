@@ -1,0 +1,57 @@
+{
+  "entities": {
+    "userProfile": {
+      "title": "User Profile",
+      "description": "User preferences and global state for synchronization.",
+      "type": "object",
+      "properties": {
+        "theme": {
+          "type": "string",
+          "enum": ["dark", "light"]
+        },
+        "lang": {
+          "type": "string",
+          "enum": ["de", "en"]
+        },
+        "favorites": {
+          "type": "array",
+          "description": "Ordered list of favorite map IDs."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["theme", "lang", "favorites", "updatedAt"]
+    },
+    "userMap": {
+      "title": "User Map",
+      "description": "Custom or modified map data with callouts.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "slug": { "type": "string" },
+        "category": { "type": "string" },
+        "image": { "type": "string", "description": "Base64 or path" },
+        "lowerImage": { "type": "string" },
+        "descriptionDe": { "type": "string", "maxLength": 500 },
+        "descriptionEn": { "type": "string", "maxLength": 500 },
+        "callouts": { "type": "array" },
+        "isCustom": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "slug", "category", "callouts", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "userProfile",
+      "description": "User preferences and metadata."
+    },
+    "/users/{userId}/maps/{mapId}": {
+      "schema": "userMap",
+      "description": "Custom maps created or modified by the user."
+    }
+  }
+}
