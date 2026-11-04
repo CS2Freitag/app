@@ -131,6 +131,13 @@ export function loadStoredMaps(): MapData[] {
     if (raw) {
       let parsed: MapData[] = JSON.parse(raw);
       if (Array.isArray(parsed)) {
+        // Migration: Fix absolute paths (e.g. /maps/...) to relative (maps/...)
+        parsed = parsed.map(m => ({
+          ...m,
+          image: m.image.startsWith('/') ? m.image.substring(1) : m.image,
+          lowerImage: m.lowerImage && m.lowerImage.startsWith('/') ? m.lowerImage.substring(1) : m.lowerImage
+        }));
+
         // Remove arms race maps, poseidon, and deleted maps
         parsed = parsed.filter(
           (m) =>
