@@ -80,7 +80,7 @@ export default defineConfig(() => {
         workbox: {
           maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10 MiB
           globPatterns: ['**/*.{js,css,html,ico,svg,woff,woff2}', 'pwa-*.png', 'apple-touch-icon.png', 'screenshot-*.png', 'ct.png', 'T.png', 'manifest.json'],
-          navigateFallback: 'index.html',
+          navigateFallback: null,
           runtimeCaching: [
             {
               urlPattern: ({ request }) => request.destination === 'image',
