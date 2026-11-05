@@ -34,7 +34,8 @@ import {
   Upload,
   Activity,
   PenTool,
-  ArrowUp
+  ArrowUp,
+  FileText
 } from 'lucide-react';
 import {
   MapData,
@@ -2425,6 +2426,18 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             )}
+          </div>
+
+          {/* PDF EXPORT BUTTON */}
+          <div className="flex items-center border-l border-zinc-800 pl-1 ml-0.5">
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md font-semibold text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 border border-amber-500/30 transition-colors cursor-pointer"
+              title={isDe ? 'Drucken / Als PDF speichern' : 'Print / Export as PDF'}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>{isDe ? 'PDF' : 'PDF'}</span>
+            </button>
           </div>
         </div>
 

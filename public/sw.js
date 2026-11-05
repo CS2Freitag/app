@@ -81,7 +81,7 @@ define(['./workbox-dc59bdb6'], (function (workbox) { 'use strict';
     "revision": "ef23cdc7e72c4dc13da79fc0b5d8d29f"
   }, {
     "url": "index.html",
-    "revision": "03e79a213d1beea86df6d33f9f0334f0"
+    "revision": "b7e52f02a5251ba7769495b6233fc37c"
   }, {
     "url": "icon.svg",
     "revision": "b4b520fb0f629713d0d9396dfc573b28"
@@ -95,10 +95,10 @@ define(['./workbox-dc59bdb6'], (function (workbox) { 'use strict';
     "url": "favicon.ico",
     "revision": "6d2d9e923f4d127c48be94a5c3bea52b"
   }, {
-    "url": "assets/index-DYWKEzC0.css",
+    "url": "assets/index-hrCWwXfH.css",
     "revision": null
   }, {
-    "url": "assets/index-CjR4WUMA.js",
+    "url": "assets/index-DTwwLXvn.js",
     "revision": null
   }, {
     "url": "pwa-maskable-512x512.png",

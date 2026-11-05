@@ -19,6 +19,7 @@ import {
   HardDrive,
   RefreshCw,
   ShieldCheck,
+  Gamepad2,
 } from 'lucide-react';
 import { MapData, Language, Theme } from '../types';
 import { usePWAInstall } from '../hooks/usePWAInstall';
@@ -53,6 +54,7 @@ interface SettingsModalProps {
   onManualSaveNow?: () => Promise<boolean>;
   onLoadFromFileLocation?: () => Promise<boolean>;
   onDisconnectFileLocation?: () => Promise<void>;
+  onStartQuiz?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -82,6 +84,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onManualSaveNow,
   onLoadFromFileLocation,
   onDisconnectFileLocation,
+  onStartQuiz,
 }) => {
   const isDe = lang === 'de';
   const { isInstallable, isInstalled, isIOS, isInIframe, install } = usePWAInstall();
@@ -877,7 +880,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
-          {/* 5. IMPRESSUM & DATENSCHUTZERKLÄRUNG */}
+          {/* 5. CALLOUT TRAINER / LERN-QUIZ */}
+          <div className="p-4 rounded-xl bg-zinc-950/70 border border-amber-500/30 space-y-3">
+            <div className="flex items-center gap-2 font-mono uppercase font-bold text-amber-400">
+              <Gamepad2 className="w-4 h-4" />
+              <span>{isDe ? 'Callout-Trainer / Lern-Quiz' : 'Callout Trainer / Quiz'}</span>
+            </div>
+
+            <p className="text-[11px] text-zinc-400 leading-relaxed">
+              {isDe
+                ? 'Teste dein Wissen und lerne die Callouts aller CS2-Karten im interaktiven Quiz auswendig. Wähle eine Map mit mindestens 6 Callouts und versuche, die höchsten Punkte zu erreichen!'
+                : 'Test your knowledge and memorize callouts for all CS2 maps in an interactive quiz. Choose any map with at least 6 callouts to start!'}
+            </p>
+
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                if (onStartQuiz) onStartQuiz();
+              }}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black transition-all shadow-md active:scale-[0.98] cursor-pointer text-xs uppercase tracking-wider"
+            >
+              <Gamepad2 className="w-4 h-4" />
+              <span>{isDe ? '🎯 Quiz-Modus starten' : '🎯 Start Quiz Mode'}</span>
+            </button>
+          </div>
+
+          {/* 6. IMPRESSUM & DATENSCHUTZERKLÄRUNG */}
           <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800 space-y-3 text-xs">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800/80 pb-2">
               <div>

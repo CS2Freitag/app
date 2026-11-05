@@ -22,6 +22,7 @@ import { MapEditorModal } from './components/MapEditorModal';
 import { TacticalMapView } from './components/TacticalMapView';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { SettingsModal } from './components/SettingsModal';
+import { CalloutQuizModal } from './components/CalloutQuizModal';
 import { MapImportConflictModal } from './components/MapImportConflictModal';
 import { ExternalLink, ArrowUp } from 'lucide-react';
 import JSZip from 'jszip';
@@ -70,6 +71,7 @@ export default function App() {
   const [isEditorOpen, setIsEditorOpen] = useState<boolean>(false);
   const [mapToEdit, setMapToEdit] = useState<MapData | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [isQuizOpen, setIsQuizOpen] = useState<boolean>(false);
 
   // Custom Map Groups / Pools
   const [customGroups, setCustomGroups] = useState<string[]>(() => loadCustomGroups());
@@ -1098,6 +1100,15 @@ export default function App() {
         onManualSaveNow={handleManualSaveNow}
         onLoadFromFileLocation={handleLoadFromFileLocation}
         onDisconnectFileLocation={handleDisconnectFileLocation}
+        onStartQuiz={() => setIsQuizOpen(true)}
+      />
+
+      {/* Callout Trainer / Quiz Modal */}
+      <CalloutQuizModal
+        isOpen={isQuizOpen}
+        onClose={() => setIsQuizOpen(false)}
+        maps={maps}
+        lang={lang}
       />
 
       {/* Single Map Import Conflict Modal (Overwrite vs. Rename with -Neu1) */}
