@@ -33,7 +33,8 @@ import {
   Image as ImageIcon,
   Upload,
   Activity,
-  PenTool
+  PenTool,
+  ArrowUp
 } from 'lucide-react';
 import {
   MapData,
@@ -179,6 +180,19 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     };
     window.addEventListener('resize', handleScaleResize);
     return () => window.removeEventListener('resize', handleScaleResize);
+  }, []);
+  // Scroll to Top state & listener inside TacticalMapView
+  const [showTacticalScrollTop, setShowTacticalScrollTop] = useState(false);
+  useEffect(() => {
+    const handleTacticalScroll = () => {
+      if (window.scrollY > 250) {
+        setShowTacticalScrollTop(true);
+      } else {
+        setShowTacticalScrollTop(false);
+      }
+    };
+    window.addEventListener('scroll', handleTacticalScroll);
+    return () => window.removeEventListener('scroll', handleTacticalScroll);
   }, []);
 
   // Color Mode: 'zone' | 'danger'
@@ -3931,6 +3945,18 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         mapName={mapData.name}
         isProcessing={isProcessingConflict}
       />
+
+      {/* Scroll to Top Floating Button inside TacticalMapView */}
+      {showTacticalScrollTop && (
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="fixed bottom-5 right-4 sm:bottom-6 sm:right-6 z-40 flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-zinc-900/60 hover:bg-amber-500 text-zinc-300 hover:text-zinc-950 border border-zinc-700/60 hover:border-amber-400 shadow-xl backdrop-blur-md opacity-70 hover:opacity-100 transition-all duration-300 active:scale-95 group cursor-pointer animate-in fade-in zoom-in-75 ring-1 ring-white/10"
+          title={isDe ? 'Nach oben scrollen' : 'Scroll to top'}
+          aria-label="Scroll to top"
+        >
+          <ArrowUp className="w-5 h-5 transition-transform group-hover:-translate-y-0.5" />
+        </button>
+      )}
     </div>
   );
 };
