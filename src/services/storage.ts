@@ -2,16 +2,19 @@ import { MapData, Language, Theme } from '../types';
 import { INITIAL_MAPS, INITIAL_SETTINGS } from '../data/mapsData';
 
 const STORAGE_KEYS = {
-  MAPS: 'cs2freitag_maps_v5_backup',
-  FAVORITES: 'cs2freitag_favorites_v5_backup',
-  THEME: 'cs2freitag_theme_v5_backup',
-  LANGUAGE: 'cs2freitag_lang_v5_backup',
-  CUSTOM_GROUPS: 'cs2freitag_custom_groups_v5_backup',
-  DELETED_MAPS: 'cs2freitag_deleted_maps_v5_backup',
+  MAPS: 'cs2freitag_maps_v6_integrated',
+  FAVORITES: 'cs2freitag_favorites_v6_integrated',
+  THEME: 'cs2freitag_theme_v6_integrated',
+  LANGUAGE: 'cs2freitag_lang_v6_integrated',
+  CUSTOM_GROUPS: 'cs2freitag_custom_groups_v6_integrated',
+  DELETED_MAPS: 'cs2freitag_deleted_maps_v6_integrated',
 };
 
 function ensureCenteredCoordinates(maps: MapData[]): MapData[] {
   return maps.map((map) => {
+    // If map already has verified centered coordinates, retain all callouts, areas, and polygons as-is
+    if ((map as any).isCenteredCoords) return map;
+
     const callouts = map.callouts || [];
 
     if (callouts.length > 0) {
@@ -29,6 +32,12 @@ function ensureCenteredCoordinates(maps: MapData[]): MapData[] {
                   ...c.area,
                   x: Math.round((c.area.x + 50) * 10) / 10,
                   y: Math.round((c.area.y + 50) * 10) / 10,
+                  points: c.area.points
+                    ? c.area.points.map((p) => ({
+                        x: Math.round((p.x + 50) * 10) / 10,
+                        y: Math.round((p.y + 50) * 10) / 10,
+                      }))
+                    : undefined,
                 }
               : undefined,
           })),
@@ -36,8 +45,6 @@ function ensureCenteredCoordinates(maps: MapData[]): MapData[] {
         };
       }
     }
-
-    if ((map as any).isCenteredCoords) return map;
 
     const isAlreadyCentered = callouts.some(
       (c) => c.x < 0 || c.y < 0 || (c.area && (c.area.x < 0 || c.area.y < 0))
@@ -60,6 +67,12 @@ function ensureCenteredCoordinates(maps: MapData[]): MapData[] {
               ...c.area,
               x: Math.round((c.area.x - 50) * 10) / 10,
               y: Math.round((c.area.y - 50) * 10) / 10,
+              points: c.area.points
+                ? c.area.points.map((p) => ({
+                    x: Math.round((p.x - 50) * 10) / 10,
+                    y: Math.round((p.y - 50) * 10) / 10,
+                  }))
+                : undefined,
             }
           : undefined;
 
@@ -116,7 +129,12 @@ function applyDefaultSpawnImages(maps: MapData[]): MapData[] {
   }));
 }
 
+const isBrowser = typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+
 export function loadStoredMaps(): MapData[] {
+  if (!isBrowser) {
+    return applyDefaultSpawnImages(INITIAL_MAPS);
+  }
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.MAPS);
     const deletedIds = loadDeletedMapIds();
@@ -178,6 +196,7 @@ export function loadStoredMaps(): MapData[] {
 }
 
 export function loadCustomGroups(): string[] {
+  if (!isBrowser) return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.CUSTOM_GROUPS);
     if (raw) {
@@ -193,6 +212,7 @@ export function loadCustomGroups(): string[] {
 }
 
 export function saveCustomGroups(groups: string[]): void {
+  if (!isBrowser) return;
   try {
     localStorage.setItem(STORAGE_KEYS.CUSTOM_GROUPS, JSON.stringify(groups));
   } catch (e) {
@@ -201,6 +221,7 @@ export function saveCustomGroups(groups: string[]): void {
 }
 
 export function saveStoredMaps(maps: MapData[]): void {
+  if (!isBrowser) return;
   try {
     localStorage.setItem(STORAGE_KEYS.MAPS, JSON.stringify(maps));
   } catch (e) {
@@ -209,8 +230,9 @@ export function saveStoredMaps(maps: MapData[]): void {
 }
 
 export function loadFavorites(): string[] {
+  if (!isBrowser) return INITIAL_SETTINGS.favorites || ['inferno', 'cache', 'ancient', 'dust2', 'nuke', 'train', 'anubis'];
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.FAVORITES);
+    const raw = localStorage.getItem(STORAGE_KEYS.FAVORITES) || localStorage.getItem('cs2freitag_favorites_v5_backup');
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
@@ -224,6 +246,7 @@ export function loadFavorites(): string[] {
 }
 
 export function saveFavorites(favorites: string[]): void {
+  if (!isBrowser) return;
   try {
     localStorage.setItem(STORAGE_KEYS.FAVORITES, JSON.stringify(favorites));
   } catch (e) {
@@ -232,9 +255,10 @@ export function saveFavorites(favorites: string[]): void {
 }
 
 export function loadTheme(): Theme {
+  if (!isBrowser) return INITIAL_SETTINGS.theme || 'dark';
   try {
-    const val = localStorage.getItem(STORAGE_KEYS.THEME);
-    if (val === 'light' || val === 'dark') return val;
+    const val = localStorage.getItem(STORAGE_KEYS.THEME) || localStorage.getItem('cs2freitag_theme_v5_backup');
+    if (val === 'light' || val === 'dark') return val as Theme;
   } catch (e) {
     // fallback
   }
@@ -242,6 +266,7 @@ export function loadTheme(): Theme {
 }
 
 export function saveTheme(theme: Theme): void {
+  if (!isBrowser) return;
   try {
     localStorage.setItem(STORAGE_KEYS.THEME, theme);
   } catch (e) {
@@ -250,9 +275,10 @@ export function saveTheme(theme: Theme): void {
 }
 
 export function loadLanguage(): Language {
+  if (!isBrowser) return INITIAL_SETTINGS.lang || 'de';
   try {
-    const val = localStorage.getItem(STORAGE_KEYS.LANGUAGE);
-    if (val === 'de' || val === 'en') return val;
+    const val = localStorage.getItem(STORAGE_KEYS.LANGUAGE) || localStorage.getItem('cs2freitag_lang_v5_backup');
+    if (val === 'de' || val === 'en') return val as Language;
   } catch (e) {
     // fallback
   }
@@ -260,6 +286,7 @@ export function loadLanguage(): Language {
 }
 
 export function saveLanguage(lang: Language): void {
+  if (!isBrowser) return;
   try {
     localStorage.setItem(STORAGE_KEYS.LANGUAGE, lang);
   } catch (e) {
@@ -268,12 +295,14 @@ export function saveLanguage(lang: Language): void {
 }
 
 export function resetToDefaults(): MapData[] {
-  try {
-    localStorage.removeItem(STORAGE_KEYS.MAPS);
-    localStorage.removeItem(STORAGE_KEYS.DELETED_MAPS);
-    localStorage.removeItem(STORAGE_KEYS.FAVORITES);
-  } catch (e) {
-    //
+  if (isBrowser) {
+    try {
+      localStorage.removeItem(STORAGE_KEYS.MAPS);
+      localStorage.removeItem(STORAGE_KEYS.DELETED_MAPS);
+      localStorage.removeItem(STORAGE_KEYS.FAVORITES);
+    } catch (e) {
+      //
+    }
   }
   const cleanDefaults = INITIAL_MAPS;
   saveStoredMaps(cleanDefaults);
@@ -281,6 +310,7 @@ export function resetToDefaults(): MapData[] {
 }
 
 export function loadDeletedMapIds(): Set<string> {
+  if (!isBrowser) return new Set();
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.DELETED_MAPS);
     if (raw) {
@@ -292,6 +322,7 @@ export function loadDeletedMapIds(): Set<string> {
 }
 
 export function saveDeletedMapId(mapId: string): void {
+  if (!isBrowser) return;
   try {
     const deleted = loadDeletedMapIds();
     deleted.add(mapId);
