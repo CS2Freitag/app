@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { MapData, Callout, Language } from '../types';
-import { Gamepad2, X, Trophy, CheckCircle2, XCircle, ArrowRight, RotateCcw, Target, Sparkles, Map as MapIcon } from 'lucide-react';
+import { Gamepad2, X, Trophy, CheckCircle2, XCircle, ArrowRight, RotateCcw, Target, Sparkles, Map as MapIcon, ZoomIn, ZoomOut } from 'lucide-react';
 import { resolveAssetPath } from '../utils/assets';
 
 interface CalloutQuizModalProps {
@@ -31,6 +31,16 @@ export const CalloutQuizModal: React.FC<CalloutQuizModalProps> = ({
   const [score, setScore] = useState<number>(0);
   const [isFinished, setIsFinished] = useState<boolean>(false);
 
+  // Zoom and Pan state for the map
+  const [zoom, setZoom] = useState<number>(1.0);
+  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [startPan, setStartPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  
+  // Pinch-to-zoom refs
+  const initialPinchDistRef = useRef<number | null>(null);
+  const initialPinchZoomRef = useRef<number>(1.0);
+
   useEffect(() => {
     if (eligibleMaps.length > 0 && !selectedMapId) {
       setSelectedMapId(eligibleMaps[0].id);
@@ -42,7 +52,10 @@ export const CalloutQuizModal: React.FC<CalloutQuizModalProps> = ({
     setSelectedOption(null);
     setCurrentIndex(0);
     setScore(0);
+    setQuestions([]);
     setIsFinished(false);
+    setZoom(1.0);
+    setPan({ x: 0, y: 0 });
     onClose();
   };
 
@@ -53,7 +66,7 @@ export const CalloutQuizModal: React.FC<CalloutQuizModalProps> = ({
   const startQuiz = () => {
     if (!currentMap || !currentMap.callouts || currentMap.callouts.length < 6) return;
 
-    // Shuffle and pick 8 random callouts (or all callouts if less than 8)
+    // Shuffle and pick 10 random callouts (or all if less)
     const validCallouts = [...currentMap.callouts];
     const shuffledCallouts = validCallouts.sort(() => Math.random() - 0.5);
     const selectedQuestionsCallouts = shuffledCallouts.slice(0, Math.min(10, shuffledCallouts.length));
@@ -80,6 +93,8 @@ export const CalloutQuizModal: React.FC<CalloutQuizModalProps> = ({
     setSelectedOption(null);
     setIsFinished(false);
     setIsQuizActive(true);
+    setZoom(1.0);
+    setPan({ x: 0, y: 0 });
   };
 
   const handleSelectOption = (option: string) => {
@@ -96,16 +111,83 @@ export const CalloutQuizModal: React.FC<CalloutQuizModalProps> = ({
     if (currentIndex + 1 < questions.length) {
       setCurrentIndex((prev) => prev + 1);
       setSelectedOption(null);
+      // Reset zoom/pan for next question? User preference, usually better to stay zoomed or reset.
+      // Resetting to avoid confusion for next marker position.
+      setZoom(1.0);
+      setPan({ x: 0, y: 0 });
     } else {
       setIsFinished(true);
     }
+  };
+
+  const handleZoomChange = (newZoom: number) => {
+    const clamped = Math.max(1.0, Math.min(3.0, Math.round(newZoom * 100) / 100));
+    setZoom(clamped);
+    if (clamped === 1.0) setPan({ x: 0, y: 0 });
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (!isQuizActive || isFinished) return;
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    handleZoomChange(zoom + delta);
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (zoom <= 1.0) return;
+    setIsPanning(true);
+    setStartPan({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isPanning) return;
+    setPan({
+      x: e.clientX - startPan.x,
+      y: e.clientY - startPan.y,
+    });
+  };
+
+  const handleMouseUp = () => setIsPanning(false);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      initialPinchDistRef.current = dist;
+      initialPinchZoomRef.current = zoom;
+    } else if (e.touches.length === 1 && zoom > 1.0) {
+      const touch = e.touches[0];
+      setIsPanning(true);
+      setStartPan({ x: touch.clientX - pan.x, y: touch.clientY - pan.y });
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && initialPinchDistRef.current) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const currentDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      const factor = currentDist / initialPinchDistRef.current;
+      handleZoomChange(initialPinchZoomRef.current * factor);
+    } else if (e.touches.length === 1 && isPanning) {
+      const touch = e.touches[0];
+      setPan({
+        x: touch.clientX - startPan.x,
+        y: touch.clientY - startPan.y,
+      });
+    }
+  };
+
+  const handleTouchEnd = () => {
+    initialPinchDistRef.current = null;
+    setIsPanning(false);
   };
 
   const currentQuestion = questions[currentIndex];
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 overflow-y-auto animate-in fade-in-50"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 overflow-y-auto animate-in fade-in-50 print:hidden"
       onClick={(e) => {
         if (e.target === e.currentTarget) handleClose();
       }}
@@ -215,28 +297,59 @@ export const CalloutQuizModal: React.FC<CalloutQuizModalProps> = ({
             </div>
 
             {/* Interactive Radar Map View with Target Pin Highlighted */}
-            <div className="relative w-full aspect-square max-w-[420px] mx-auto rounded-xl border-2 border-amber-500/40 bg-zinc-950 overflow-hidden shadow-2xl">
-              <img
-                src={resolveAssetPath(currentMap?.image)}
-                alt={currentMap?.name}
-                className="w-full h-full object-cover"
-              />
-
-              {/* Target Highlight Ring & Pulsing Pin */}
-              <div
-                className="absolute transform -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none"
-                style={{
-                  left: `${((currentQuestion.callout.x + 80) / 160) * 100}%`,
-                  top: `${((currentQuestion.callout.y + 80) / 160) * 100}%`,
-                }}
+            <div 
+              className="relative w-full aspect-square max-w-[420px] mx-auto rounded-xl border-2 border-amber-500/40 bg-zinc-950 overflow-hidden shadow-2xl cursor-grab active:cursor-grabbing"
+              onWheel={handleWheel}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
+              <div 
+                className="w-full h-full transition-transform duration-75"
+                style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
               >
-                <div className="relative flex items-center justify-center">
-                  <span className="absolute w-10 h-10 rounded-full bg-amber-400/40 animate-ping" />
-                  <span className="absolute w-6 h-6 rounded-full bg-amber-500/60 ring-2 ring-amber-300 animate-pulse" />
-                  <div className="w-4 h-4 rounded-full bg-amber-400 ring-2 ring-zinc-950 shadow-lg flex items-center justify-center font-black text-[9px] text-zinc-950">
-                    ?
+                <img
+                  src={resolveAssetPath(currentMap?.image)}
+                  alt={currentMap?.name}
+                  className="w-full h-full object-cover pointer-events-none"
+                />
+
+                {/* Target Highlight Ring & Pulsing Pin (Updated for Accuracy and Smaller Size) */}
+                <div
+                  className="absolute transform -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none"
+                  style={{
+                    left: `${currentQuestion.callout.x + 50}%`,
+                    top: `${currentQuestion.callout.y + 50}%`,
+                  }}
+                >
+                  <div className="relative flex items-center justify-center">
+                    <span className="absolute w-5 h-5 rounded-full bg-amber-400/30 animate-ping" />
+                    <span className="absolute w-2.5 h-2.5 rounded-full bg-amber-500/50 ring-1 ring-amber-300/80 animate-pulse" />
+                    <div className="w-2 h-2 rounded-full bg-amber-400 ring-[1px] ring-zinc-950 shadow-[0_0_10px_rgba(251,191,36,0.5)] flex items-center justify-center font-black text-[6px] text-zinc-950 z-10">
+                      ?
+                    </div>
                   </div>
                 </div>
+              </div>
+              
+              {/* Zoom Controls Overlay */}
+              <div className="absolute bottom-2 right-2 flex flex-col gap-1 z-40">
+                <button 
+                  onClick={() => handleZoomChange(zoom + 0.5)}
+                  className="p-1.5 rounded-lg bg-zinc-900/80 border border-zinc-700 text-white hover:bg-zinc-800"
+                >
+                  <ZoomIn className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => handleZoomChange(zoom - 0.5)}
+                  className="p-1.5 rounded-lg bg-zinc-900/80 border border-zinc-700 text-white hover:bg-zinc-800"
+                >
+                  <ZoomOut className="w-4 h-4" />
+                </button>
               </div>
             </div>
 

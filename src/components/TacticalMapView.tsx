@@ -2062,7 +2062,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                     style={{
                       fontSize: `${fontSize}px`,
                       fontFamily: getFontFamilyStyle(callout.fontFamily),
-                      marginTop: callout.displayMode === 'both' ? '6px' : '4px',
+                      marginTop: callout.hidePin ? '0px' : (callout.displayMode === 'both' ? '6px' : '4px'),
                       padding: `${Math.round(2 * calloutScale)}px ${Math.round(6 * calloutScale)}px`,
                       transform: `rotate(${callout.textRotation !== undefined ? callout.textRotation : (callout.rotation || 0)}deg)`,
                       transformOrigin: 'center center',
@@ -2816,7 +2816,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
       {/* 5. COLOR EXPLANATION / LEGENDE MODAL (ZONEN & GEFAHRENSTUFEN) */}
       {showLegend && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 print:hidden">
           <div className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl text-zinc-100 animate-in fade-in-50 zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-3 border-b border-zinc-800 mb-4">
               <div className="flex items-center gap-2">
@@ -3858,7 +3858,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       )}
       {/* SYNC CHANGES CONFIRMATION MODAL */}
       {showSyncPrompt && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in-50">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in-50 print:hidden">
           <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl text-zinc-100 scale-in-95 animate-in">
             <div className="flex items-center gap-3 pb-3 border-b border-zinc-800 mb-4">
               <div className="p-2 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400">

@@ -43,6 +43,9 @@
     color: black !important;
     margin: 0 !important;
     padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
   }
 
   /* Reset fixed positioning for print to avoid clipping and allow natural page flow */
@@ -53,6 +56,14 @@
     background: white !important;
     color: black !important;
     overflow: visible !important;
+    z-index: 0 !important;
+  }
+
+  /* Force the map container to be visible and centered */
+  .relative.flex-1.flex.overflow-hidden {
+    overflow: visible !important;
+    display: block !important;
+    height: auto !important;
   }
 
   /* Center the map and remove dark background/shadows */
@@ -61,10 +72,24 @@
     box-shadow: none !important;
     border-color: #e5e7eb !important; /* light gray border for print */
     background: white !important;
+    margin: 0 auto !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Hide specific UI elements that might be absolute/fixed but missed print:hidden */
+  nav, footer, aside, .floating-button, .sidebar {
+    display: none !important;
   }
 
   /* Ensure text on map is dark if needed, though mostly it's labels */
   .text-zinc-100, .text-white {
     color: black !important;
   }
+  
+  /* Reset transforms for print if they cause issues, but we want zoom/pan state? 
+     Actually, if the user zoomed in, they probably want that view. 
+     But for a standard PDF, maybe full view is better. 
+     The user didn't specify if zoom should be preserved in PDF. 
+     Usually window.print() preserves current DOM state.
+  */
 }

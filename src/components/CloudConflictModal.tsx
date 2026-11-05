@@ -27,7 +27,7 @@ export const CloudConflictModal: React.FC<CloudConflictModalProps> = ({
   const isDe = lang === 'de';
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in-50">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in-50 print:hidden">
       <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl text-zinc-100 scale-in-95 animate-in">
         {/* Header matching Save Dialog */}
         <div className="flex items-center gap-3 pb-3 border-b border-zinc-800 mb-4">
