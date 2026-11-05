@@ -2145,7 +2145,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       className="fixed inset-0 z-50 flex flex-col bg-zinc-950 text-zinc-100 select-none overflow-hidden"
     >
       {/* 1. TOP HEADER BAR */}
-      <div className="h-14 border-b border-zinc-800 bg-zinc-950/95 px-2 sm:px-4 flex items-center justify-between gap-2 shrink-0 backdrop-blur-md overflow-x-auto no-scrollbar">
+      <div className="h-14 border-b border-zinc-800 bg-zinc-950/95 px-2 sm:px-4 flex items-center justify-between gap-2 shrink-0 backdrop-blur-md overflow-x-auto no-scrollbar print:hidden">
         {/* Left: Back & Title */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <button
@@ -2328,7 +2328,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       </div>
 
       {/* 2. TACTICAL TOOLBAR: TOOLS, ERASER, UNDO/REDO, AREAS TOGGLE, TEXT SCALE, ZOOM */}
-      <div className="h-12 border-b border-zinc-800/80 bg-zinc-900/90 px-4 flex items-center justify-between gap-3 shrink-0 overflow-x-auto text-xs">
+      <div className="h-12 border-b border-zinc-800/80 bg-zinc-900/90 px-4 flex items-center justify-between gap-3 shrink-0 overflow-x-auto text-xs print:hidden">
         {/* Tactical tools */}
         <div className="flex items-center gap-1 shrink-0">
           <button
@@ -2638,7 +2638,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
         {/* 4. PINNED TACTICAL INSPECTOR SIDEBAR */}
         {!isDrawingPolygonArea && selectedCallout && !isEditMode && (
-          <aside className="w-80 sm:w-96 border-l border-zinc-800 bg-zinc-900/95 p-5 flex flex-col justify-between overflow-y-auto z-40 backdrop-blur-md shrink-0 shadow-2xl animate-in slide-in-from-right-10 duration-200">
+          <aside className="w-80 sm:w-96 border-l border-zinc-800 bg-zinc-900/95 p-5 flex flex-col justify-between overflow-y-auto z-40 backdrop-blur-md shrink-0 shadow-2xl animate-in slide-in-from-right-10 duration-200 print:hidden">
             <div>
               <div className="flex items-start justify-between pb-3 border-b border-zinc-800 mb-4">
                 <div>
@@ -2726,7 +2726,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         )}
         {/* BOTTOM FLOATING CONTROL BAR (Areas, Text Scale, Zoom) */}
         {!isDrawingPolygonArea && (
-        <div className="absolute bottom-2 left-2 right-2 sm:bottom-4 sm:left-4 sm:right-auto z-30 flex flex-wrap sm:flex-nowrap items-center gap-2 p-2 rounded-xl bg-zinc-950/95 border border-zinc-800 shadow-2xl backdrop-blur-md text-xs">
+        <div className="absolute bottom-2 left-2 right-2 sm:bottom-4 sm:left-4 sm:right-auto z-30 flex flex-wrap sm:flex-nowrap items-center gap-2 p-2 rounded-xl bg-zinc-950/95 border border-zinc-800 shadow-2xl backdrop-blur-md text-xs print:hidden">
           {/* TotalCSGO-Style Area Toggle */}
           <button
             onClick={() => setShowAreas(!showAreas)}
@@ -2950,7 +2950,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
       {/* 6. ADD / EDIT CALLOUT MODAL */}
       {isAddingCallout && pendingCalloutCoords && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 overflow-y-auto print:hidden">
           <div className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl text-zinc-100 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-zinc-800 mb-4">
               <h3 className="text-base font-bold text-white">
@@ -3963,7 +3963,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       {showTacticalScrollTop && (
         <button
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="fixed bottom-5 right-4 sm:bottom-6 sm:right-6 z-40 flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-zinc-900/60 hover:bg-amber-500 text-zinc-300 hover:text-zinc-950 border border-zinc-700/60 hover:border-amber-400 shadow-xl backdrop-blur-md opacity-70 hover:opacity-100 transition-all duration-300 active:scale-95 group cursor-pointer animate-in fade-in zoom-in-75 ring-1 ring-white/10"
+          className="fixed bottom-5 right-4 sm:bottom-6 sm:right-6 z-40 flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-zinc-900/60 hover:bg-amber-500 text-zinc-300 hover:text-zinc-950 border border-zinc-700/60 hover:border-amber-400 shadow-xl backdrop-blur-md opacity-70 hover:opacity-100 transition-all duration-300 active:scale-95 group cursor-pointer animate-in fade-in zoom-in-75 ring-1 ring-white/10 print:hidden"
           title={isDe ? 'Nach oben scrollen' : 'Scroll to top'}
           aria-label="Scroll to top"
         >

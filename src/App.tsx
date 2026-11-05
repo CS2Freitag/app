@@ -1017,7 +1017,7 @@ export default function App() {
           </main>
 
           {/* Footer */}
-          <footer className="mt-auto border-t border-zinc-800/80 bg-zinc-950/60 py-6 text-xs text-zinc-400 dark:border-zinc-800/80 dark:bg-zinc-950/60 light:border-zinc-200 light:bg-white">
+          <footer className="mt-auto border-t border-zinc-800/80 bg-zinc-950/60 py-6 text-xs text-zinc-400 dark:border-zinc-800/80 dark:bg-zinc-950/60 light:border-zinc-200 light:bg-white print:hidden">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
               <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 text-center sm:text-left">
                 <div className="flex items-center justify-center sm:justify-start gap-2">
@@ -1131,7 +1131,7 @@ export default function App() {
       {showScrollTop && (
         <button
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="fixed bottom-5 right-4 sm:bottom-6 sm:right-6 z-40 flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-zinc-900/60 hover:bg-amber-500 text-zinc-300 hover:text-zinc-950 border border-zinc-700/60 hover:border-amber-400 shadow-xl backdrop-blur-md opacity-70 hover:opacity-100 transition-all duration-300 active:scale-95 group cursor-pointer animate-in fade-in zoom-in-75 ring-1 ring-white/10"
+          className="fixed bottom-5 right-4 sm:bottom-6 sm:right-6 z-40 flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-zinc-900/60 hover:bg-amber-500 text-zinc-300 hover:text-zinc-950 border border-zinc-700/60 hover:border-amber-400 shadow-xl backdrop-blur-md opacity-70 hover:opacity-100 transition-all duration-300 active:scale-95 group cursor-pointer animate-in fade-in zoom-in-75 ring-1 ring-white/10 print:hidden"
           title={lang === 'de' ? 'Nach oben scrollen' : 'Scroll to top'}
           aria-label="Scroll to top"
         >

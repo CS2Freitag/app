@@ -212,8 +212,8 @@ export const CalloutQuizModal: React.FC<CalloutQuizModalProps> = ({
               <div
                 className="absolute transform -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none"
                 style={{
-                  left: `${currentQuestion.callout.x + 50}%`,
-                  top: `${currentQuestion.callout.y + 50}%`,
+                  left: `${((currentQuestion.callout.x + 80) / 160) * 100}%`,
+                  top: `${((currentQuestion.callout.y + 80) / 160) * 100}%`,
                 }}
               >
                 <div className="relative flex items-center justify-center">
