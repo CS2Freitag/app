@@ -93,3 +93,32 @@
      Usually window.print() preserves current DOM state.
   */
 }
+
+@keyframes pulse-color-change {
+  0%, 100% {
+    background-color: #fbbf24; /* amber-400 */
+    border-color: #fcd34d; /* amber-300 */
+  }
+  50% {
+    background-color: #22c55e; /* emerald-500 */
+    border-color: #86efac; /* emerald-300 */
+  }
+}
+
+@keyframes ping-color-change {
+  0%, 100% {
+    background-color: rgba(251, 191, 36, 0.3); /* amber-400/30 */
+  }
+  50% {
+    background-color: rgba(34, 197, 94, 0.3); /* emerald-500/30 */
+  }
+}
+
+.animate-quiz-pulse {
+  animation: pulse-color-change 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-ping-color {
+  animation: ping-color-change 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+

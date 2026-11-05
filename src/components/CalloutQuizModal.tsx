@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { MapData, Callout, Language } from '../types';
 import { Gamepad2, X, Trophy, CheckCircle2, XCircle, ArrowRight, RotateCcw, Target, Sparkles, Map as MapIcon, ZoomIn, ZoomOut } from 'lucide-react';
+import confetti from 'canvas-confetti';
 import { resolveAssetPath } from '../utils/assets';
 
 interface CalloutQuizModalProps {
@@ -46,6 +47,32 @@ export const CalloutQuizModal: React.FC<CalloutQuizModalProps> = ({
       setSelectedMapId(eligibleMaps[0].id);
     }
   }, [eligibleMaps, selectedMapId]);
+
+  // Perfect Score Celebration (Confetti)
+  useEffect(() => {
+    if (isFinished && score > 0 && score === questions.length) {
+      const duration = 3 * 1000;
+      const animationEnd = Date.now() + duration;
+      const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 100 };
+
+      const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+
+      const interval: any = setInterval(() => {
+        const timeLeft = animationEnd - Date.now();
+
+        if (timeLeft <= 0) {
+          return clearInterval(interval);
+        }
+
+        const particleCount = 50 * (timeLeft / duration);
+        // since particles fall down, start a bit higher than random
+        confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
+        confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
+      }, 250);
+
+      return () => clearInterval(interval);
+    }
+  }, [isFinished, score, questions.length]);
 
   const handleClose = () => {
     setIsQuizActive(false);
@@ -327,9 +354,9 @@ export const CalloutQuizModal: React.FC<CalloutQuizModalProps> = ({
                   }}
                 >
                   <div className="relative flex items-center justify-center">
-                    <span className="absolute w-5 h-5 rounded-full bg-amber-400/30 animate-ping" />
-                    <span className="absolute w-2.5 h-2.5 rounded-full bg-amber-500/50 ring-1 ring-amber-300/80 animate-pulse" />
-                    <div className="w-2 h-2 rounded-full bg-amber-400 ring-[1px] ring-zinc-950 shadow-[0_0_10px_rgba(251,191,36,0.5)] flex items-center justify-center font-black text-[6px] text-zinc-950 z-10">
+                    <span className="absolute w-5 h-5 rounded-full bg-amber-400/30 animate-ping animate-ping-color" />
+                    <span className="absolute w-2.5 h-2.5 rounded-full bg-amber-500/50 ring-1 ring-amber-300/80 animate-quiz-pulse" />
+                    <div className="w-2 h-2 rounded-full bg-amber-400 ring-[1px] ring-zinc-950 shadow-[0_0_10px_rgba(251,191,36,0.5)] flex items-center justify-center font-black text-[6px] text-zinc-950 z-10 animate-quiz-pulse">
                       ?
                     </div>
                   </div>
