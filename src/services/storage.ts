@@ -1,28 +1,23 @@
 import { MapData, Language, Theme } from '../types';
-import { INITIAL_MAPS } from '../data/mapsData';
+import { INITIAL_MAPS, INITIAL_SETTINGS } from '../data/mapsData';
 
 const STORAGE_KEYS = {
-  MAPS: 'cs2freitag_maps_v3',
-  FAVORITES: 'cs2freitag_favorites_v3',
-  THEME: 'cs2freitag_theme_v3',
-  LANGUAGE: 'cs2freitag_lang_v3',
-  CUSTOM_GROUPS: 'cs2freitag_custom_groups_v3',
-  DELETED_MAPS: 'cs2freitag_deleted_maps_v3',
+  MAPS: 'cs2freitag_maps_v5_backup',
+  FAVORITES: 'cs2freitag_favorites_v5_backup',
+  THEME: 'cs2freitag_theme_v5_backup',
+  LANGUAGE: 'cs2freitag_lang_v5_backup',
+  CUSTOM_GROUPS: 'cs2freitag_custom_groups_v5_backup',
+  DELETED_MAPS: 'cs2freitag_deleted_maps_v5_backup',
 };
-
-// Initial default favorites: popular active duty maps
-const DEFAULT_FAVORITES = ['mirage', 'inferno', 'dust2', 'nuke'];
 
 function ensureCenteredCoordinates(maps: MapData[]): MapData[] {
   return maps.map((map) => {
     const callouts = map.callouts || [];
 
-    // Helper to check if map callouts are severely over-shifted to top-left (e.g. avgX < -35 and avgY < -35)
     if (callouts.length > 0) {
       const avgX = callouts.reduce((sum, c) => sum + c.x, 0) / callouts.length;
       const avgY = callouts.reduce((sum, c) => sum + c.y, 0) / callouts.length;
       if (avgX < -35 && avgY < -35) {
-        // Repair double-shifted coordinates by adding 50 back
         return {
           ...map,
           callouts: callouts.map((c) => ({
@@ -44,7 +39,6 @@ function ensureCenteredCoordinates(maps: MapData[]): MapData[] {
 
     if ((map as any).isCenteredCoords) return map;
 
-    // Check if callouts are ALREADY centered (e.g. any coordinate is negative)
     const isAlreadyCentered = callouts.some(
       (c) => c.x < 0 || c.y < 0 || (c.area && (c.area.x < 0 || c.area.y < 0))
     );
@@ -56,7 +50,6 @@ function ensureCenteredCoordinates(maps: MapData[]): MapData[] {
       };
     }
 
-    // Otherwise convert legacy 0..100 coordinates to centered -50..+50 coordinates
     return {
       ...map,
       callouts: callouts.map((c) => {
@@ -127,29 +120,40 @@ export function loadStoredMaps(): MapData[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.MAPS);
     const deletedIds = loadDeletedMapIds();
+    const initialMapMap = new Map(INITIAL_MAPS.map(m => [m.id, m]));
 
     if (raw) {
       let parsed: MapData[] = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        // Migration: Fix absolute paths (e.g. /maps/...) to relative (maps/...)
-        parsed = parsed.map(m => ({
-          ...m,
-          image: m.image.startsWith('/') ? m.image.substring(1) : m.image,
-          lowerImage: m.lowerImage && m.lowerImage.startsWith('/') ? m.lowerImage.substring(1) : m.lowerImage
-        }));
+        // Update with INITIAL_MAPS (backup) versions to ensure all backup updates are active
+        parsed = parsed.map(m => {
+          const defaultVersion = initialMapMap.get(m.id);
+          if (defaultVersion) {
+            return defaultVersion;
+          }
+          return {
+            ...m,
+            image: m.image && m.image.startsWith('/') ? m.image.substring(1) : m.image,
+            lowerImage: m.lowerImage && m.lowerImage.startsWith('/') ? m.lowerImage.substring(1) : m.lowerImage
+          };
+        });
 
-        // Remove arms race maps, poseidon, and deleted maps
+        // Add any missing maps from INITIAL_MAPS
+        const existingIds = new Set(parsed.map(m => m.id));
+        for (const defaultMap of INITIAL_MAPS) {
+          if (!existingIds.has(defaultMap.id) && !deletedIds.has(defaultMap.id)) {
+            parsed.push(defaultMap);
+          }
+        }
+
         parsed = parsed.filter(
           (m) =>
             m.category !== 'armsrace' &&
             m.id !== 'baggage' &&
             m.id !== 'shoots' &&
-            m.id !== 'poseidon' &&
-            m.slug !== 'poseidon' &&
             !deletedIds.has(m.id)
         );
 
-        // Ensure hostage maps are categorized under 'hostage'
         parsed = parsed.map((m) => {
           if (['office', 'italy', 'agency', 'assault'].includes(m.id)) {
             return { ...m, category: 'hostage' };
@@ -157,25 +161,16 @@ export function loadStoredMaps(): MapData[] {
           return m;
         });
 
-        // Merge missing default maps (respecting deleted list)
-        const existingIds = new Set(parsed.map((m) => m.id));
-        const missingDefaults = INITIAL_MAPS.filter(
-          (m) => !existingIds.has(m.id) && !deletedIds.has(m.id)
-        );
-        if (missingDefaults.length > 0) {
-          parsed = [...parsed, ...missingDefaults];
-        }
-
-        // Apply default spawn emblems (ct.png and T.png)
         parsed = applyDefaultSpawnImages(parsed);
         saveStoredMaps(parsed);
         return parsed;
       }
     }
 
-    // Fallback: Return INITIAL_MAPS filtered by deleted IDs
     const filteredDefaults = INITIAL_MAPS.filter(m => !deletedIds.has(m.id));
-    return applyDefaultSpawnImages(filteredDefaults);
+    const processed = applyDefaultSpawnImages(filteredDefaults);
+    saveStoredMaps(processed);
+    return processed;
   } catch (e) {
     console.error('Failed to load maps from storage:', e);
   }
@@ -225,7 +220,7 @@ export function loadFavorites(): string[] {
   } catch (e) {
     console.error('Failed to load favorites:', e);
   }
-  return DEFAULT_FAVORITES;
+  return INITIAL_SETTINGS.favorites || ['inferno', 'cache', 'ancient', 'dust2', 'nuke', 'train', 'anubis'];
 }
 
 export function saveFavorites(favorites: string[]): void {
@@ -243,7 +238,7 @@ export function loadTheme(): Theme {
   } catch (e) {
     // fallback
   }
-  return 'dark';
+  return INITIAL_SETTINGS.theme || 'dark';
 }
 
 export function saveTheme(theme: Theme): void {
@@ -261,7 +256,7 @@ export function loadLanguage(): Language {
   } catch (e) {
     // fallback
   }
-  return 'de';
+  return INITIAL_SETTINGS.lang || 'de';
 }
 
 export function saveLanguage(lang: Language): void {
@@ -276,6 +271,7 @@ export function resetToDefaults(): MapData[] {
   try {
     localStorage.removeItem(STORAGE_KEYS.MAPS);
     localStorage.removeItem(STORAGE_KEYS.DELETED_MAPS);
+    localStorage.removeItem(STORAGE_KEYS.FAVORITES);
   } catch (e) {
     //
   }
