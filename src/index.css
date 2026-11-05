@@ -70,8 +70,7 @@
   .map-canvas-tile,
   .aspect-square {
     box-shadow: none !important;
-    border-color: #e5e7eb !important; /* light gray border for print */
-    background: white !important;
+    background: transparent !important;
     margin: 0 auto !important;
     page-break-inside: avoid !important;
   }
@@ -81,9 +80,9 @@
     display: none !important;
   }
 
-  /* Ensure text on map is dark if needed, though mostly it's labels */
-  .text-zinc-100, .text-white {
-    color: black !important;
+  /* Keep original colors, do not force black text */
+  .text-zinc-100, .text-white, .text-zinc-200, .text-zinc-300, .text-zinc-400 {
+    color: inherit !important;
   }
   
   /* Reset transforms for print if they cause issues, but we want zoom/pan state? 
@@ -98,10 +97,14 @@
   0%, 100% {
     background-color: #fbbf24; /* amber-400 */
     border-color: #fcd34d; /* amber-300 */
+    opacity: 1;
+    transform: scale(1);
   }
   50% {
     background-color: #22c55e; /* emerald-500 */
     border-color: #86efac; /* emerald-300 */
+    opacity: 0.5;
+    transform: scale(0.95);
   }
 }
 
