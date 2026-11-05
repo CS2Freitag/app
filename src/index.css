@@ -66,11 +66,11 @@
     height: auto !important;
   }
 
-  /* Center the map and remove dark background/shadows */
+  /* Keep dark background for the map container */
   .map-canvas-tile,
   .aspect-square {
     box-shadow: none !important;
-    background: transparent !important;
+    background: #18181b !important; /* zinc-900 */
     margin: 0 auto !important;
     page-break-inside: avoid !important;
   }
@@ -80,9 +80,9 @@
     display: none !important;
   }
 
-  /* Keep original colors, do not force black text */
+  /* Keep original colors from app theme */
   .text-zinc-100, .text-white, .text-zinc-200, .text-zinc-300, .text-zinc-400 {
-    color: inherit !important;
+    color: currentColor !important;
   }
   
   /* Reset transforms for print if they cause issues, but we want zoom/pan state? 
