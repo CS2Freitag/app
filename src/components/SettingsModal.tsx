@@ -15,6 +15,9 @@ import {
   Monitor,
   ExternalLink,
   FileCode,
+  Save,
+  HardDrive,
+  RefreshCw,
 } from 'lucide-react';
 import { MapData, Language, Theme } from '../types';
 import { usePWAInstall } from '../hooks/usePWAInstall';
@@ -41,6 +44,14 @@ interface SettingsModalProps {
   onLogout: () => void;
   onUploadToCloud: () => void;
   onDownloadFromCloud: () => void;
+  isAutosaveEnabled?: boolean;
+  onToggleAutosave?: () => void;
+  connectedFileName?: string;
+  lastAutosaveTs?: number;
+  onChooseSaveLocation?: () => Promise<boolean>;
+  onManualSaveNow?: () => Promise<boolean>;
+  onLoadFromFileLocation?: () => Promise<boolean>;
+  onDisconnectFileLocation?: () => Promise<void>;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -62,6 +73,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onLogout,
   onUploadToCloud,
   onDownloadFromCloud,
+  isAutosaveEnabled = true,
+  onToggleAutosave,
+  connectedFileName = '',
+  lastAutosaveTs = 0,
+  onChooseSaveLocation,
+  onManualSaveNow,
+  onLoadFromFileLocation,
+  onDisconnectFileLocation,
 }) => {
   const isDe = lang === 'de';
   const { isInstallable, isInstalled, isIOS, isInIframe, install } = usePWAInstall();
@@ -547,7 +566,150 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
-          {/* 2. CLOUD SYNC */}
+          {/* 2. AUTOSAVE & EIGENER SPEICHERORT (PC & SMARTPHONE) */}
+          <div className="p-4 rounded-xl bg-zinc-950/70 border border-emerald-500/30 space-y-3.5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 font-mono uppercase font-bold text-zinc-200">
+                <HardDrive className="w-4 h-4 text-emerald-400" />
+                <span>{isDe ? 'Autosave & Eigener Speicherort' : 'Autosave & Custom Storage Location'}</span>
+              </div>
+
+              {/* Autosave Toggle Switch */}
+              <div className="flex items-center gap-2">
+                <span className={`text-[10px] font-mono font-bold uppercase ${isAutosaveEnabled ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                  {isAutosaveEnabled ? (isDe ? 'Aktiviert' : 'Active') : (isDe ? 'Deaktiviert' : 'Disabled')}
+                </span>
+                <button
+                  type="button"
+                  onClick={onToggleAutosave}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    isAutosaveEnabled ? 'bg-emerald-500' : 'bg-zinc-700'
+                  }`}
+                  role="switch"
+                  aria-checked={isAutosaveEnabled}
+                  title={isDe ? 'Autosave ein- oder ausschalten' : 'Toggle autosave on/off'}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                      isAutosaveEnabled ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-zinc-400 leading-relaxed">
+              {isDe
+                ? 'Mit Autosave werden deine Karten, Callouts, Marker und Taktiken automatisch gesichert. Du kannst eine Datei an einem von dir gewählten Ort (z.B. Dokumente, Cloud-Ordner, USB) verknüpfen, in die jede Änderung automatisch direkt geschrieben wird.'
+                : 'With Autosave, all your map edits, callouts, and tactics are automatically saved. You can connect a file at a custom folder of your choice (e.g. Documents, Cloud folder, USB) so changes write directly to it.'}
+            </p>
+
+            {/* File Connection Status Box */}
+            <div className="p-3 rounded-lg bg-zinc-900 border border-zinc-800 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className={`p-2 rounded-lg ${connectedFileName ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'}`}>
+                    <Save className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-bold text-zinc-200 truncate flex items-center gap-1.5">
+                      <span>{connectedFileName ? `📁 ${connectedFileName}` : (isDe ? 'Keine Datei verknüpft' : 'No file linked')}</span>
+                      {connectedFileName && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono">
+                          {isDe ? 'Verbunden' : 'Connected'}
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-[10px] text-zinc-500">
+                      {lastAutosaveTs && lastAutosaveTs > 0
+                        ? `${isDe ? 'Zuletzt automatisch gesichert: ' : 'Last autosaved: '} ${new Date(lastAutosaveTs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
+                        : (isDe ? 'Wartet auf erste Speicherung...' : 'Waiting for first save...')}
+                    </p>
+                  </div>
+                </div>
+
+                {connectedFileName && (
+                  <button
+                    onClick={async () => {
+                      if (onDisconnectFileLocation) await onDisconnectFileLocation();
+                      showNotification(isDe ? 'Datei-Verknüpfung getrennt.' : 'File unlinked.');
+                    }}
+                    className="text-[10px] font-bold text-zinc-400 hover:text-red-400 transition-colors px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700/80 cursor-pointer"
+                  >
+                    {isDe ? 'Trennen' : 'Unlink'}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Action Buttons: Choose Location, Manual Save Now, Load from File */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+              {/* 1. Choose Location */}
+              <button
+                onClick={async () => {
+                  if (onChooseSaveLocation) {
+                    const success = await onChooseSaveLocation();
+                    if (success) {
+                      showNotification(isDe ? 'Speicherort erfolgreich gewählt & Backup gespeichert!' : 'File location selected & backup saved!');
+                    }
+                  }
+                }}
+                className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-white font-bold transition-all shadow-xs cursor-pointer text-xs"
+                title={isDe ? 'Dateidialog öffnen und Speicherort auf PC oder Handy wählen' : 'Open file picker to select custom save location'}
+              >
+                <HardDrive className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>{isDe ? '📁 Ort wählen' : '📁 Choose File'}</span>
+              </button>
+
+              {/* 2. Manual Save Now */}
+              <button
+                onClick={async () => {
+                  if (onManualSaveNow) {
+                    const ok = await onManualSaveNow();
+                    if (ok) {
+                      showNotification(isDe ? 'Stand erfolgreich in Datei gesichert!' : 'Saved to file successfully!');
+                    }
+                  }
+                }}
+                className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-black transition-all shadow-md active:scale-[0.98] cursor-pointer text-xs"
+                title={isDe ? 'Aktuellen Stand jetzt sofort in die Datei sichern' : 'Save current state to file immediately'}
+              >
+                <Save className="w-3.5 h-3.5 shrink-0" />
+                <span>{isDe ? '💾 Speichern' : '💾 Save Now'}</span>
+              </button>
+
+              {/* 3. Load from File */}
+              <button
+                onClick={async () => {
+                  if (onLoadFromFileLocation) {
+                    const ok = await onLoadFromFileLocation();
+                    if (ok) {
+                      showNotification(isDe ? 'Daten erfolgreich aus der Datei geladen!' : 'Data loaded from file successfully!');
+                    } else {
+                      showNotification(isDe ? 'Konnte nicht aus der Datei geladen werden.' : 'Could not load from file.', true);
+                    }
+                  }
+                }}
+                className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-sky-500/40 bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 font-bold transition-all shadow-xs cursor-pointer text-xs"
+                title={isDe ? 'Aktuellen Stand aus der verknüpften Backup-Datei einlesen' : 'Reload latest state from connected backup file'}
+              >
+                <RefreshCw className="w-3.5 h-3.5 shrink-0 text-sky-400" />
+                <span>{isDe ? '🔄 Aus Datei laden' : '🔄 Load File'}</span>
+              </button>
+            </div>
+
+            {/* Info Box about PC & Mobile File System Access */}
+            <div className="p-2.5 rounded-lg bg-zinc-900/60 border border-zinc-800/80 text-[10px] text-zinc-400 space-y-1">
+              <p>
+                <strong className="text-zinc-300">{isDe ? '💡 Hinweis zu PC & Smartphone:' : '💡 Note for PC & Mobile:'}</strong>{' '}
+                {isDe
+                  ? 'Auf PCs und Android (Chrome/Edge) wird die Datei über die Dateisystem-Schnittstelle direkt an deinem gewählten Speicherort aktualisiert. Auf Apple iOS (Safari) oder Browsern ohne direkten Ordnerzugriff sichert Autosave alles lückenlos im Offline-Speicher (PWA Storage) dieses Geräts, und über "Jetzt manuell speichern" kannst du die Datei jederzeit in deinen Dateien/Downloads abspeichern.'
+                  : 'On PC and Android (Chrome/Edge), files write directly to your chosen folder. On Apple iOS (Safari), Autosave saves in offline PWA storage, and "Save Manually Now" downloads to your files.'}
+              </p>
+            </div>
+          </div>
+
+          {/* 3. CLOUD SYNC */}
           <div className="p-4 rounded-xl bg-zinc-950/70 border border-zinc-800 space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="font-mono uppercase font-bold text-zinc-400">

@@ -35,6 +35,22 @@ import {
   loadUserCloudData 
 } from './services/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
+import {
+  isFileSystemAccessSupported,
+  loadAutosaveEnabled,
+  saveAutosaveEnabled,
+  loadAutosaveFilename,
+  loadLastAutosaveTimestamp,
+  saveLastAutosaveTimestamp,
+  getStoredFileHandle,
+  removeStoredFileHandle,
+  pickSaveFileLocation,
+  pickOpenFileLocation,
+  writeBackupToFile,
+  readBackupFromFile,
+  downloadBackupJsonFile,
+  createBackupPayload,
+} from './services/fileSync';
 
 export default function App() {
   // Theme & Language
@@ -65,6 +81,68 @@ export default function App() {
 
   // Firebase Auth State
   const [user, setUser] = useState<User | null>(null);
+
+  // Autosave & File System Access State
+  const [isAutosaveEnabled, setIsAutosaveEnabled] = useState<boolean>(() => loadAutosaveEnabled());
+  const [fileHandle, setFileHandle] = useState<FileSystemFileHandle | null>(null);
+  const [connectedFileName, setConnectedFileName] = useState<string>(() => loadAutosaveFilename());
+  const [lastAutosaveTs, setLastAutosaveTs] = useState<number>(() => loadLastAutosaveTimestamp());
+  const [isAutosaving, setIsAutosaving] = useState<boolean>(false);
+
+  // Retrieve stored FileSystemFileHandle on startup and auto-sync latest data from file
+  useEffect(() => {
+    if (isFileSystemAccessSupported()) {
+      getStoredFileHandle().then(async (handle) => {
+        if (handle) {
+          setFileHandle(handle);
+          setConnectedFileName(handle.name);
+          try {
+            // Check if read permission is already granted from previous session
+            const perm = await (handle as any).queryPermission?.({ mode: 'read' });
+            if (perm === 'granted') {
+              const payload = await readBackupFromFile(handle);
+              if (payload && Array.isArray(payload.maps) && payload.maps.length > 0) {
+                parseAndApplyBackup(JSON.stringify(payload), true);
+                console.log('Autosave: Automatically synced data from connected file on startup.');
+              }
+            }
+          } catch (e) {
+            console.warn('Auto-sync from file on startup skipped:', e);
+          }
+        }
+      });
+    }
+  }, []);
+
+  // Debounced Autosave effect whenever maps, favorites, theme, or lang changes
+  const isInitialMount = useRef(true);
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    if (!isAutosaveEnabled) return;
+
+    if (fileHandle) {
+      const timer = setTimeout(async () => {
+        try {
+          setIsAutosaving(true);
+          const payload = createBackupPayload(maps, { theme, lang, favorites });
+          const ok = await writeBackupToFile(fileHandle, payload);
+          if (ok) {
+            setLastAutosaveTs(Date.now());
+          }
+        } catch (e) {
+          console.warn('Autosave to file error:', e);
+        } finally {
+          setIsAutosaving(false);
+        }
+      }, 1500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [maps, favorites, theme, lang, isAutosaveEnabled, fileHandle]);
 
   // Monitor Auth State & Auto-sync latest cloud data on startup / sign-in
   useEffect(() => {
@@ -395,7 +473,7 @@ export default function App() {
     }
   };
 
-  const parseAndApplyBackup = (text: string) => {
+  const parseAndApplyBackup = (text: string, silent = false) => {
     try {
       const parsed = JSON.parse(text);
       if (parsed && Array.isArray(parsed.maps)) {
@@ -414,13 +492,98 @@ export default function App() {
           setLang(parsed.settings.lang);
           saveLanguage(parsed.settings.lang);
         }
-        alert(lang === 'de' ? 'Gesamtes Backup wurde erfolgreich geladen!' : 'Full backup loaded successfully!');
+        if (!silent) {
+          alert(lang === 'de' ? 'Gesamtes Backup wurde erfolgreich geladen!' : 'Full backup loaded successfully!');
+        }
       } else {
-        alert(lang === 'de' ? 'Ungültiges Dateiformat. Keine Karten im Backup gefunden.' : 'Invalid backup format.');
+        if (!silent) {
+          alert(lang === 'de' ? 'Ungültiges Dateiformat. Keine Karten im Backup gefunden.' : 'Invalid backup format.');
+        }
       }
     } catch (err) {
-      alert(lang === 'de' ? 'Fehler beim Parsen der Backup-Daten.' : 'Error parsing backup data.');
+      if (!silent) {
+        alert(lang === 'de' ? 'Fehler beim Parsen der Backup-Daten.' : 'Error parsing backup data.');
+      }
     }
+  };
+
+  // Autosave & File Sync Action Handlers
+  const handleToggleAutosave = () => {
+    setIsAutosaveEnabled((prev) => {
+      const next = !prev;
+      saveAutosaveEnabled(next);
+      return next;
+    });
+  };
+
+  const handleChooseSaveLocation = async (): Promise<boolean> => {
+    const handle = await pickSaveFileLocation();
+    if (handle) {
+      setFileHandle(handle);
+      setConnectedFileName(handle.name);
+      setIsAutosaveEnabled(true);
+      saveAutosaveEnabled(true);
+      // Immediately write initial full backup into the file
+      const payload = createBackupPayload(maps, { theme, lang, favorites });
+      const ok = await writeBackupToFile(handle, payload);
+      if (ok) {
+        setLastAutosaveTs(Date.now());
+      }
+      return true;
+    }
+    return false;
+  };
+
+  const handleManualSaveNow = async (): Promise<boolean> => {
+    const payload = createBackupPayload(maps, { theme, lang, favorites });
+    if (fileHandle) {
+      const ok = await writeBackupToFile(fileHandle, payload);
+      if (ok) {
+        setLastAutosaveTs(Date.now());
+        return true;
+      }
+    }
+    // If no direct file handle or on mobile without direct file system access, download JSON file
+    downloadBackupJsonFile(payload, connectedFileName || `cs2freitag_backup_${new Date().toISOString().slice(0, 10)}.json`);
+    setLastAutosaveTs(Date.now());
+    return true;
+  };
+
+  const handleLoadFromFileLocation = async (): Promise<boolean> => {
+    if (fileHandle) {
+      try {
+        const query = await (fileHandle as any).queryPermission?.({ mode: 'read' });
+        if (query !== 'granted') {
+          const req = await (fileHandle as any).requestPermission?.({ mode: 'read' });
+          if (req !== 'granted') {
+            return false;
+          }
+        }
+        const payload = await readBackupFromFile(fileHandle);
+        if (payload && Array.isArray(payload.maps) && payload.maps.length > 0) {
+          parseAndApplyBackup(JSON.stringify(payload), true);
+          return true;
+        }
+      } catch (err) {
+        console.warn('Error reading from existing fileHandle, attempting file picker:', err);
+      }
+    }
+    const opened = await pickOpenFileLocation();
+    if (opened) {
+      setFileHandle(opened.handle);
+      setConnectedFileName(opened.handle.name);
+      if (opened.data && Array.isArray(opened.data.maps)) {
+        parseAndApplyBackup(JSON.stringify(opened.data), true);
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const handleDisconnectFileLocation = async () => {
+    await removeStoredFileHandle();
+    setFileHandle(null);
+    setConnectedFileName('');
   };
 
   // FULL BACKUP EXPORT AS ZIP (Containing JSON + Radar Images folder)
@@ -909,6 +1072,14 @@ export default function App() {
         onLogout={handleLogout}
         onUploadToCloud={handleUploadToCloud}
         onDownloadFromCloud={handleDownloadFromCloud}
+        isAutosaveEnabled={isAutosaveEnabled}
+        onToggleAutosave={handleToggleAutosave}
+        connectedFileName={connectedFileName}
+        lastAutosaveTs={lastAutosaveTs}
+        onChooseSaveLocation={handleChooseSaveLocation}
+        onManualSaveNow={handleManualSaveNow}
+        onLoadFromFileLocation={handleLoadFromFileLocation}
+        onDisconnectFileLocation={handleDisconnectFileLocation}
       />
 
       {/* Single Map Import Conflict Modal (Overwrite vs. Rename with -Neu1) */}
