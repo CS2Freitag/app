@@ -1004,14 +1004,19 @@ export default function App() {
           {/* Footer */}
           <footer className="mt-auto border-t border-zinc-800/80 bg-zinc-950/60 py-6 text-xs text-zinc-400 dark:border-zinc-800/80 dark:bg-zinc-950/60 light:border-zinc-200 light:bg-white">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-zinc-300 dark:text-zinc-300 light:text-zinc-700">
-                  CS2Freitag
-                </span>
-                <span aria-hidden="true">·</span>
-                <span>{isDe ? 'Offline PWA Taktik-Zentrale' : 'Offline PWA Tactical Hub'}</span>
-                <span aria-hidden="true">·</span>
-                <span>Counter-Strike 2 Callouts</span>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 text-center sm:text-left">
+                <div className="flex items-center justify-center sm:justify-start gap-2">
+                  <span className="font-bold text-zinc-300 dark:text-zinc-300 light:text-zinc-700">
+                    CS2Freitag
+                  </span>
+                  <span aria-hidden="true">·</span>
+                  <span>{isDe ? 'Inoffizielles Community-Projekt' : 'Unofficial Community Project'}</span>
+                </div>
+                <p className="text-[10px] text-zinc-500">
+                  {isDe
+                    ? 'Nicht mit Valve Corp. verbunden. CS2 & Kartenbilder sind Marken der Valve Corp.'
+                    : 'Not affiliated with Valve Corp. CS2 & map assets are trademarks of Valve Corp.'}
+                </p>
               </div>
 
               <div className="flex flex-wrap items-center justify-center sm:justify-end gap-3 sm:gap-4">
@@ -1033,7 +1038,7 @@ export default function App() {
                   onClick={handleOpenSettings}
                   className="text-zinc-400 hover:text-white underline decoration-zinc-700 underline-offset-2 transition-colors text-xs"
                 >
-                  {isDe ? 'Einstellungen & Backup' : 'Settings & Backup'}
+                  {isDe ? 'Einstellungen & Legal' : 'Settings & Legal'}
                 </button>
               </div>
             </div>

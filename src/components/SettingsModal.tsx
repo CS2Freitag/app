@@ -18,6 +18,7 @@ import {
   Save,
   HardDrive,
   RefreshCw,
+  ShieldCheck,
 } from 'lucide-react';
 import { MapData, Language, Theme } from '../types';
 import { usePWAInstall } from '../hooks/usePWAInstall';
@@ -876,22 +877,44 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
-          {/* 5. IMPRESSUM & ENTWICKLER */}
-          <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
-            <div>
-              <span className="font-semibold text-zinc-300">Impressum: </span>
-              <span className="text-zinc-400">callmebythecolor</span>
+          {/* 5. IMPRESSUM & DATENSCHUTZERKLÄRUNG */}
+          <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800 space-y-3 text-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800/80 pb-2">
+              <div>
+                <span className="font-bold text-zinc-200">Impressum: </span>
+                <span className="text-zinc-400">Community-Projekt (callmebythecolor)</span>
+              </div>
+              <a
+                href="https://steamcommunity.com/profiles/76561198014156077"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-amber-400 hover:text-amber-300 transition-colors font-medium underline decoration-amber-400/50 hover:decoration-amber-300 underline-offset-2 shrink-0"
+                title="Steam Profil: callmebythecolor"
+              >
+                <span>Steam Profil ansehen</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
             </div>
-            <a
-              href="https://steamcommunity.com/profiles/76561198014156077"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-amber-400 hover:text-amber-300 transition-colors font-medium underline decoration-amber-400/50 hover:decoration-amber-300 underline-offset-2"
-              title="Steam Profil: callmebythecolor"
-            >
-              <span>Steam Profil ansehen</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
+
+            {/* Datenschutz-Hinweis */}
+            <div className="space-y-1.5 pt-1">
+              <div className="flex items-center gap-1.5 font-bold text-zinc-300">
+                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Datenschutzerklärung & Speicherung</span>
+              </div>
+              <p className="text-[10px] text-zinc-400 leading-relaxed">
+                {isDe
+                  ? '• Lokale Speicherung: Alle Karten, Callouts und Einstellungen werden lokal im Browser (LocalStorage & IndexedDB) deines Geräts gespeichert.\n• Google-Login (Firebase): Bei der optionalen Anmeldung verarbeitet Google Firebase deine E-Mail-Adresse, Anzeigenamen und User-ID ausschließlich zur Sicherung deiner persönlichen Cloud-Backups. Es findet keine Datenweitergabe an Dritte statt.'
+                  : '• Local Storage: All maps, callouts, and settings are saved locally in your browser (LocalStorage & IndexedDB).\n• Google Login (Firebase): When signing in optionally, Google Firebase processes your email address, display name, and User-ID solely to manage your personal cloud backups. No data is shared with third parties.'}
+              </p>
+            </div>
+
+            {/* Valve Disclaimer */}
+            <p className="text-[10px] text-zinc-500 leading-relaxed pt-1 border-t border-zinc-800/60">
+              {isDe
+                ? 'Disclaimer: CS2Freitag ist ein kostenloses, inoffizielles Community-Fan-Projekt und steht in keiner Verbindung zu Valve Corporation. Counter-Strike, CS2, Logos und Kartenbilder sind Marken oder eingetragene Marken der Valve Corporation.'
+                : 'Disclaimer: CS2Freitag is a free, unofficial community fan project and is not affiliated with Valve Corporation. Counter-Strike, CS2, logos, and radar images are trademarks or registered trademarks of Valve Corporation.'}
+            </p>
           </div>
 
           {/* 6. FACTORY RESET */}
