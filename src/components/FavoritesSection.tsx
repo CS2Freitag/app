@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Star, ChevronRight, ChevronDown, GripVertical, Check, Layers } from 'lucide-react';
 import { MapData, Language } from '../types';
+import { resolveAssetPath } from '../utils/assets';
 
 interface FavoritesSectionProps {
   favoriteMaps: MapData[];
@@ -324,7 +325,7 @@ export const FavoritesSection: React.FC<FavoritesSectionProps> = ({
                 {/* Radar Preview Thumbnail */}
                 <div className="relative aspect-video w-full rounded-lg overflow-hidden bg-zinc-950 light:bg-zinc-200 border border-zinc-800/80 light:border-zinc-300 flex items-center justify-center">
                   <img
-                    src={map.image}
+                    src={resolveAssetPath(map.image)}
                     alt={`${map.name} Radar`}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 opacity-90 group-hover:opacity-100 pointer-events-none"
                     loading="lazy"

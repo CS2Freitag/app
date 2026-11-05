@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Search, X, MapPin, ChevronRight } from 'lucide-react';
 import { MapData, Callout, Language } from '../types';
+import { resolveAssetPath } from '../utils/assets';
 
 interface SearchBarProps {
   searchQuery: string;
@@ -166,7 +167,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
                   >
                     <div className="flex items-center gap-3">
                       <img
-                        src={map.image}
+                        src={resolveAssetPath(map.image)}
                         alt={map.name}
                         className="w-10 h-7 rounded object-cover border border-zinc-700 light:border-zinc-300 shrink-0"
                         onError={(e) => {

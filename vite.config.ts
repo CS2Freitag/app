@@ -5,9 +5,12 @@ import { fileURLToPath } from 'url';
 import {defineConfig} from 'vite';
 import {VitePWA} from 'vite-plugin-pwa';
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
+  const isGitHubPages = process.env.GITHUB_ACTIONS === 'true' || mode === 'production_github';
+  const base = isGitHubPages ? '/app/' : '/';
+
   return {
-    base: '/app/',
+    base,
     plugins: [
       react(),
       tailwindcss(),
@@ -15,7 +18,7 @@ export default defineConfig(() => {
         injectRegister: null,
         registerType: 'autoUpdate',
         manifest: {
-          id: '/app/',
+          id: base,
           name: 'CS2Freitag - Counter-Strike 2 Callouts',
           short_name: 'CS2Freitag',
           description: 'Moderne PWA für CS2 Callouts aller offiziellen Karten mit interaktiver Taktik-Karte, Offline-Funktion, Suche und Favoriten.',
@@ -24,25 +27,25 @@ export default defineConfig(() => {
           display: 'standalone',
           display_override: ['standalone', 'window-controls-overlay'],
           orientation: 'any',
-          start_url: '/app/',
-          scope: '/app/',
+          start_url: base,
+          scope: base,
           lang: 'de',
           categories: ['games', 'utilities'],
           icons: [
             {
-              src: '/app/pwa-192x192.png',
+              src: `${base}pwa-192x192.png`,
               sizes: '192x192',
               type: 'image/png',
               purpose: 'any',
             },
             {
-              src: '/app/pwa-512x512.png',
+              src: `${base}pwa-512x512.png`,
               sizes: '512x512',
               type: 'image/png',
               purpose: 'any',
             },
             {
-              src: '/app/pwa-maskable-512x512.png',
+              src: `${base}pwa-maskable-512x512.png`,
               sizes: '512x512',
               type: 'image/png',
               purpose: 'maskable',
@@ -50,14 +53,14 @@ export default defineConfig(() => {
           ],
           screenshots: [
             {
-              src: '/app/screenshot-desktop.png',
+              src: `${base}screenshot-desktop.png`,
               sizes: '1280x720',
               type: 'image/png',
               form_factor: 'wide',
               label: 'CS2Freitag Taktik-Übersicht & Callouts (Desktop)'
             },
             {
-              src: '/app/screenshot-mobile.png',
+              src: `${base}screenshot-mobile.png`,
               sizes: '1080x1920',
               type: 'image/png',
               form_factor: 'narrow',

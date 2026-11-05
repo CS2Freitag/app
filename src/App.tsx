@@ -86,9 +86,8 @@ export default function App() {
           }
 
           if (cloudMaps && cloudMaps.length > 0) {
-            const cleanCloudMaps = cloudMaps.filter((m) => m.id !== 'poseidon');
-            setMaps(cleanCloudMaps);
-            saveStoredMaps(cleanCloudMaps);
+            setMaps(cloudMaps);
+            saveStoredMaps(cloudMaps);
           }
         } catch (err) {
           console.warn('Auto cloud sync on startup/login failed or offline:', err);
@@ -115,9 +114,8 @@ export default function App() {
             }
           }
           if (cloudMaps && cloudMaps.length > 0) {
-            const cleanCloudMaps = cloudMaps.filter((m) => m.id !== 'poseidon');
-            setMaps(cleanCloudMaps);
-            saveStoredMaps(cleanCloudMaps);
+            setMaps(cloudMaps);
+            saveStoredMaps(cloudMaps);
           }
         } catch (e) {
           console.warn('Initial download after login error:', e);
@@ -179,9 +177,8 @@ export default function App() {
       }
 
       if (cloudMaps && cloudMaps.length > 0) {
-        const cleanCloudMaps = cloudMaps.filter((m) => m.id !== 'poseidon');
-        setMaps(cleanCloudMaps);
-        saveStoredMaps(cleanCloudMaps);
+        setMaps(cloudMaps);
+        saveStoredMaps(cloudMaps);
       }
     } catch (err) {
       console.error('Download failed:', err);

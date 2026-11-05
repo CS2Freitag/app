@@ -99,21 +99,21 @@ function applyDefaultSpawnImages(maps: MapData[]): MapData[] {
         c.name.toLowerCase() === 't-spawn';
 
       if (isCT) {
-        if (!c.customImage || c.customImage === '/ct.png' || c.customImage.startsWith('/ct.png')) {
+        if (!c.customImage || c.customImage === '/ct.png' || c.customImage === 'ct.png' || c.customImage.startsWith('/ct.png')) {
           return {
             ...c,
             displayMode: c.displayMode || 'image',
-            customImage: '/ct.png',
+            customImage: 'ct.png',
             imageSize: c.imageSize || 36,
           };
         }
       }
       if (isT) {
-        if (!c.customImage || c.customImage === '/T.png' || c.customImage === '/t.png' || c.customImage.startsWith('/T.png') || c.customImage.startsWith('/t.png')) {
+        if (!c.customImage || c.customImage === '/T.png' || c.customImage === '/t.png' || c.customImage === 'T.png' || c.customImage === 't.png' || c.customImage.startsWith('/T.png') || c.customImage.startsWith('/t.png')) {
           return {
             ...c,
             displayMode: c.displayMode || 'image',
-            customImage: '/T.png',
+            customImage: 'T.png',
             imageSize: c.imageSize || 36,
           };
         }
@@ -145,6 +145,7 @@ export function loadStoredMaps(): MapData[] {
             m.id !== 'baggage' &&
             m.id !== 'shoots' &&
             m.id !== 'poseidon' &&
+            m.slug !== 'poseidon' &&
             !deletedIds.has(m.id)
         );
 
@@ -159,7 +160,7 @@ export function loadStoredMaps(): MapData[] {
         // Merge missing default maps (respecting deleted list)
         const existingIds = new Set(parsed.map((m) => m.id));
         const missingDefaults = INITIAL_MAPS.filter(
-          (m) => m.id !== 'poseidon' && !existingIds.has(m.id) && !deletedIds.has(m.id)
+          (m) => !existingIds.has(m.id) && !deletedIds.has(m.id)
         );
         if (missingDefaults.length > 0) {
           parsed = [...parsed, ...missingDefaults];
@@ -172,13 +173,13 @@ export function loadStoredMaps(): MapData[] {
       }
     }
 
-    // Fallback: Return INITIAL_MAPS filtered by deleted IDs and poseidon
-    const filteredDefaults = INITIAL_MAPS.filter(m => m.id !== 'poseidon' && !deletedIds.has(m.id));
+    // Fallback: Return INITIAL_MAPS filtered by deleted IDs
+    const filteredDefaults = INITIAL_MAPS.filter(m => !deletedIds.has(m.id));
     return applyDefaultSpawnImages(filteredDefaults);
   } catch (e) {
     console.error('Failed to load maps from storage:', e);
   }
-  return applyDefaultSpawnImages(INITIAL_MAPS.filter(m => m.id !== 'poseidon'));
+  return applyDefaultSpawnImages(INITIAL_MAPS);
 }
 
 export function loadCustomGroups(): string[] {
@@ -278,7 +279,7 @@ export function resetToDefaults(): MapData[] {
   } catch (e) {
     //
   }
-  const cleanDefaults = INITIAL_MAPS.filter(m => m.id !== 'poseidon');
+  const cleanDefaults = INITIAL_MAPS;
   saveStoredMaps(cleanDefaults);
   return cleanDefaults;
 }

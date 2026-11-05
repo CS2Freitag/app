@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { User } from 'firebase/auth';
 import { getCloudMap, smartMergeMap, syncUserMap, loginWithGoogle } from '../services/firebase';
 import { CloudConflictModal } from './CloudConflictModal';
+import { resolveAssetPath } from '../utils/assets';
 import {
   ArrowLeft,
   ZoomIn,
@@ -1027,7 +1028,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     const isCT = callout.zone === 'ct_spawn' || callout.name.toLowerCase().includes('ct spawn');
     const isT = callout.zone === 't_spawn' || callout.name.toLowerCase().includes('t spawn');
     const defaultMode = callout.displayMode || (callout.customImage ? 'image' : (isCT || isT ? 'image' : 'text'));
-    const defaultImage = callout.customImage || (isCT ? '/ct.png' : isT ? '/T.png' : '');
+    const defaultImage = callout.customImage || (isCT ? 'ct.png' : isT ? 'T.png' : '');
 
     setCalloutFormDisplayMode(defaultMode);
     setCalloutFormCustomImage(defaultImage);
@@ -1602,7 +1603,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         {/* Background Radar Image (Clipped inside frame) */}
         <div className="absolute inset-0 rounded-lg overflow-hidden border border-zinc-800 bg-zinc-900">
           <img
-            src={tileImage}
+            src={resolveAssetPath(tileImage)}
             alt={`${mapData.name} ${isLower ? 'Lower' : 'Upper'} Radar Map`}
             className="w-full h-full object-cover pointer-events-none"
             draggable={false}
@@ -1990,7 +1991,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                         <span className="absolute -inset-2 rounded-full bg-white/40 animate-ping pointer-events-none" />
                       )}
                       <img
-                        src={callout.customImage?.startsWith('/') ? `${callout.customImage}?v=3` : callout.customImage}
+                        src={resolveAssetPath(callout.customImage)}
                         alt={callout.name}
                         draggable={false}
                         style={{
@@ -2999,7 +3000,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       setCalloutFormDisplayMode('image');
                       if (!calloutFormCustomImage) {
                         const isCT = calloutFormZone === 'ct_spawn' || calloutFormName.toLowerCase().includes('ct');
-                        setCalloutFormCustomImage(isCT ? '/ct.png' : '/T.png');
+                        setCalloutFormCustomImage(isCT ? 'ct.png' : 'T.png');
                       }
                     }}
                     className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${
@@ -3018,7 +3019,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       setCalloutFormDisplayMode('both');
                       if (!calloutFormCustomImage) {
                         const isCT = calloutFormZone === 'ct_spawn' || calloutFormName.toLowerCase().includes('ct');
-                        setCalloutFormCustomImage(isCT ? '/ct.png' : '/T.png');
+                        setCalloutFormCustomImage(isCT ? 'ct.png' : 'T.png');
                       }
                     }}
                     className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${
@@ -3071,15 +3072,15 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
-                          onClick={() => setCalloutFormCustomImage('/ct.png')}
+                          onClick={() => setCalloutFormCustomImage('ct.png')}
                           className={`flex items-center gap-2.5 p-2 rounded-xl border text-left transition-all ${
-                            calloutFormCustomImage === '/ct.png'
+                            calloutFormCustomImage === 'ct.png' || calloutFormCustomImage === '/ct.png'
                               ? 'border-sky-400 bg-sky-950/40 text-white ring-1 ring-sky-400 shadow-md'
                               : 'border-zinc-800 bg-zinc-900/90 text-zinc-400 hover:text-white hover:bg-zinc-800'
                           }`}
                         >
                           <img
-                            src="/ct.png"
+                            src={resolveAssetPath('ct.png')}
                             alt="CT Spawn Emblem"
                             className="w-7 h-7 object-contain rounded-full shadow filter drop-shadow"
                           />
@@ -3091,15 +3092,15 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
                         <button
                           type="button"
-                          onClick={() => setCalloutFormCustomImage('/T.png')}
+                          onClick={() => setCalloutFormCustomImage('T.png')}
                           className={`flex items-center gap-2.5 p-2 rounded-xl border text-left transition-all ${
-                            calloutFormCustomImage === '/T.png'
+                            calloutFormCustomImage === 'T.png' || calloutFormCustomImage === '/T.png'
                               ? 'border-amber-500 bg-amber-950/40 text-white ring-1 ring-amber-500 shadow-md'
                               : 'border-zinc-800 bg-zinc-900/90 text-zinc-400 hover:text-white hover:bg-zinc-800'
                           }`}
                         >
                           <img
-                            src="/T.png?v=3"
+                            src={resolveAssetPath('T.png')}
                             alt="T Spawn Emblem"
                             className="w-7 h-7 object-contain rounded-full shadow filter drop-shadow"
                           />
@@ -3117,7 +3118,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                         type="text"
                         value={calloutFormCustomImage}
                         onChange={(e) => setCalloutFormCustomImage(e.target.value)}
-                        placeholder="/ct.png, /T.png oder Web-URL..."
+                        placeholder="ct.png, T.png oder Web-URL..."
                         className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-zinc-700 bg-zinc-950 text-white focus:outline-hidden focus:border-amber-400"
                       />
                       <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 cursor-pointer text-xs font-medium shrink-0">

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Star, Plus, Edit2, ChevronRight, Layers, Upload, Download, Trash2 } from 'lucide-react';
 import { MapData, Language } from '../types';
+import { resolveAssetPath } from '../utils/assets';
 
 interface MapGridProps {
   maps: MapData[];
@@ -221,7 +222,7 @@ export const MapGrid: React.FC<MapGridProps> = ({
                   className="relative aspect-video w-full overflow-hidden bg-zinc-950 light:bg-zinc-200 cursor-pointer"
                 >
                   <img
-                    src={map.image}
+                    src={resolveAssetPath(map.image)}
                     alt={`${map.name} Overview`}
                     className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 opacity-85 group-hover:opacity-100"
                     loading="lazy"
