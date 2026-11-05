@@ -39,13 +39,15 @@
   }
 
   body, html {
-    background: white !important;
-    color: black !important;
+    background: #18181b !important;
+    color: currentColor !important;
     margin: 0 !important;
     padding: 0 !important;
     width: 100% !important;
     height: auto !important;
     overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   /* Reset fixed positioning for print to avoid clipping and allow natural page flow */
@@ -53,8 +55,8 @@
     position: relative !important;
     height: auto !important;
     display: block !important;
-    background: white !important;
-    color: black !important;
+    background: #18181b !important;
+    color: currentColor !important;
     overflow: visible !important;
     z-index: 0 !important;
   }
