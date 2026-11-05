@@ -37,6 +37,15 @@ export const CalloutQuizModal: React.FC<CalloutQuizModalProps> = ({
     }
   }, [eligibleMaps, selectedMapId]);
 
+  const handleClose = () => {
+    setIsQuizActive(false);
+    setSelectedOption(null);
+    setCurrentIndex(0);
+    setScore(0);
+    setIsFinished(false);
+    onClose();
+  };
+
   if (!isOpen) return null;
 
   const currentMap = maps.find((m) => m.id === selectedMapId);
@@ -95,7 +104,12 @@ export const CalloutQuizModal: React.FC<CalloutQuizModalProps> = ({
   const currentQuestion = questions[currentIndex];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 overflow-y-auto animate-in fade-in-50">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 overflow-y-auto animate-in fade-in-50"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) handleClose();
+      }}
+    >
       <div className="w-full max-w-2xl rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl text-zinc-100 max-h-[92vh] overflow-y-auto relative">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-zinc-800 mb-5">
@@ -116,7 +130,7 @@ export const CalloutQuizModal: React.FC<CalloutQuizModalProps> = ({
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />

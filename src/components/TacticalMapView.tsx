@@ -2447,7 +2447,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       <div className="relative flex-1 flex overflow-hidden">
         {/* POLYGON DRAWING MODE FLOATING BANNER */}
         {isDrawingPolygonArea && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-50 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 px-3 sm:px-4 py-2 rounded-xl bg-zinc-950/95 border-2 border-sky-400 shadow-2xl backdrop-blur-md max-w-[92vw] sm:max-w-3xl pointer-events-auto text-xs text-white">
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-50 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 px-3 sm:px-4 py-2 rounded-xl bg-zinc-950/95 border-2 border-sky-400 shadow-2xl backdrop-blur-md max-w-[92vw] sm:max-w-3xl pointer-events-auto text-xs text-white print:hidden">
             <div className="flex items-center gap-2 shrink-0">
               <span className="relative flex h-2.5 w-2.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
@@ -2512,7 +2512,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
         <div
           style={{ touchAction: 'none' }}
-          className={`relative flex-1 bg-zinc-950 flex items-center justify-center overflow-hidden ${
+          className={`relative flex-1 bg-zinc-950 flex items-center justify-center overflow-hidden print:bg-white print:h-auto print:overflow-visible ${
             isPanning
               ? 'cursor-grabbing'
               : activeTool === 'eraser'
@@ -2574,7 +2574,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                 e.preventDefault();
                 setShowEditBanner(false);
               }}
-              className="absolute top-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2.5 px-4 py-2 rounded-xl bg-amber-500/20 border border-amber-500/60 text-amber-200 text-xs font-semibold backdrop-blur-md shadow-2xl cursor-pointer hover:bg-amber-500/30 transition-all animate-in fade-in slide-in-from-top-2 duration-200"
+              className="absolute top-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2.5 px-4 py-2 rounded-xl bg-amber-500/20 border border-amber-500/60 text-amber-200 text-xs font-semibold backdrop-blur-md shadow-2xl cursor-pointer hover:bg-amber-500/30 transition-all animate-in fade-in slide-in-from-top-2 duration-200 print:hidden"
               title={isDe ? 'Klicken zum Ausblenden' : 'Click to dismiss'}
             >
               <Move className="w-4 h-4 text-amber-400 animate-pulse shrink-0 pointer-events-none" />
@@ -2601,7 +2601,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
           {/* FLOATING HOVER CARD */}
           {!isDrawingPolygonArea && hoveredCallout && !selectedCallout && !isEditMode && (
-            <div className="absolute bottom-5 left-5 z-40 max-w-sm rounded-xl border border-zinc-700 bg-zinc-950/95 p-4 shadow-2xl backdrop-blur-md text-zinc-100 pointer-events-none animate-in fade-in-50 duration-150">
+            <div className="absolute bottom-5 left-5 z-40 max-w-sm rounded-xl border border-zinc-700 bg-zinc-950/95 p-4 shadow-2xl backdrop-blur-md text-zinc-100 pointer-events-none animate-in fade-in-50 duration-150 print:hidden">
               <div className="flex items-center justify-between gap-2 mb-1.5">
                 <span className="font-extrabold text-sm text-white">
                   {hoveredCallout.name}

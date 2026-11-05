@@ -33,3 +33,38 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #3f3f46;
 }
+@media print {
+  .print\:hidden {
+    display: none !important;
+  }
+
+  body, html {
+    background: white !important;
+    color: black !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Reset fixed positioning for print to avoid clipping and allow natural page flow */
+  .fixed.inset-0 {
+    position: relative !important;
+    height: auto !important;
+    display: block !important;
+    background: white !important;
+    color: black !important;
+    overflow: visible !important;
+  }
+
+  /* Center the map and remove dark background/shadows */
+  .map-canvas-tile,
+  .aspect-square {
+    box-shadow: none !important;
+    border-color: #e5e7eb !important; /* light gray border for print */
+    background: white !important;
+  }
+
+  /* Ensure text on map is dark if needed, though mostly it's labels */
+  .text-zinc-100, .text-white {
+    color: black !important;
+  }
+}
