@@ -123,9 +123,11 @@ export default function App() {
           console.warn('Initial download after login error:', e);
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Login failed:', err);
-      alert(lang === 'de' ? 'Anmeldung fehlgeschlagen!' : 'Login failed!');
+      const errorCode = err?.code || 'unknown';
+      const errorMessage = err?.message || (lang === 'de' ? 'Unbekannter Fehler' : 'Unknown error');
+      alert((lang === 'de' ? 'Anmeldung fehlgeschlagen!\nCode: ' : 'Login failed!\nCode: ') + errorCode + '\n' + errorMessage);
     }
   };
 
