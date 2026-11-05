@@ -75,12 +75,16 @@ export default defineConfig(({ mode }) => {
           runtimeCaching: [
             {
               urlPattern: ({ request }) => request.destination === 'image',
-              handler: 'CacheFirst',
+              handler: 'NetworkFirst',
               options: {
-                cacheName: 'cs2-maps-cache',
+                cacheName: 'cs2-maps-cache-v3',
+                networkTimeoutSeconds: 3,
                 expiration: {
                   maxEntries: 150,
-                  maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
+                  maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
                 },
               },
             },
@@ -91,7 +95,7 @@ export default defineConfig(({ mode }) => {
                 request.destination === 'worker',
               handler: 'StaleWhileRevalidate',
               options: {
-                cacheName: 'cs2-static-resources',
+                cacheName: 'cs2-static-resources-v3',
               },
             },
           ],

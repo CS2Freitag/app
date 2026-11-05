@@ -67,7 +67,7 @@ if (!self.define) {
     });
   };
 }
-define(['./workbox-06918fc1'], (function (workbox) { 'use strict';
+define(['./workbox-dc59bdb6'], (function (workbox) { 'use strict';
 
   self.skipWaiting();
   workbox.clientsClaim();
@@ -77,32 +77,41 @@ define(['./workbox-06918fc1'], (function (workbox) { 'use strict';
    * See https://goo.gl/S9QRab
    */
   workbox.precacheAndRoute([{
+    "url": "launcher-icon.ico",
+    "revision": "ef23cdc7e72c4dc13da79fc0b5d8d29f"
+  }, {
     "url": "index.html",
-    "revision": "8dc5f9172e57105aab6f2e4aa85d867b"
+    "revision": "80b426b44f4133387f714d91a4c3cf58"
   }, {
     "url": "icon.svg",
     "revision": "b4b520fb0f629713d0d9396dfc573b28"
   }, {
-    "url": "favicon.ico",
-    "revision": "18c827bf6b7c72ab6eb0116a2893269c"
+    "url": "favicon32x32.ico",
+    "revision": "c8456d1fe630ed8cda3885f7df36f6ab"
   }, {
-    "url": "assets/index-p4yF1yR9.css",
+    "url": "favicon16x16.ico",
+    "revision": "c8f2b585ba07799363ceaf269fcd1e10"
+  }, {
+    "url": "favicon.ico",
+    "revision": "6d2d9e923f4d127c48be94a5c3bea52b"
+  }, {
+    "url": "assets/index-D2sJ7-Nu.js",
     "revision": null
   }, {
-    "url": "assets/index-BxQMteXp.js",
+    "url": "assets/index-B_K2OKm3.css",
     "revision": null
   }, {
     "url": "pwa-maskable-512x512.png",
-    "revision": "568ab296e9e5c16e4a19d31ad38ed735"
+    "revision": "e34cd2cb690bf6746ed83b4a8e1ce058"
   }, {
     "url": "pwa-512x512.png",
-    "revision": "ffdcd600fee6ab0bcd96287b823b3fd8"
+    "revision": "e34cd2cb690bf6746ed83b4a8e1ce058"
   }, {
     "url": "pwa-192x192.png",
-    "revision": "ca88a83870ecde613fdc882ba9f1874d"
+    "revision": "c3222a6c2eb7c68c27924512e217542f"
   }, {
     "url": "apple-touch-icon.png",
-    "revision": "d80622d3160e1824c063284c7670a403"
+    "revision": "71a116e8b8ef8f049db5142db8906a6a"
   }, {
     "url": "screenshot-mobile.png",
     "revision": "4dbd48587604e5b19dbf305799dbb97c"
@@ -117,53 +126,37 @@ define(['./workbox-06918fc1'], (function (workbox) { 'use strict';
     "revision": "f66235ebcfe70ec00e4512a6a0252b35"
   }, {
     "url": "manifest.json",
-    "revision": "9117c13149ea633399569b8d5b570e5f"
-  }, {
-    "url": "apple-touch-icon.png",
-    "revision": "d80622d3160e1824c063284c7670a403"
-  }, {
-    "url": "favicon.ico",
-    "revision": "18c827bf6b7c72ab6eb0116a2893269c"
-  }, {
-    "url": "icon.svg",
-    "revision": "b4b520fb0f629713d0d9396dfc573b28"
-  }, {
-    "url": "manifest.json",
-    "revision": "9117c13149ea633399569b8d5b570e5f"
+    "revision": "adedc4bc9a44fd7656e4ee630dd265e0"
   }, {
     "url": "pwa-192x192.png",
-    "revision": "ca88a83870ecde613fdc882ba9f1874d"
+    "revision": "c3222a6c2eb7c68c27924512e217542f"
   }, {
     "url": "pwa-512x512.png",
-    "revision": "ffdcd600fee6ab0bcd96287b823b3fd8"
+    "revision": "e34cd2cb690bf6746ed83b4a8e1ce058"
   }, {
     "url": "pwa-maskable-512x512.png",
-    "revision": "568ab296e9e5c16e4a19d31ad38ed735"
+    "revision": "e34cd2cb690bf6746ed83b4a8e1ce058"
   }, {
-    "url": "screenshot-desktop.png",
-    "revision": "491320f6be24af2134dbd437f7d2d1d7"
-  }, {
-    "url": "screenshot-mobile.png",
-    "revision": "4dbd48587604e5b19dbf305799dbb97c"
-  }, {
-    "url": "manifest.json",
+    "url": "manifest.webmanifest",
     "revision": "9117c13149ea633399569b8d5b570e5f"
   }], {});
   workbox.cleanupOutdatedCaches();
-  workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html")));
   workbox.registerRoute(({
     request
-  }) => request.destination === "image", new workbox.CacheFirst({
-    "cacheName": "cs2-maps-cache",
+  }) => request.destination === "image", new workbox.NetworkFirst({
+    "cacheName": "cs2-maps-cache-v3",
+    "networkTimeoutSeconds": 3,
     plugins: [new workbox.ExpirationPlugin({
       maxEntries: 150,
-      maxAgeSeconds: 31536000
+      maxAgeSeconds: 2592000
+    }), new workbox.CacheableResponsePlugin({
+      statuses: [0, 200]
     })]
   }), 'GET');
   workbox.registerRoute(({
     request
   }) => request.destination === "script" || request.destination === "style" || request.destination === "worker", new workbox.StaleWhileRevalidate({
-    "cacheName": "cs2-static-resources",
+    "cacheName": "cs2-static-resources-v3",
     plugins: []
   }), 'GET');
 
