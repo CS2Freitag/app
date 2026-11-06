@@ -47,6 +47,12 @@ export interface Callout {
 
 export type MapCategory = 'active' | 'reserve' | 'wingman' | 'hostage' | 'community' | string;
 
+export interface TacticalState {
+  drawings: TacticalDrawingLine[];
+  utilities: UtilityMarker[];
+  players: PlayerToken[];
+}
+
 export interface MapData {
   id: string;
   name: string;
@@ -59,6 +65,9 @@ export interface MapData {
   callouts: Callout[];
   isCustom?: boolean;
   updatedAt?: number;
+  isCustomTactic?: boolean;
+  baseMapId?: string;
+  tacticData?: TacticalState;
 }
 
 export type UtilityType = 'smoke' | 'flash' | 'molotov' | 'he' | 'decoy';

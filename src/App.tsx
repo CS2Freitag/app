@@ -24,8 +24,11 @@ import { OfflineIndicator } from './components/OfflineIndicator';
 import { SettingsModal } from './components/SettingsModal';
 import { CalloutQuizModal } from './components/CalloutQuizModal';
 import { MapImportConflictModal } from './components/MapImportConflictModal';
-import { ExternalLink, ArrowUp } from 'lucide-react';
+import { ShareTacticModal } from './components/ShareTacticModal';
+import { ExternalLink, ArrowUp, Check, Save } from 'lucide-react';
 import JSZip from 'jszip';
+import LZString from 'lz-string';
+import { decodeCompactTactic } from './utils/tacticCodec';
 import { 
   auth, 
   loginWithGoogle, 
@@ -72,6 +75,7 @@ export default function App() {
   const [mapToEdit, setMapToEdit] = useState<MapData | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isQuizOpen, setIsQuizOpen] = useState<boolean>(false);
+  const [isGlobalLoadTacticOpen, setIsGlobalLoadTacticOpen] = useState<boolean>(false);
 
   // Custom Map Groups / Pools
   const [customGroups, setCustomGroups] = useState<string[]>(() => loadCustomGroups());
@@ -80,6 +84,12 @@ export default function App() {
   const [isConflictOpen, setIsConflictOpen] = useState<boolean>(false);
   const [conflictIncomingMap, setConflictIncomingMap] = useState<MapData | null>(null);
   const [conflictExistingMap, setConflictExistingMap] = useState<MapData | null>(null);
+
+  // Incoming Shared Tactic Notification State
+  const [sharedTacticNotification, setSharedTacticNotification] = useState<{
+    tacticMap: MapData;
+    tacticTitle: string;
+  } | null>(null);
 
   // Firebase Auth State
   const [user, setUser] = useState<User | null>(null);
@@ -115,6 +125,55 @@ export default function App() {
       });
     }
   }, []);
+
+  // Parse shared tactic from URL hash on app start (e.g. #tactic=... or #t=...)
+  useEffect(() => {
+    const parseUrlHashTactic = () => {
+      const hash = window.location.hash;
+      if (!hash) return;
+
+      const prefixMatch = hash.match(/^#(?:tactic|t)=(.+)$/);
+      if (!prefixMatch || !prefixMatch[1]) return;
+
+      try {
+        const decoded = decodeCompactTactic(prefixMatch[1]);
+        if (!decoded) return;
+
+        const targetMapId = decoded.mapId;
+        const baseMap = maps.find((m) => m.id === targetMapId || m.name.toLowerCase() === (decoded.name || '').toLowerCase()) || maps[0];
+
+        if (baseMap) {
+          const tacticTitle = decoded.name || `${baseMap.name} - Taktik`;
+          const tacticMapInstance: MapData = {
+            ...baseMap,
+            id: `shared_temp_${Date.now()}`,
+            name: `${baseMap.name} - ${tacticTitle}`,
+            isCustomTactic: true,
+            baseMapId: baseMap.id,
+            tacticData: {
+              drawings: decoded.drawings,
+              utilities: decoded.utilities,
+              players: decoded.players,
+            },
+          };
+
+          // Open directly into tactical map view
+          setSelectedMap(tacticMapInstance);
+          setSharedTacticNotification({
+            tacticMap: tacticMapInstance,
+            tacticTitle,
+          });
+
+          // Clean hash from browser URL without reloading
+          window.history.replaceState(null, '', window.location.pathname);
+        }
+      } catch (err) {
+        console.warn('Could not parse shared tactic from URL hash:', err);
+      }
+    };
+
+    parseUrlHashTactic();
+  }, [maps]);
 
   // Debounced Autosave effect whenever maps, favorites, theme, or lang changes
   const isInitialMount = useRef(true);
@@ -326,6 +385,42 @@ export default function App() {
     if (selectedMap?.id === mapWithFlag.id) {
       setSelectedMap(mapWithFlag);
     }
+  };
+
+  // Save tactical map into "Eigene Taktiken" category
+  const handleSaveAsMyTactic = (
+    baseMap: MapData,
+    tacticTitle: string,
+    tacticState: { drawings: any[]; utilities: any[]; players: any[] }
+  ) => {
+    const newTacticId = `tactic_${Date.now()}`;
+    const newTacticMap: MapData = {
+      ...baseMap,
+      id: newTacticId,
+      name: tacticTitle,
+      category: 'custom',
+      isCustom: true,
+      isCustomTactic: true,
+      baseMapId: baseMap.baseMapId || baseMap.id,
+      tacticData: tacticState,
+      updatedAt: Date.now(),
+    };
+
+    setMaps((prev) => {
+      const next = [newTacticMap, ...prev];
+      saveStoredMaps(next);
+      return next;
+    });
+
+    // Also update selectedMap if currently open
+    setSelectedMap(newTacticMap);
+    setSharedTacticNotification(null);
+
+    alert(
+      lang === 'de'
+        ? `Taktik "${tacticTitle}" wurde erfolgreich unter "Eigene Taktiken" gespeichert!`
+        : `Tactic "${tacticTitle}" saved to "My Tactics" successfully!`
+    );
   };
 
   // Delete map
@@ -948,21 +1043,56 @@ export default function App() {
 
       {/* Main Fullscreen Tactical Map View if a map is selected */}
       {selectedMap ? (
-        <TacticalMapView
-          mapData={selectedMap}
-          onBack={handleCloseMap}
-          onGoHome={handleCloseMap}
-          onUpdateMap={handleSaveMap}
-          onSyncMap={async (m) => {
-            // Trigger manual cloud sync if requested via the exit prompt
-            if (user) {
-              await syncUserMap(user.uid, m);
-            }
-          }}
-          currentUser={user}
-          lang={lang}
-          initialHighlightedCalloutId={highlightedCalloutId}
-        />
+        <div className="relative w-full h-full">
+          {/* Incoming Shared Tactic Notification Banner */}
+          {sharedTacticNotification && (
+            <div className="absolute top-16 left-1/2 -translate-x-1/2 z-[80] flex items-center gap-3 px-4 py-2.5 rounded-xl bg-zinc-950/95 border-2 border-sky-400 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-3 duration-200">
+              <span className="text-xs text-zinc-200 font-medium">
+                {isDe
+                  ? `Taktik geladen: "${sharedTacticNotification.tacticTitle}". Möchtest du sie dauerhaft speichern?`
+                  : `Tactic loaded: "${sharedTacticNotification.tacticTitle}". Do you want to save it permanently?`}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  handleSaveAsMyTactic(
+                    sharedTacticNotification.tacticMap,
+                    sharedTacticNotification.tacticTitle,
+                    sharedTacticNotification.tacticMap.tacticData || { drawings: [], utilities: [], players: [] }
+                  );
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-sky-500 hover:bg-sky-400 text-zinc-950 transition-all cursor-pointer shadow-sm"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>{isDe ? 'Dauerhaft speichern' : 'Save permanently'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSharedTacticNotification(null)}
+                className="text-xs text-zinc-400 hover:text-white px-1.5 py-1"
+              >
+                {isDe ? 'Ausblenden' : 'Dismiss'}
+              </button>
+            </div>
+          )}
+
+          <TacticalMapView
+            mapData={selectedMap}
+            onBack={handleCloseMap}
+            onGoHome={handleCloseMap}
+            onUpdateMap={handleSaveMap}
+            onSaveAsMyTactic={handleSaveAsMyTactic}
+            onSyncMap={async (m) => {
+              // Trigger manual cloud sync if requested via the exit prompt
+              if (user) {
+                await syncUserMap(user.uid, m);
+              }
+            }}
+            currentUser={user}
+            lang={lang}
+            initialHighlightedCalloutId={highlightedCalloutId}
+          />
+        </div>
       ) : (
         /* Home Page / Overview */
         <div className="flex flex-col min-h-screen">
@@ -1006,6 +1136,7 @@ export default function App() {
               onDeleteMap={handleDeleteMap}
               onAddNewMap={handleAddNewMap}
               onImportSingleMap={() => homeSingleMapInputRef.current?.click()}
+              onLoadTactic={() => setIsGlobalLoadTacticOpen(true)}
               onExportSingleMap={(map, e) => {
                 e.stopPropagation();
                 handleExportSingleMap(map);
@@ -1102,6 +1233,38 @@ export default function App() {
         onDisconnectFileLocation={handleDisconnectFileLocation}
         onStartQuiz={() => setIsQuizOpen(true)}
       />
+
+      {/* Global Load & QR Scan Modal for Eigene Taktiken */}
+      {isGlobalLoadTacticOpen && (
+        <ShareTacticModal
+          isOpen={isGlobalLoadTacticOpen}
+          onClose={() => setIsGlobalLoadTacticOpen(false)}
+          mapData={maps[0]}
+          shareUrl={`${window.location.origin}${window.location.pathname}`}
+          defaultTitle={lang === 'de' ? 'Neue Taktik' : 'New Tactic'}
+          tacticState={{ drawings: [], utilities: [], players: [] }}
+          onSaveAsMyTactic={(title) => {}}
+          onLoadTacticState={(loadedState, title) => {
+            setIsGlobalLoadTacticOpen(false);
+            const baseMap = maps[0];
+            const tacticTitle = title || `${baseMap.name} - Taktik`;
+            const tacticMapInstance: MapData = {
+              ...baseMap,
+              id: `shared_temp_${Date.now()}`,
+              name: `${baseMap.name} - ${tacticTitle}`,
+              isCustomTactic: true,
+              baseMapId: baseMap.id,
+              tacticData: loadedState,
+            };
+            setSelectedMap(tacticMapInstance);
+            setSharedTacticNotification({
+              tacticMap: tacticMapInstance,
+              tacticTitle,
+            });
+          }}
+          lang={lang}
+        />
+      )}
 
       {/* Callout Trainer / Quiz Modal */}
       <CalloutQuizModal

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Star, Plus, Edit2, ChevronRight, Layers, Upload, Download, Trash2 } from 'lucide-react';
+import { Star, Plus, Edit2, ChevronRight, Layers, Upload, Download, Trash2, FolderOpen, QrCode } from 'lucide-react';
 import { MapData, Language } from '../types';
 import { resolveAssetPath } from '../utils/assets';
 
@@ -12,6 +12,7 @@ interface MapGridProps {
   onDeleteMap: (mapId: string) => void;
   onAddNewMap: () => void;
   onImportSingleMap?: () => void;
+  onLoadTactic?: () => void;
   onExportSingleMap?: (map: MapData, e: React.MouseEvent) => void;
   customGroups?: string[];
   lang: Language;
@@ -29,6 +30,7 @@ export const MapGrid: React.FC<MapGridProps> = ({
   onDeleteMap,
   onAddNewMap,
   onImportSingleMap,
+  onLoadTactic,
   onExportSingleMap,
   customGroups = [],
   lang,
@@ -42,8 +44,20 @@ export const MapGrid: React.FC<MapGridProps> = ({
     let list = [...maps];
 
     // Filter by category
-    if (selectedCategory !== 'all') {
-      list = list.filter((m) => m.category === selectedCategory);
+    if (selectedCategory === 'custom') {
+      // Show all custom tactics and user-created custom maps
+      list = list.filter((m) => m.isCustomTactic || m.category === 'custom' || m.category === 'tactics');
+    } else if (selectedCategory === 'all') {
+      // In 'all', do not clutter with custom tactics unless they are favorited
+      list = list.filter((m) => !m.isCustomTactic || favorites.includes(m.id));
+    } else {
+      // In specific categories (active, reserve, etc.), hide custom tactics unless favorited
+      list = list.filter((m) => {
+        if (m.isCustomTactic) {
+          return m.category === selectedCategory && favorites.includes(m.id);
+        }
+        return m.category === selectedCategory;
+      });
     }
 
     // Filter by query if present
@@ -152,7 +166,17 @@ export const MapGrid: React.FC<MapGridProps> = ({
                 : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white light:text-zinc-600 light:hover:text-zinc-950'
             }`}
           >
-            {isDe ? 'Eigene / Custom' : 'Custom'}
+            {isDe ? 'Community' : 'Community'}
+          </button>
+          <button
+            onClick={() => setSelectedCategory('custom')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
+              selectedCategory === 'custom'
+                ? 'bg-zinc-800 text-white dark:bg-zinc-100 dark:text-zinc-950 light:bg-zinc-900 light:text-white'
+                : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white light:text-zinc-600 light:hover:text-zinc-950'
+            }`}
+          >
+            {isDe ? 'Eigene Taktiken' : 'My Tactics'} ({maps.filter((m) => m.isCustomTactic || m.category === 'custom').length})
           </button>
           {customGroups.map((grp) => (
             <button
@@ -171,6 +195,17 @@ export const MapGrid: React.FC<MapGridProps> = ({
 
         {/* Actions: Add New Map & Import Map */}
         <div className="flex items-center gap-2 shrink-0">
+          {selectedCategory === 'custom' && onLoadTactic && (
+            <button
+              onClick={onLoadTactic}
+              className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border border-amber-500/50 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 transition-all shadow-xs cursor-pointer"
+              title={isDe ? 'Taktik laden (Code, QR-Scan oder Datei)' : 'Load tactic (Code, QR scan or file)'}
+            >
+              <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
+              <span>{isDe ? 'Taktik laden' : 'Load Tactic'}</span>
+            </button>
+          )}
+
           {onImportSingleMap && (
             <button
               onClick={onImportSingleMap}
@@ -194,10 +229,34 @@ export const MapGrid: React.FC<MapGridProps> = ({
 
       {/* Alphabetical Grid of Map Buttons */}
       {filteredAndSortedMaps.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-zinc-800 p-12 text-center text-zinc-400">
-          <p className="text-sm font-medium">
-            {isDe ? 'Keine Karten für diese Auswahl gefunden.' : 'No maps found matching criteria.'}
+        <div className="rounded-2xl border border-dashed border-zinc-800 p-8 sm:p-12 text-center text-zinc-400 bg-zinc-950/40 flex flex-col items-center justify-center">
+          <p className="text-sm font-medium mb-1">
+            {selectedCategory === 'custom'
+              ? isDe
+                ? 'Noch keine eigenen Taktiken gespeichert.'
+                : 'No custom tactics saved yet.'
+              : isDe
+              ? 'Keine Karten für diese Auswahl gefunden.'
+              : 'No maps found matching criteria.'}
           </p>
+          <p className="text-xs text-zinc-500 max-w-md mb-4">
+            {selectedCategory === 'custom'
+              ? isDe
+                ? 'Du kannst eine Taktik per QR-Code scannen, Link / Code einfügen, oder auf einer beliebigen Karte zeichnen und speichern.'
+                : 'You can scan a tactic via QR code, paste a link/code, or draw and save on any map.'
+              : ''}
+          </p>
+
+          {selectedCategory === 'custom' && onLoadTactic && (
+            <button
+              type="button"
+              onClick={onLoadTactic}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-xs font-bold transition-all shadow-md cursor-pointer hover:scale-105 active:scale-95"
+            >
+              <FolderOpen className="w-4 h-4" />
+              <span>{isDe ? 'Taktik laden / QR-Code scannen' : 'Load tactic / Scan QR'}</span>
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -233,12 +292,19 @@ export const MapGrid: React.FC<MapGridProps> = ({
                   <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 via-transparent to-black/20" />
 
                   {/* Multi-level indicator if map has lower level */}
-                  {map.lowerImage && (
-                    <div className="absolute bottom-2 left-2 flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900/90 light:bg-white text-zinc-300 light:text-zinc-700 border border-zinc-700 light:border-zinc-300 backdrop-blur-xs">
-                      <Layers className="w-3 h-3 text-zinc-400 light:text-zinc-500" />
-                      <span>{isDe ? '2 Ebenen' : '2 Levels'}</span>
-                    </div>
-                  )}
+                  <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
+                    {map.lowerImage && (
+                      <div className="flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900/90 light:bg-white text-zinc-300 light:text-zinc-700 border border-zinc-700 light:border-zinc-300 backdrop-blur-xs">
+                        <Layers className="w-3 h-3 text-zinc-400 light:text-zinc-500" />
+                        <span>{isDe ? '2 Ebenen' : '2 Levels'}</span>
+                      </div>
+                    )}
+                    {map.isCustomTactic && (
+                      <div className="flex items-center gap-1 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-sky-950/90 text-sky-300 border border-sky-500/50 backdrop-blur-xs">
+                        <span>{isDe ? 'Taktik' : 'Tactic'}</span>
+                      </div>
+                    )}
+                  </div>
 
                   {/* Favorite Star at top-right */}
                   <button

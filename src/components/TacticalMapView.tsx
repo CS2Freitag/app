@@ -1,8 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import LZString from 'lz-string';
 import { User } from 'firebase/auth';
 import { getCloudMap, smartMergeMap, syncUserMap, loginWithGoogle } from '../services/firebase';
 import { CloudConflictModal } from './CloudConflictModal';
+import { ShareTacticModal } from './ShareTacticModal';
 import { resolveAssetPath } from '../utils/assets';
+import { encodeCompactTactic } from '../utils/tacticCodec';
 import {
   ArrowLeft,
   ZoomIn,
@@ -34,7 +37,8 @@ import {
   Upload,
   Activity,
   PenTool,
-  ArrowUp
+  ArrowUp,
+  Share2
 } from 'lucide-react';
 import {
   MapData,
@@ -111,6 +115,7 @@ interface TacticalMapViewProps {
   onBack: () => void;
   onGoHome?: () => void;
   onUpdateMap: (updatedMap: MapData, skipCloudSync?: boolean) => void;
+  onSaveAsMyTactic?: (baseMap: MapData, tacticTitle: string, tacticState: { drawings: TacticalDrawingLine[]; utilities: UtilityMarker[]; players: PlayerToken[] }) => void;
   onSyncMap: (mapData: MapData) => Promise<void>;
   currentUser: User | null;
   lang: Language;
@@ -122,6 +127,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   onBack,
   onGoHome,
   onUpdateMap,
+  onSaveAsMyTactic,
   onSyncMap,
   currentUser,
   lang,
@@ -141,6 +147,10 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const [conflictCloudMap, setConflictCloudMap] = useState<MapData | null>(null);
   const [isProcessingConflict, setIsProcessingConflict] = useState<boolean>(false);
 
+  // Share & Save Tactic Modal State
+  const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
+  const [currentShareUrl, setCurrentShareUrl] = useState<string>('');
+
   // Multi-level floor state ('upper' | 'lower' | 'both')
   const [currentLevel, setCurrentLevel] = useState<'upper' | 'lower' | 'both'>('upper');
   const activeImage =
@@ -150,6 +160,24 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     setHasChangesInSession(true);
     // During editing, we skip cloud sync and only save locally via localStorage
     onUpdateMap(updated, true);
+  };
+
+  const handleShareTactics = () => {
+    try {
+      const compressed = encodeCompactTactic(
+        mapData.id,
+        mapData.name,
+        drawings,
+        utilities,
+        players
+      );
+      const url = `${window.location.origin}${window.location.pathname}#t=${compressed}`;
+      setCurrentShareUrl(url);
+      setIsShareModalOpen(true);
+    } catch (err) {
+      console.error('Error generating share URL:', err);
+      alert(isDe ? 'Fehler beim Erstellen des Taktik-Links.' : 'Error generating tactic link.');
+    }
   };
 
   // Continuous Zoom (10% to 200%, default 75% for non-fullscreen fit)
@@ -210,16 +238,42 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const [selectedPlayerSide, setSelectedPlayerSide] = useState<'ct' | 't'>('ct');
   const [penColor, setPenColor] = useState<string>('#ffffff');
   const [penWithArrow, setPenWithArrow] = useState<boolean>(true);
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const pressTimer = useRef<number | null>(null);
+
+  const colors = ['#ffffff', '#000000', '#3b82f6', '#92400e', '#ef4444', '#22c55e', '#f97316'];
+
+  const handleToolPress = (tool: TacticalTool, isArrow: boolean) => {
+    setActiveTool(tool);
+    setPenWithArrow(isArrow);
+    setShowColorPicker(false);
+  };
+
+  const handleToolLongPress = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    setShowColorPicker(!showColorPicker);
+  };
+
+  const startPressTimer = (e: React.MouseEvent | React.TouchEvent) => {
+    pressTimer.current = window.setTimeout(() => {
+      handleToolLongPress(e);
+    }, 500); // 500ms for long press
+  };
+
+  const clearPressTimer = () => {
+    if (pressTimer.current) clearTimeout(pressTimer.current);
+  };
+
 
   // Tactical drawings and undo/redo stacks
-  const [drawings, setDrawings] = useState<TacticalDrawingLine[]>([]);
+  const [drawings, setDrawings] = useState<TacticalDrawingLine[]>(() => mapData.tacticData?.drawings || []);
   const [drawingsRedoStack, setDrawingsRedoStack] = useState<TacticalDrawingLine[]>([]);
   const [currentDrawing, setCurrentDrawing] = useState<TacticalDrawingLine | null>(null);
   const [hoveredLineId, setHoveredLineId] = useState<string | null>(null);
 
   // Utility & Players
-  const [utilities, setUtilities] = useState<UtilityMarker[]>([]);
-  const [players, setPlayers] = useState<PlayerToken[]>([]);
+  const [utilities, setUtilities] = useState<UtilityMarker[]>(() => mapData.tacticData?.utilities || []);
+  const [players, setPlayers] = useState<PlayerToken[]>(() => mapData.tacticData?.players || []);
 
   // Callouts & Inspector state
   const [hoveredCallout, setHoveredCallout] = useState<Callout | null>(null);
@@ -2245,15 +2299,16 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           </button>
         </div>
 
-        {/* Right Actions: Karte teilen, Farbmodus, Farblegende, Bearbeiten, Fullscreen */}
+        {/* Right Actions: Karte teilen & exportieren, Farbmodus, Farblegende, Bearbeiten, Fullscreen */}
         <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-          {/* SINGLE MAP EXPORT / TEILEN BUTTON */}
+          {/* VEREINHEITLICHTER TEILEN / EXPORT BUTTON */}
           <button
-            onClick={handleExportThisMap}
-            className="p-1.5 sm:p-2 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors"
-            title={isDe ? 'Karte teilen' : 'Share Map'}
+            onClick={handleShareTactics}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-lg border border-sky-500/40 bg-sky-950/60 hover:bg-sky-900/80 text-sky-300 hover:text-white transition-all shadow-xs cursor-pointer"
+            title={isDe ? 'Taktik / Karte teilen & exportieren (Link, QR, JSON, ZIP)' : 'Share & export tactic (Link, QR, JSON, ZIP)'}
           >
-            <Download className="w-4 h-4 text-sky-400" />
+            <Share2 className="w-4 h-4 text-sky-400" />
+            <span className="text-xs font-bold hidden sm:inline">{isDe ? 'Teilen' : 'Share'}</span>
           </button>
 
           {/* COLOR MODE TOGGLE */}
@@ -2327,9 +2382,9 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       </div>
 
       {/* 2. TACTICAL TOOLBAR: TOOLS, ERASER, UNDO/REDO, AREAS TOGGLE, TEXT SCALE, ZOOM */}
-      <div className="h-12 border-b border-zinc-800/80 bg-zinc-900/90 px-4 flex items-center justify-between gap-3 shrink-0 overflow-x-auto text-xs print:hidden">
+      <div className="relative z-30 h-12 border-b border-zinc-800/80 bg-zinc-900/90 px-4 flex items-center justify-between gap-3 shrink-0 text-xs print:hidden">
         {/* Tactical tools */}
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1 shrink-0 overflow-visible">
           <button
             onClick={() => setActiveTool('select')}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-semibold transition-colors ${
@@ -2343,30 +2398,36 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           </button>
 
           <button
-            onClick={() => {
-              setActiveTool('pen');
-              setPenWithArrow(false);
-            }}
+            onClick={() => handleToolPress('pen', false)}
+            onMouseDown={startPressTimer}
+            onMouseUp={clearPressTimer}
+            onMouseLeave={clearPressTimer}
+            onTouchStart={startPressTimer}
+            onTouchEnd={clearPressTimer}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-semibold transition-colors ${
               activeTool === 'pen' && !penWithArrow
                 ? 'bg-zinc-100 text-zinc-950 shadow-xs'
                 : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
             }`}
+            style={{ borderLeft: activeTool === 'pen' ? `4px solid ${penColor}` : undefined }}
           >
             <Pencil className="w-3.5 h-3.5" />
             <span>{isDe ? 'Linie' : 'Line'}</span>
           </button>
 
           <button
-            onClick={() => {
-              setActiveTool('arrow');
-              setPenWithArrow(true);
-            }}
+            onClick={() => handleToolPress('arrow', true)}
+            onMouseDown={startPressTimer}
+            onMouseUp={clearPressTimer}
+            onMouseLeave={clearPressTimer}
+            onTouchStart={startPressTimer}
+            onTouchEnd={clearPressTimer}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-semibold transition-colors ${
               activeTool === 'arrow'
                 ? 'bg-zinc-100 text-zinc-950 shadow-xs'
                 : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
             }`}
+            style={{ borderLeft: activeTool === 'arrow' ? `4px solid ${penColor}` : undefined }}
           >
             <Move className="w-3.5 h-3.5" />
             <span>{isDe ? 'Pfeil (Rush)' : 'Arrow'}</span>
@@ -2389,6 +2450,41 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             <Eraser className="w-3.5 h-3.5" />
             <span>{isDe ? 'Radierer' : 'Eraser'}</span>
           </button>
+
+          {/* FARBPICKER DROPDOWN */}
+          <div className="relative">
+            <button
+              onClick={() => setShowColorPicker(!showColorPicker)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md font-semibold text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors border border-zinc-700/80"
+              title={isDe ? 'Farbe wählen (7 Farben)' : 'Choose color (7 colors)'}
+            >
+              <div className="w-3.5 h-3.5 rounded-full border border-white/40 shadow-xs" style={{ backgroundColor: penColor }} />
+              <span className="hidden sm:inline">{isDe ? 'Farbe' : 'Color'}</span>
+            </button>
+            {showColorPicker && (
+              <div
+                data-no-map-click="true"
+                className="absolute top-full left-0 mt-1.5 p-2 bg-zinc-900/98 rounded-xl border border-zinc-700 shadow-2xl z-[70] flex items-center gap-1.5 backdrop-blur-md animate-in fade-in zoom-in-95 duration-100"
+              >
+                {colors.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    className={`w-6 h-6 rounded-full border transition-transform hover:scale-115 active:scale-95 ${
+                      penColor === c ? 'border-amber-400 ring-2 ring-amber-400/50 scale-110' : 'border-zinc-600'
+                    }`}
+                    style={{ backgroundColor: c }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPenColor(c);
+                      setShowColorPicker(false);
+                    }}
+                    title={c}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* UNDO & REDO CONTROLS */}
           <div className="flex items-center gap-0.5 border-l border-zinc-800 pl-1 ml-0.5">
@@ -2427,7 +2523,6 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             )}
           </div>
         </div>
-
       </div>
 
       {/* 3. MAIN MAP STAGE */}
@@ -3944,6 +4039,37 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         lang={lang}
         mapName={mapData.name}
         isProcessing={isProcessingConflict}
+      />
+
+      {/* SHARE & SAVE TACTIC MODAL */}
+      <ShareTacticModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        mapData={mapData}
+        shareUrl={currentShareUrl}
+        defaultTitle={`${mapData.name} - Taktik`}
+        tacticState={{
+          drawings,
+          utilities,
+          players,
+        }}
+        onSaveAsMyTactic={(title) => {
+          if (onSaveAsMyTactic) {
+            onSaveAsMyTactic(mapData, title, {
+              drawings,
+              utilities,
+              players,
+            });
+          }
+        }}
+        onLoadTacticState={(loadedState, title) => {
+          setDrawings(loadedState.drawings || []);
+          setUtilities(loadedState.utilities || []);
+          setPlayers(loadedState.players || []);
+          setDrawingsRedoStack([]);
+          setHasChangesInSession(true);
+        }}
+        lang={lang}
       />
 
       {/* Scroll to Top Floating Button inside TacticalMapView */}
