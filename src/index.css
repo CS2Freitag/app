@@ -66,3 +66,13 @@
   animation: ping-color-change 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+@keyframes scan-beam {
+  0% { top: 2%; opacity: 0.8; }
+  50% { top: 96%; opacity: 1; }
+  100% { top: 2%; opacity: 0.8; }
+}
+
+.animate-scan-line {
+  animation: scan-beam 2.2s ease-in-out infinite;
+}
+

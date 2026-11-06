@@ -2382,7 +2382,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       </div>
 
       {/* 2. TACTICAL TOOLBAR: TOOLS, ERASER, UNDO/REDO, AREAS TOGGLE, TEXT SCALE, ZOOM */}
-      <div className="relative z-30 h-12 border-b border-zinc-800/80 bg-zinc-900/90 px-4 flex items-center justify-between gap-3 shrink-0 text-xs print:hidden">
+      <div className="relative z-50 h-12 border-b border-zinc-800/80 bg-zinc-900/90 px-4 flex items-center justify-between gap-3 shrink-0 text-xs print:hidden">
         {/* Tactical tools */}
         <div className="flex items-center gap-1 shrink-0 overflow-visible">
           <button
@@ -2452,7 +2452,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           </button>
 
           {/* FARBPICKER DROPDOWN */}
-          <div className="relative">
+          <div className="relative z-50">
             <button
               onClick={() => setShowColorPicker(!showColorPicker)}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-md font-semibold text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors border border-zinc-700/80"
@@ -2464,7 +2464,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             {showColorPicker && (
               <div
                 data-no-map-click="true"
-                className="absolute top-full left-0 mt-1.5 p-2 bg-zinc-900/98 rounded-xl border border-zinc-700 shadow-2xl z-[70] flex items-center gap-1.5 backdrop-blur-md animate-in fade-in zoom-in-95 duration-100"
+                className="absolute top-full left-0 mt-1.5 p-2 bg-zinc-900 rounded-xl border border-zinc-700 shadow-2xl z-[100] flex items-center gap-1.5 backdrop-blur-md animate-in fade-in zoom-in-95 duration-100"
               >
                 {colors.map((c) => (
                   <button

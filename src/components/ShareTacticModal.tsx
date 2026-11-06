@@ -131,6 +131,8 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
         return;
       }
 
+      setIsCameraActive(true);
+
       // Try environment camera first, then fall back to any available video input
       let stream: MediaStream | null = null;
       try {
@@ -138,18 +140,29 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
           video: { facingMode: { ideal: 'environment' } },
         });
       } catch (firstErr) {
-        // Fallback without constraints
         stream = await navigator.mediaDevices.getUserMedia({
           video: true,
         });
       }
 
-      if (stream && videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.setAttribute('playsinline', 'true');
-        await videoRef.current.play();
-        setIsCameraActive(true);
-        scanVideoFrame();
+      if (stream) {
+        let attempts = 0;
+        const attachStream = async () => {
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+            videoRef.current.setAttribute('playsinline', 'true');
+            try {
+              await videoRef.current.play();
+              scanVideoFrame();
+            } catch (playErr) {
+              console.warn('Video play error:', playErr);
+            }
+          } else if (attempts < 20) {
+            attempts++;
+            setTimeout(attachStream, 50);
+          }
+        };
+        attachStream();
       }
     } catch (err: any) {
       console.warn('Camera access error:', err);
@@ -647,54 +660,32 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
         ) : (
           /* TAB 2: LADEN & QR-CODE SCANNEN */
           <div className="space-y-4 animate-in fade-in duration-100">
-            {/* Live Camera Scanner */}
+            {/* Live Camera Scanner Trigger & Full-Screen Foreground Viewfinder */}
             <div className="p-3.5 bg-zinc-950/80 rounded-xl border border-zinc-800">
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
-                  <Camera className="w-4 h-4 text-amber-400" />
-                  <span>{isDe ? 'QR-Code mit Kamera scannen:' : 'Scan QR code with camera:'}</span>
-                </label>
-                {isCameraActive && (
-                  <button
-                    type="button"
-                    onClick={stopCamera}
-                    className="text-[11px] font-semibold text-red-400 hover:text-red-300 px-2 py-0.5 rounded bg-red-950/50 border border-red-800"
-                  >
-                    {isDe ? 'Kamera stoppen' : 'Stop camera'}
-                  </button>
-                )}
+              <label className="block text-xs font-semibold text-zinc-300 mb-2">
+                {isDe ? 'QR-Code mit Kamera scannen:' : 'Scan QR code with camera:'}
+              </label>
+
+              <div className="flex flex-col sm:flex-row items-center gap-2">
+                <button
+                  type="button"
+                  onClick={startCamera}
+                  className="w-full sm:w-auto flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 text-xs font-bold transition-all shadow-sm cursor-pointer"
+                >
+                  <Camera className="w-4 h-4" />
+                  <span>{isDe ? 'Kamera-Scanner starten (Vollbild)' : 'Start camera scanner (Fullscreen)'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => qrImageInputRef.current?.click()}
+                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700 text-xs font-semibold transition-all cursor-pointer"
+                  title={isDe ? 'QR-Code Bild hochladen' : 'Upload QR code image'}
+                >
+                  <QrCode className="w-4 h-4 text-amber-400" />
+                  <span>{isDe ? 'QR-Bild wählen' : 'Upload QR image'}</span>
+                </button>
               </div>
-
-              {isCameraActive ? (
-                <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-black border border-amber-500/50 flex items-center justify-center">
-                  <video ref={videoRef} className="w-full h-full object-cover" />
-                  <canvas ref={canvasRef} className="hidden" />
-                  <div className="absolute inset-0 border-2 border-amber-400/60 pointer-events-none rounded-lg flex items-center justify-center">
-                    <div className="w-36 h-36 border-2 border-dashed border-amber-400 rounded-lg animate-pulse" />
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col sm:flex-row items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={startCamera}
-                    className="w-full sm:w-auto flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 text-xs font-bold transition-all shadow-sm cursor-pointer"
-                  >
-                    <Camera className="w-4 h-4" />
-                    <span>{isDe ? 'Kamera starten' : 'Start camera'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => qrImageInputRef.current?.click()}
-                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700 text-xs font-semibold transition-all cursor-pointer"
-                    title={isDe ? 'QR-Code Bild hochladen' : 'Upload QR code image'}
-                  >
-                    <QrCode className="w-4 h-4 text-amber-400" />
-                    <span>{isDe ? 'QR-Bild wählen' : 'Upload QR image'}</span>
-                  </button>
-                </div>
-              )}
 
               {cameraError && (
                 <p className="text-[11px] text-amber-400/90 mt-2 leading-relaxed">
@@ -702,6 +693,76 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
                 </p>
               )}
             </div>
+
+            {/* FULLSCREEN CAMERA VIEWFINDER OVERLAY */}
+            {isCameraActive && (
+              <div className="fixed inset-0 z-[120] bg-black text-white flex flex-col justify-between items-center select-none overflow-hidden animate-in fade-in duration-200">
+                {/* Background Video Stream */}
+                <video
+                  ref={videoRef}
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+                <canvas ref={canvasRef} className="hidden" />
+
+                {/* Top Header Floating Bar */}
+                <div className="relative z-20 w-full p-4 sm:p-6 flex items-center justify-between bg-gradient-to-b from-black/80 via-black/40 to-transparent">
+                  <div className="flex items-center gap-2 bg-zinc-900/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-zinc-700/80">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                    <span className="text-xs font-bold text-zinc-100 flex items-center gap-1.5">
+                      <Camera className="w-3.5 h-3.5 text-amber-400" />
+                      {isDe ? 'QR-Code Scanner' : 'QR Code Scanner'}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={stopCamera}
+                    className="p-2.5 rounded-full bg-zinc-900/80 hover:bg-zinc-800 text-white border border-zinc-700/80 transition-colors cursor-pointer"
+                    title={isDe ? 'Kamera Schließen' : 'Close camera'}
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                {/* Center Illuminated Viewfinder Target Frame */}
+                <div className="relative z-10 my-auto flex flex-col items-center justify-center p-4">
+                  <div className="w-64 h-64 sm:w-80 sm:h-80 rounded-2xl border-2 border-amber-400 relative shadow-[0_0_0_9999px_rgba(0,0,0,0.75)] flex items-center justify-center overflow-hidden pointer-events-none">
+                    {/* Animated Laser Scan Beam */}
+                    <div className="absolute left-1 right-1 h-1 bg-gradient-to-r from-amber-500/10 via-amber-400 to-amber-500/10 shadow-[0_0_15px_#f59e0b] animate-scan-line pointer-events-none" />
+
+                    {/* Corner Bracket Accents */}
+                    <div className="absolute -top-1 -left-1 w-7 h-7 border-t-4 border-l-4 border-amber-400 rounded-tl-xl" />
+                    <div className="absolute -top-1 -right-1 w-7 h-7 border-t-4 border-r-4 border-amber-400 rounded-tr-xl" />
+                    <div className="absolute -bottom-1 -left-1 w-7 h-7 border-b-4 border-l-4 border-amber-400 rounded-bl-xl" />
+                    <div className="absolute -bottom-1 -right-1 w-7 h-7 border-b-4 border-r-4 border-amber-400 rounded-br-xl" />
+                  </div>
+
+                  <p className="text-xs font-semibold text-amber-300 mt-4 px-4 py-1.5 rounded-full bg-black/60 border border-amber-500/30 backdrop-blur-xs text-center shadow-md">
+                    {isDe ? 'Taktik QR-Code im Rahmen ausrichten' : 'Align tactic QR code in frame'}
+                  </p>
+                </div>
+
+                {/* Bottom Action Bar */}
+                <div className="relative z-20 w-full p-6 pb-8 flex items-center justify-center gap-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent">
+                  <button
+                    type="button"
+                    onClick={() => qrImageInputRef.current?.click()}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 text-zinc-100 border border-zinc-700/80 text-xs font-bold transition-all backdrop-blur-md cursor-pointer"
+                  >
+                    <QrCode className="w-4 h-4 text-amber-400" />
+                    <span>{isDe ? 'QR-Bild aus Galerie wählen' : 'Select QR image from gallery'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={stopCamera}
+                    className="px-4 py-2.5 rounded-xl bg-red-600/90 hover:bg-red-500 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
+                  >
+                    <span>{isDe ? 'Kamera beenden' : 'Stop camera'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Code / Link Paste */}
             <div className="p-3.5 bg-zinc-950/80 rounded-xl border border-zinc-800">
