@@ -3587,8 +3587,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       <span className="text-[10px] text-zinc-500 font-mono">Presets:</span>
                       {[
                         { label: 'Zentriert (Mid)', x: 0, y: 0 },
-                        { label: 'Unten (Standard)', x: 0, y: 0 },
-                        { label: 'Oben', x: 0, y: -50 },
+                        { label: 'Unten (Standard)', x: 0, y: 25 },
+                        { label: 'Oben', x: 0, y: -25 },
                       ].map((p, idx) => (
                         <button
                           key={idx}
