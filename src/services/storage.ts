@@ -94,9 +94,13 @@ function applyDefaultSpawnImages(maps: MapData[]): MapData[] {
     ...map,
     callouts: (map.callouts || []).map((c) => {
       let updated = { ...c };
-      if (updated.hidePin) {
+      if (!!updated.hidePin) {
         updated.pinOffsetX = 0;
         updated.pinOffsetY = 0;
+      } else {
+        // Ensure non-hidden pins have at least 0/0 defaults if missing
+        updated.pinOffsetX = updated.pinOffsetX ?? 0;
+        updated.pinOffsetY = updated.pinOffsetY ?? 0;
       }
       const name = (updated.name || '').toLowerCase();
       const id = updated.id || '';
