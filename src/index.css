@@ -33,67 +33,6 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #3f3f46;
 }
-@media print {
-  .print\:hidden {
-    display: none !important;
-  }
-
-  body, html {
-    background: #18181b !important;
-    color: currentColor !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    width: 100% !important;
-    height: auto !important;
-    overflow: visible !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  /* Reset fixed positioning for print to avoid clipping and allow natural page flow */
-  .fixed.inset-0 {
-    position: relative !important;
-    height: auto !important;
-    display: block !important;
-    background: #18181b !important;
-    color: currentColor !important;
-    overflow: visible !important;
-    z-index: 0 !important;
-  }
-
-  /* Force the map container to be visible and centered */
-  .relative.flex-1.flex.overflow-hidden {
-    overflow: visible !important;
-    display: block !important;
-    height: auto !important;
-  }
-
-  /* Keep dark background for the map container */
-  .map-canvas-tile,
-  .aspect-square {
-    box-shadow: none !important;
-    background: #18181b !important; /* zinc-900 */
-    margin: 0 auto !important;
-    page-break-inside: avoid !important;
-  }
-
-  /* Hide specific UI elements that might be absolute/fixed but missed print:hidden */
-  nav, footer, aside, .floating-button, .sidebar {
-    display: none !important;
-  }
-
-  /* Keep original colors from app theme */
-  .text-zinc-100, .text-white, .text-zinc-200, .text-zinc-300, .text-zinc-400 {
-    color: currentColor !important;
-  }
-  
-  /* Reset transforms for print if they cause issues, but we want zoom/pan state? 
-     Actually, if the user zoomed in, they probably want that view. 
-     But for a standard PDF, maybe full view is better. 
-     The user didn't specify if zoom should be preserved in PDF. 
-     Usually window.print() preserves current DOM state.
-  */
-}
 
 @keyframes pulse-color-change {
   0%, 100% {
