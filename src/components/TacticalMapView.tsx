@@ -1088,7 +1088,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     setCalloutFormImageSize(36);
     setCalloutFormHidePin(false);
     setCalloutFormPinOffsetX(0);
-    setCalloutFormPinOffsetY(25);
+    setCalloutFormPinOffsetY(0);
     setCalloutFormDescDe('');
     setCalloutFormDescEn('');
     setCalloutFormTipDe('');
@@ -1134,7 +1134,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     setCalloutFormImageSize(callout.imageSize || 36);
     setCalloutFormHidePin(Boolean(callout.hidePin));
     setCalloutFormPinOffsetX(callout.pinOffsetX ?? 0);
-    setCalloutFormPinOffsetY(callout.pinOffsetY ?? 25);
+    setCalloutFormPinOffsetY(callout.pinOffsetY ?? (callout.hidePin ? 0 : 25));
 
     setCalloutFormDescDe(callout.descriptionDe);
     setCalloutFormDescEn(callout.descriptionEn);
@@ -3587,8 +3587,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       <span className="text-[10px] text-zinc-500 font-mono">Presets:</span>
                       {[
                         { label: 'Zentriert (Mid)', x: 0, y: 0 },
-                        { label: 'Unten (Standard)', x: 0, y: 25 },
-                        { label: 'Oben', x: 0, y: -25 },
+                        { label: 'Unten (Standard)', x: 0, y: 0 },
+                        { label: 'Oben', x: 0, y: -50 },
                       ].map((p, idx) => (
                         <button
                           key={idx}

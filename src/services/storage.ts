@@ -98,9 +98,19 @@ function applyDefaultSpawnImages(maps: MapData[]): MapData[] {
         updated.pinOffsetX = 0;
         updated.pinOffsetY = 0;
       } else {
-        // Ensure non-hidden pins have at least 0/0 defaults if missing
         updated.pinOffsetX = updated.pinOffsetX ?? 0;
-        updated.pinOffsetY = updated.pinOffsetY ?? 0;
+        updated.pinOffsetY = updated.pinOffsetY ?? 25;
+        if (!(updated as any).__shifted) {
+          updated.y = Math.round((updated.y - 1.5) * 10) / 10;
+          if (updated.area) {
+            updated.area = {
+              ...updated.area,
+              y: Math.round((updated.area.y - 1.5) * 10) / 10,
+              points: updated.area.points ? updated.area.points.map(p => ({ ...p, y: Math.round((p.y - 1.5) * 10) / 10 })) : undefined
+            };
+          }
+          (updated as any).__shifted = true;
+        }
       }
       const name = (updated.name || '').toLowerCase();
       const id = updated.id || '';
