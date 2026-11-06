@@ -11,31 +11,31 @@ const STORAGE_KEYS = {
 };
 
 function ensureCenteredCoordinates(maps: MapData[]): MapData[] {
-  return maps.map((map) => {
+  return (maps || []).map((map) => {
     // If map already has verified centered coordinates, retain all callouts, areas, and polygons as-is
     if ((map as any).isCenteredCoords) return map;
 
     const callouts = map.callouts || [];
 
     if (callouts.length > 0) {
-      const avgX = callouts.reduce((sum, c) => sum + c.x, 0) / callouts.length;
-      const avgY = callouts.reduce((sum, c) => sum + c.y, 0) / callouts.length;
+      const avgX = callouts.reduce((sum, c) => sum + (c.x || 0), 0) / callouts.length;
+      const avgY = callouts.reduce((sum, c) => sum + (c.y || 0), 0) / callouts.length;
       if (avgX < -35 && avgY < -35) {
         return {
           ...map,
           callouts: callouts.map((c) => ({
             ...c,
-            x: Math.round((c.x + 50) * 10) / 10,
-            y: Math.round((c.y + 50) * 10) / 10,
+            x: Math.round(((c.x || 0) + 50) * 10) / 10,
+            y: Math.round(((c.y || 0) + 50) * 10) / 10,
             area: c.area
               ? {
                   ...c.area,
-                  x: Math.round((c.area.x + 50) * 10) / 10,
-                  y: Math.round((c.area.y + 50) * 10) / 10,
+                  x: Math.round(((c.area.x || 0) + 50) * 10) / 10,
+                  y: Math.round(((c.area.y || 0) + 50) * 10) / 10,
                   points: c.area.points
                     ? c.area.points.map((p) => ({
-                        x: Math.round((p.x + 50) * 10) / 10,
-                        y: Math.round((p.y + 50) * 10) / 10,
+                        x: Math.round(((p.x || 0) + 50) * 10) / 10,
+                        y: Math.round(((p.y || 0) + 50) * 10) / 10,
                       }))
                     : undefined,
                 }
@@ -47,7 +47,7 @@ function ensureCenteredCoordinates(maps: MapData[]): MapData[] {
     }
 
     const isAlreadyCentered = callouts.some(
-      (c) => c.x < 0 || c.y < 0 || (c.area && (c.area.x < 0 || c.area.y < 0))
+      (c) => (c.x || 0) < 0 || (c.y || 0) < 0 || (c.area && ((c.area.x || 0) < 0 || (c.area.y || 0) < 0))
     );
 
     if (isAlreadyCentered) {
@@ -60,17 +60,17 @@ function ensureCenteredCoordinates(maps: MapData[]): MapData[] {
     return {
       ...map,
       callouts: callouts.map((c) => {
-        const newX = Math.round((c.x - 50) * 10) / 10;
-        const newY = Math.round((c.y - 50) * 10) / 10;
+        const newX = Math.round(((c.x || 0) - 50) * 10) / 10;
+        const newY = Math.round(((c.y || 0) - 50) * 10) / 10;
         let newArea = c.area
           ? {
               ...c.area,
-              x: Math.round((c.area.x - 50) * 10) / 10,
-              y: Math.round((c.area.y - 50) * 10) / 10,
+              x: Math.round(((c.area.x || 0) - 50) * 10) / 10,
+              y: Math.round(((c.area.y || 0) - 50) * 10) / 10,
               points: c.area.points
                 ? c.area.points.map((p) => ({
-                    x: Math.round((p.x - 50) * 10) / 10,
-                    y: Math.round((p.y - 50) * 10) / 10,
+                    x: Math.round(((p.x || 0) - 50) * 10) / 10,
+                    y: Math.round(((p.y || 0) - 50) * 10) / 10,
                   }))
                 : undefined,
             }
@@ -90,41 +90,43 @@ function ensureCenteredCoordinates(maps: MapData[]): MapData[] {
 
 function applyDefaultSpawnImages(maps: MapData[]): MapData[] {
   const centeredMaps = ensureCenteredCoordinates(maps);
-  return centeredMaps.map((map) => ({
+  return (centeredMaps || []).map((map) => ({
     ...map,
-    callouts: map.callouts.map((c) => {
+    callouts: (map.callouts || []).map((c) => {
+      let updated = { ...c };
+      if (updated.hidePin) {
+        updated.pinOffsetX = 0;
+        updated.pinOffsetY = 0;
+      }
+      const name = (updated.name || '').toLowerCase();
+      const id = updated.id || '';
+      const zone = updated.zone || '';
       const isCT =
-        c.zone === 'ct_spawn' ||
-        c.id.endsWith('_ct_spawn') ||
-        c.name.toLowerCase().includes('ct spawn') ||
-        c.name.toLowerCase() === 'ct-spawn';
+        zone === 'ct_spawn' ||
+        id.endsWith('_ct_spawn') ||
+        name.includes('ct spawn') ||
+        name === 'ct-spawn';
       const isT =
-        c.zone === 't_spawn' ||
-        c.id.endsWith('_t_spawn') ||
-        c.name.toLowerCase().includes('t spawn') ||
-        c.name.toLowerCase() === 't-spawn';
+        zone === 't_spawn' ||
+        id.endsWith('_t_spawn') ||
+        name.includes('t spawn') ||
+        name === 't-spawn';
 
       if (isCT) {
-        if (!c.customImage || c.customImage === '/ct.png' || c.customImage === 'ct.png' || c.customImage.startsWith('/ct.png')) {
-          return {
-            ...c,
-            displayMode: c.displayMode || 'image',
-            customImage: 'ct.png',
-            imageSize: c.imageSize || 36,
-          };
+        if (!updated.customImage || updated.customImage === '/ct.png' || updated.customImage === 'ct.png' || updated.customImage.startsWith('/ct.png')) {
+          updated.displayMode = updated.displayMode || 'image';
+          updated.customImage = 'ct.png';
+          updated.imageSize = updated.imageSize || 36;
         }
       }
       if (isT) {
-        if (!c.customImage || c.customImage === '/T.png' || c.customImage === '/t.png' || c.customImage === 'T.png' || c.customImage === 't.png' || c.customImage.startsWith('/T.png') || c.customImage.startsWith('/t.png')) {
-          return {
-            ...c,
-            displayMode: c.displayMode || 'image',
-            customImage: 'T.png',
-            imageSize: c.imageSize || 36,
-          };
+        if (!updated.customImage || updated.customImage === '/T.png' || updated.customImage === '/t.png' || updated.customImage === 'T.png' || updated.customImage === 't.png' || updated.customImage.startsWith('/T.png') || updated.customImage.startsWith('/t.png')) {
+          updated.displayMode = updated.displayMode || 'image';
+          updated.customImage = 'T.png';
+          updated.imageSize = updated.imageSize || 36;
         }
       }
-      return c;
+      return updated;
     }),
   }));
 }

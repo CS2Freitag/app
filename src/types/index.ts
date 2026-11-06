@@ -33,6 +33,8 @@ export interface Callout {
   customImage?: string; // image path or data URL (e.g. '/ct.png' or '/T.png')
   imageSize?: number; // image diameter/size in pixels (e.g. 16 to 96, default 36)
   hidePin?: boolean; // when true, hides the circular pin dot / emblem while keeping text label visible
+  pinOffsetX?: number; // custom horizontal offset in px of the pin dot relative to the text label box (-50 to +50)
+  pinOffsetY?: number; // custom vertical offset in px of the pin dot relative to the text label box (-50 to +50)
   area?: CalloutArea; // optional semi-transparent rectangular area like totalcsgo.com
   zone: ZoneType;
   danger: DangerLevel;

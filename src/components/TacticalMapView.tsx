@@ -356,6 +356,24 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const [calloutFormCustomImage, setCalloutFormCustomImage] = useState<string>('');
   const [calloutFormImageSize, setCalloutFormImageSize] = useState<number>(36);
   const [calloutFormHidePin, setCalloutFormHidePin] = useState<boolean>(false);
+  const [calloutFormPinOffsetX, setCalloutFormPinOffsetX] = useState<number>(0);
+  const [calloutFormPinOffsetY, setCalloutFormPinOffsetY] = useState<number>(0);
+  const previewBoxRef = useRef<HTMLDivElement | null>(null);
+  const [isDraggingPinPreview, setIsDraggingPinPreview] = useState<boolean>(false);
+
+  const handlePreviewPointerMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!previewBoxRef.current) return;
+    const rect = previewBoxRef.current.getBoundingClientRect();
+    const clientX = 'touches' in e && e.touches && e.touches.length > 0 ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const clientY = 'touches' in e && e.touches && e.touches.length > 0 ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const dx = Math.max(-120, Math.min(120, Math.round(clientX - centerX)));
+    const dy = Math.max(-120, Math.min(120, Math.round(clientY - centerY)));
+    setCalloutFormPinOffsetX(dx);
+    setCalloutFormPinOffsetY(dy);
+  };
+
   const [calloutFormDescDe, setCalloutFormDescDe] = useState('');
   const [calloutFormDescEn, setCalloutFormDescEn] = useState('');
   const [calloutFormTipDe, setCalloutFormTipDe] = useState('');
@@ -1069,6 +1087,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     setCalloutFormCustomImage('');
     setCalloutFormImageSize(36);
     setCalloutFormHidePin(false);
+    setCalloutFormPinOffsetX(0);
+    setCalloutFormPinOffsetY(25);
     setCalloutFormDescDe('');
     setCalloutFormDescEn('');
     setCalloutFormTipDe('');
@@ -1113,7 +1133,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     setCalloutFormCustomImage(defaultImage);
     setCalloutFormImageSize(callout.imageSize || 36);
     setCalloutFormHidePin(Boolean(callout.hidePin));
-
+    setCalloutFormPinOffsetX(callout.pinOffsetX ?? 0);
+    setCalloutFormPinOffsetY(callout.pinOffsetY ?? 25);
 
     setCalloutFormDescDe(callout.descriptionDe);
     setCalloutFormDescEn(callout.descriptionEn);
@@ -1222,6 +1243,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
               customImage: finalCustomImage,
               imageSize: calloutFormImageSize,
               hidePin: calloutFormHidePin,
+              pinOffsetX: calloutFormHidePin ? 0 : calloutFormPinOffsetX,
+              pinOffsetY: calloutFormHidePin ? 0 : calloutFormPinOffsetY,
               level: mapData.lowerImage ? calloutFormLevel : c.level,
               area: areaObj,
               descriptionDe: calloutFormDescDe.trim() || `${calloutFormName.trim()} Position`,
@@ -1250,6 +1273,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         customImage: finalCustomImage,
         imageSize: calloutFormImageSize,
         hidePin: calloutFormHidePin,
+        pinOffsetX: calloutFormHidePin ? 0 : calloutFormPinOffsetX,
+        pinOffsetY: calloutFormHidePin ? 0 : calloutFormPinOffsetY,
         level: mapData.lowerImage ? calloutFormLevel : undefined,
         area: areaObj,
         descriptionDe: calloutFormDescDe.trim() || `${calloutFormName.trim()} Position`,
@@ -2037,12 +2062,14 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
             const pinX = callout.x;
             const pinY = callout.y;
+            const offX = Math.round((callout.pinOffsetX ?? 0) * calloutScale);
+            const offY = Math.round((callout.pinOffsetY ?? 22) * calloutScale);
 
             return (
               <div
                 key={`callout_${tileLevel}_${callout.id}`}
                 style={{ left: `calc(50% + ${pinX}%)`, top: `calc(50% + ${pinY}%)` }}
-                className={`absolute -translate-x-1/2 -translate-y-1/2 group flex flex-col items-center pointer-events-auto ${
+                className={`absolute -translate-x-1/2 -translate-y-1/2 group flex items-center justify-center pointer-events-auto ${
                   isBeingDragged ? 'z-50' : 'z-25'
                 }`}
                 onMouseEnter={() => !draggingCalloutId && setHoveredCallout(callout)}
@@ -2060,72 +2087,76 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                 }}
               >
                 {!callout.hidePin && (
-                  isImageMode ? (
-                    <div
-                      onMouseDown={(e) => handleCalloutDragStart(callout, e)}
-                      onTouchStart={(e) => handleCalloutDragStart(callout, e)}
-                      style={{
-                        width: `${calloutImgSize}px`,
-                        height: `${calloutImgSize}px`,
-                      }}
-                      className={`relative flex items-center justify-center transition-all select-none shrink-0 ${
-                        isEditMode
-                          ? 'cursor-grab active:cursor-grabbing hover:scale-110'
-                          : isSelected || isHighlighted
-                          ? 'scale-115 cursor-pointer'
-                          : 'hover:scale-110 cursor-pointer'
-                      }`}
-                    >
-                      {(isSelected || isHighlighted || isBeingDragged) && (
-                        <span className="absolute -inset-2 rounded-full bg-white/40 animate-ping pointer-events-none" />
-                      )}
-                      <img
-                        src={resolveAssetPath(callout.customImage)}
-                        alt={callout.name}
-                        draggable={false}
+                  <div
+                    className="absolute z-10 flex items-center justify-center pointer-events-auto"
+                  >
+                    {isImageMode ? (
+                      <div
+                        onMouseDown={(e) => handleCalloutDragStart(callout, e)}
+                        onTouchStart={(e) => handleCalloutDragStart(callout, e)}
                         style={{
                           width: `${calloutImgSize}px`,
                           height: `${calloutImgSize}px`,
-                          transform: `rotate(${callout.textRotation !== undefined ? callout.textRotation : (callout.rotation || 0)}deg)`,
                         }}
-                        className={`rounded-full object-contain filter drop-shadow-[0_2px_6px_rgba(0,0,0,0.85)] ${
-                          isBeingDragged
-                            ? 'ring-4 ring-amber-400 scale-110'
+                        className={`relative flex items-center justify-center transition-all select-none shrink-0 ${
+                          isEditMode
+                            ? 'cursor-grab active:cursor-grabbing hover:scale-110'
                             : isSelected || isHighlighted
-                            ? 'ring-2 ring-white ring-offset-2 ring-offset-zinc-950 scale-105'
-                            : 'hover:brightness-110'
+                            ? 'scale-115 cursor-pointer'
+                            : 'hover:scale-110 cursor-pointer'
                         }`}
-                      />
-                    </div>
-                  ) : (
-                    <div
-                      onMouseDown={(e) => handleCalloutDragStart(callout, e)}
-                      onTouchStart={(e) => handleCalloutDragStart(callout, e)}
-                      className={`relative flex items-center justify-center transition-transform shrink-0 ${
-                        isEditMode
-                          ? 'cursor-grab active:cursor-grabbing hover:scale-125'
-                          : isSelected || isHighlighted
-                          ? 'scale-125 cursor-pointer'
-                          : 'hover:scale-115 cursor-pointer'
-                      }`}
-                    >
-                      {(isSelected || isHighlighted || isBeingDragged) && (
-                        <span className="absolute -inset-1.5 rounded-full bg-white/40 animate-ping pointer-events-none" />
-                      )}
-
+                      >
+                        {(isSelected || isHighlighted || isBeingDragged) && (
+                          <span className="absolute -inset-2 rounded-full bg-white/40 animate-ping pointer-events-none" />
+                        )}
+                        <img
+                          src={resolveAssetPath(callout.customImage)}
+                          alt={callout.name}
+                          draggable={false}
+                          style={{
+                            width: `${calloutImgSize}px`,
+                            height: `${calloutImgSize}px`,
+                            transform: `rotate(${callout.textRotation !== undefined ? callout.textRotation : (callout.rotation || 0)}deg)`,
+                          }}
+                          className={`rounded-full object-contain filter drop-shadow-[0_2px_6px_rgba(0,0,0,0.85)] ${
+                            isBeingDragged
+                              ? 'ring-4 ring-amber-400 scale-110'
+                              : isSelected || isHighlighted
+                              ? 'ring-2 ring-white ring-offset-2 ring-offset-zinc-950 scale-105'
+                              : 'hover:brightness-110'
+                          }`}
+                        />
+                      </div>
+                    ) : (
                       <div
-                        style={{
-                          width: `${dotSize}px`,
-                          height: `${dotSize}px`,
-                        }}
-                        className={`rounded-full border-2 border-zinc-950 shadow-md flex items-center justify-center ${
-                          isBeingDragged
-                            ? 'ring-4 ring-amber-400 bg-white scale-125'
-                            : pinBgColor
+                        onMouseDown={(e) => handleCalloutDragStart(callout, e)}
+                        onTouchStart={(e) => handleCalloutDragStart(callout, e)}
+                        className={`relative flex items-center justify-center transition-transform shrink-0 ${
+                          isEditMode
+                            ? 'cursor-grab active:cursor-grabbing hover:scale-125'
+                            : isSelected || isHighlighted
+                            ? 'scale-125 cursor-pointer'
+                            : 'hover:scale-115 cursor-pointer'
                         }`}
-                      />
-                    </div>
-                  )
+                      >
+                        {(isSelected || isHighlighted || isBeingDragged) && (
+                          <span className="absolute -inset-1.5 rounded-full bg-white/40 animate-ping pointer-events-none" />
+                        )}
+
+                        <div
+                          style={{
+                            width: `${dotSize}px`,
+                            height: `${dotSize}px`,
+                          }}
+                          className={`rounded-full border-2 border-zinc-950 shadow-md flex items-center justify-center ${
+                            isBeingDragged
+                              ? 'ring-4 ring-amber-400 bg-white scale-125'
+                              : pinBgColor
+                          }`}
+                        />
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {/* ROTATABLE CALLOUT LABEL */}
@@ -2136,12 +2167,11 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                     style={{
                       fontSize: `${fontSize}px`,
                       fontFamily: getFontFamilyStyle(callout.fontFamily),
-                      marginTop: callout.hidePin ? '0px' : (callout.displayMode === 'both' ? '6px' : '4px'),
                       padding: `${Math.round(2 * calloutScale)}px ${Math.round(6 * calloutScale)}px`,
-                      transform: `rotate(${callout.textRotation !== undefined ? callout.textRotation : (callout.rotation || 0)}deg)`,
+                      transform: `translate(${offX}px, ${offY}px) rotate(${callout.textRotation !== undefined ? callout.textRotation : (callout.rotation || 0)}deg)`,
                       transformOrigin: 'center center',
                     }}
-                    className={`rounded font-bold tracking-tight whitespace-nowrap shadow-lg transition-transform shrink-0 ${
+                    className={`rounded font-bold tracking-tight whitespace-nowrap shadow-lg transition-transform shrink-0 relative z-20 ${
                       isEditMode
                         ? 'cursor-grab active:cursor-grabbing bg-zinc-950 border border-sky-400 text-sky-200 ring-1 ring-sky-400/50'
                         : isSelected || isHighlighted
@@ -3462,34 +3492,163 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                 )}
               </div>
 
-              {/* BEREICH-DREHUNG (RECHTECK) */}
-              <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800 space-y-2">
+              {/* CALLOUT-TEXT POSITION */}
+              <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800 space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <label className="font-semibold uppercase text-zinc-300 flex items-center gap-1.5">
-                    <RotateCw className="w-3.5 h-3.5 text-amber-400" />
-                    <span>{isDe ? 'Bereich-Drehung (Rechteck)' : 'Area Box Rotation'}</span>
+                  <label className="font-semibold uppercase text-zinc-300 flex items-center gap-1.5 text-xs">
+                    <Crosshair className="w-3.5 h-3.5 text-amber-400" />
+                    <span>{isDe ? 'Callout-Text Position' : 'Callout Text Position'}</span>
                   </label>
-                  <span className="font-mono font-bold text-amber-300">
-                    {calloutFormRotation}°
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <label className="flex items-center gap-1.5 text-[11px] text-zinc-400 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={calloutFormHidePin}
+                        onChange={(e) => {
+                          const val = e.target.checked;
+                          setCalloutFormHidePin(val);
+                          if (val) {
+                            setCalloutFormPinOffsetX(0);
+                            setCalloutFormPinOffsetY(0);
+                          }
+                        }}
+                        className="w-3.5 h-3.5 accent-amber-400 rounded cursor-pointer"
+                      />
+                      <span>{isDe ? 'Punkt ausblenden' : 'Hide Pin'}</span>
+                    </label>
+                    <span className="font-mono text-[10px] text-amber-300 font-bold px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800">
+                      X: {calloutFormPinOffsetX} / Y: {calloutFormPinOffsetY}
+                    </span>
+                  </div>
                 </div>
-                <input
-                  type="range"
-                  min="-180"
-                  max="180"
-                  step="5"
-                  value={calloutFormRotation}
-                  onChange={(e) => setCalloutFormRotation(Number(e.target.value))}
-                  className="w-full accent-amber-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
-                />
+
+                {!calloutFormHidePin && (
+                  <div className="space-y-2.5 pt-1">
+                    <p className="text-[11px] text-zinc-400 leading-snug">
+                      {isDe
+                        ? 'Bewege das Schriftfeld in der Vorschau frei per Drag & Drop um den fixierten Callout-Punkt herum (oder nutze Presets & Regler).'
+                        : 'Drag the text box freely around the fixed callout pin in the preview box (or use presets & sliders).'}
+                    </p>
+
+                    {/* Interactive 2D Drag Preview Box */}
+                    <div
+                      ref={previewBoxRef}
+                      onMouseDown={(e) => {
+                        setIsDraggingPinPreview(true);
+                        handlePreviewPointerMove(e);
+                      }}
+                      onMouseMove={(e) => {
+                        if (isDraggingPinPreview || e.buttons === 1) {
+                          handlePreviewPointerMove(e);
+                        }
+                      }}
+                      onMouseUp={() => setIsDraggingPinPreview(false)}
+                      onTouchStart={(e) => {
+                        setIsDraggingPinPreview(true);
+                        handlePreviewPointerMove(e);
+                      }}
+                      onTouchMove={(e) => {
+                        if (isDraggingPinPreview) {
+                          handlePreviewPointerMove(e);
+                        }
+                      }}
+                      onTouchEnd={() => setIsDraggingPinPreview(false)}
+                      className="relative h-64 w-full bg-zinc-900/90 rounded-xl border border-zinc-700/80 overflow-hidden cursor-crosshair select-none flex items-center justify-center shadow-inner group"
+                    >
+                      {/* Subtle grid lines */}
+                      <div className="absolute inset-0 bg-[radial-gradient(#3f3f46_1px,transparent_1px)] [background-size:12px_12px] opacity-40 pointer-events-none" />
+                      <div className="absolute w-full h-[1px] bg-zinc-800 pointer-events-none" />
+                      <div className="absolute h-full w-[1px] bg-zinc-800 pointer-events-none" />
+
+                      {/* FIXED Callout Pin Dot in Center (0,0) */}
+                      <div className="absolute z-10 w-4 h-4 rounded-full bg-amber-400 border-2 border-zinc-950 shadow-[0_0_10px_rgba(251,191,36,0.8)] pointer-events-none flex items-center justify-center">
+                        <div className="w-1.5 h-1.5 rounded-full bg-zinc-950" />
+                      </div>
+
+                      {/* MOVABLE Text Label Box relative to fixed center dot */}
+                      <div
+                        style={{
+                          transform: `translate(${calloutFormPinOffsetX}px, ${calloutFormPinOffsetY}px) rotate(${calloutFormTextRotation}deg)`,
+                          fontSize: `${calloutFormFontSize}px`,
+                          fontFamily: getFontFamilyStyle(calloutFormFontFamily),
+                        }}
+                        className="relative z-20 px-2.5 py-1 rounded bg-zinc-950 border border-sky-400 text-sky-200 font-bold shadow-lg pointer-events-none whitespace-nowrap transition-transform duration-75"
+                      >
+                        {calloutFormName.trim() || 'Schriftfeld'}
+                      </div>
+
+                      <span className="absolute bottom-1.5 right-2 text-[9px] font-mono text-zinc-500 pointer-events-none">
+                        {isDe ? 'Schriftfeld ziehen' : 'Drag Text Label'}
+                      </span>
+                    </div>
+
+                    {/* Quick Offset Presets */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] text-zinc-500 font-mono">Presets:</span>
+                      {[
+                        { label: 'Zentriert (Mid)', x: 0, y: 0 },
+                        { label: 'Unten (Standard)', x: 0, y: 25 },
+                        { label: 'Oben', x: 0, y: -25 },
+                      ].map((p, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            setCalloutFormPinOffsetX(p.x);
+                            setCalloutFormPinOffsetY(p.y);
+                          }}
+                          className={`px-2 py-0.5 rounded text-[10px] font-mono font-semibold cursor-pointer transition-colors ${
+                            calloutFormPinOffsetX === p.x && calloutFormPinOffsetY === p.y
+                              ? 'bg-amber-400 text-zinc-950 font-bold'
+                              : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                          }`}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Fine-Tuning Sliders */}
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <div className="flex justify-between text-[10px] font-mono text-zinc-400 mb-0.5">
+                          <span>X-Offset ({calloutFormPinOffsetX}px):</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="-120"
+                          max="120"
+                          step="1"
+                          value={calloutFormPinOffsetX}
+                          onChange={(e) => setCalloutFormPinOffsetX(Number(e.target.value))}
+                          className="w-full accent-amber-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
+                        />
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-[10px] font-mono text-zinc-400 mb-0.5">
+                          <span>Y-Offset ({calloutFormPinOffsetY}px):</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="-120"
+                          max="120"
+                          step="1"
+                          value={calloutFormPinOffsetY}
+                          onChange={(e) => setCalloutFormPinOffsetY(Number(e.target.value))}
+                          className="w-full accent-amber-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* SCHRIFT-DREHUNG SEPARAT */}
+              {/* SCHRIFT-DREHUNG */}
               <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800 space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="font-semibold uppercase text-zinc-300 flex items-center gap-1.5">
+                  <label className="font-semibold uppercase text-zinc-300 flex items-center gap-1.5 text-xs">
                     <RotateCw className="w-3.5 h-3.5 text-sky-400" />
-                    <span>{isDe ? 'Schrift-Drehung separat' : 'Text Label Rotation (separate)'}</span>
+                    <span>{isDe ? 'Schrift-Drehung' : 'Text Label Rotation'}</span>
                   </label>
                   <span className="font-mono font-bold text-sky-300">
                     {calloutFormTextRotation}°
