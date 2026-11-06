@@ -2382,19 +2382,20 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       </div>
 
       {/* 2. TACTICAL TOOLBAR: TOOLS, ERASER, UNDO/REDO, AREAS TOGGLE, TEXT SCALE, ZOOM */}
-      <div className="relative z-50 h-12 border-b border-zinc-800/80 bg-zinc-900/90 px-4 flex items-center justify-between gap-3 shrink-0 text-xs print:hidden">
+      <div className="relative z-50 min-h-12 border-b border-zinc-800/80 bg-zinc-900/90 px-2 sm:px-4 flex items-center justify-between gap-1.5 sm:gap-3 shrink-0 text-xs print:hidden overflow-visible">
         {/* Tactical tools */}
-        <div className="flex items-center gap-1 shrink-0 overflow-visible">
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 overflow-visible max-w-full">
           <button
             onClick={() => setActiveTool('select')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-semibold transition-colors ${
+            className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
               activeTool === 'select'
                 ? 'bg-zinc-100 text-zinc-950 shadow-xs'
                 : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
             }`}
+            title={isDe ? 'Inspektor: Callouts & Infos auf der Karte anzeigen' : 'Inspect'}
           >
-            <Crosshair className="w-3.5 h-3.5" />
-            <span>{isDe ? 'Inspektor' : 'Inspect'}</span>
+            <Crosshair className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+            <span className="hidden sm:inline">{isDe ? 'Inspektor' : 'Inspect'}</span>
           </button>
 
           <button
@@ -2404,15 +2405,16 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             onMouseLeave={clearPressTimer}
             onTouchStart={startPressTimer}
             onTouchEnd={clearPressTimer}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-semibold transition-colors ${
+            className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
               activeTool === 'pen' && !penWithArrow
                 ? 'bg-zinc-100 text-zinc-950 shadow-xs'
                 : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
             }`}
             style={{ borderLeft: activeTool === 'pen' ? `4px solid ${penColor}` : undefined }}
+            title={isDe ? 'Freihand Linie zeichnen' : 'Line'}
           >
-            <Pencil className="w-3.5 h-3.5" />
-            <span>{isDe ? 'Linie' : 'Line'}</span>
+            <Pencil className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+            <span className="hidden sm:inline">{isDe ? 'Linie' : 'Line'}</span>
           </button>
 
           <button
@@ -2422,21 +2424,22 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             onMouseLeave={clearPressTimer}
             onTouchStart={startPressTimer}
             onTouchEnd={clearPressTimer}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-semibold transition-colors ${
+            className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
               activeTool === 'arrow'
                 ? 'bg-zinc-100 text-zinc-950 shadow-xs'
                 : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
             }`}
             style={{ borderLeft: activeTool === 'arrow' ? `4px solid ${penColor}` : undefined }}
+            title={isDe ? 'Pfeil (Rush) zeichnen' : 'Arrow'}
           >
-            <Move className="w-3.5 h-3.5" />
-            <span>{isDe ? 'Pfeil (Rush)' : 'Arrow'}</span>
+            <Move className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+            <span className="hidden sm:inline">{isDe ? 'Pfeil (Rush)' : 'Arrow'}</span>
           </button>
 
           {/* RADIERER (LÖSCHEN EINZELNER LINIEN / PFEILE) */}
           <button
             onClick={() => setActiveTool('eraser')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-semibold transition-colors ${
+            className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
               activeTool === 'eraser'
                 ? 'bg-red-500 text-white shadow-xs font-bold'
                 : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
@@ -2447,30 +2450,30 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                 : 'Eraser: Click on a drawn line or arrow to delete it'
             }
           >
-            <Eraser className="w-3.5 h-3.5" />
-            <span>{isDe ? 'Radierer' : 'Eraser'}</span>
+            <Eraser className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+            <span className="hidden sm:inline">{isDe ? 'Radierer' : 'Eraser'}</span>
           </button>
 
           {/* FARBPICKER DROPDOWN */}
           <div className="relative z-50">
             <button
               onClick={() => setShowColorPicker(!showColorPicker)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md font-semibold text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors border border-zinc-700/80"
+              className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-md font-semibold text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors border border-zinc-700/80 cursor-pointer"
               title={isDe ? 'Farbe wählen (7 Farben)' : 'Choose color (7 colors)'}
             >
-              <div className="w-3.5 h-3.5 rounded-full border border-white/40 shadow-xs" style={{ backgroundColor: penColor }} />
+              <div className="w-4 h-4 sm:w-3.5 sm:h-3.5 rounded-full border border-white/40 shadow-xs" style={{ backgroundColor: penColor }} />
               <span className="hidden sm:inline">{isDe ? 'Farbe' : 'Color'}</span>
             </button>
             {showColorPicker && (
               <div
                 data-no-map-click="true"
-                className="absolute top-full left-0 mt-1.5 p-2 bg-zinc-900 rounded-xl border border-zinc-700 shadow-2xl z-[100] flex items-center gap-1.5 backdrop-blur-md animate-in fade-in zoom-in-95 duration-100"
+                className="fixed top-16 left-1/2 -translate-x-1/2 sm:absolute sm:top-full sm:left-0 sm:translate-x-0 mt-1.5 p-2 bg-zinc-900/98 rounded-2xl sm:rounded-xl border border-zinc-700 shadow-2xl z-[200] flex items-center justify-center gap-2 backdrop-blur-md animate-in fade-in zoom-in-95 duration-100 max-w-[92vw] min-w-[240px]"
               >
                 {colors.map((c) => (
                   <button
                     key={c}
                     type="button"
-                    className={`w-6 h-6 rounded-full border transition-transform hover:scale-115 active:scale-95 ${
+                    className={`w-7 h-7 sm:w-6 sm:h-6 rounded-full border transition-transform hover:scale-115 active:scale-95 shrink-0 cursor-pointer ${
                       penColor === c ? 'border-amber-400 ring-2 ring-amber-400/50 scale-110' : 'border-zinc-600'
                     }`}
                     style={{ backgroundColor: c }}
