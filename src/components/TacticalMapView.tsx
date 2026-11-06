@@ -38,7 +38,8 @@ import {
   Activity,
   PenTool,
   ArrowUp,
-  Share2
+  Share2,
+  Plus
 } from 'lucide-react';
 import {
   MapData,
@@ -284,8 +285,11 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     initialHighlightedCalloutId
   );
 
-  // Edit mode & Dragging states
+  // Edit mode, Options Modal & Single Callout Edit states
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
+  const [isEditOptionsModalOpen, setIsEditOptionsModalOpen] = useState<boolean>(false);
+  const [singleEditCalloutId, setSingleEditCalloutId] = useState<string | null>(null);
+  const [singleEditSearchQuery, setSingleEditSearchQuery] = useState<string>('');
   const [draggingCalloutId, setDraggingCalloutId] = useState<string | null>(null);
   const [draggedCoords, setDraggedCoords] = useState<{ x: number; y: number } | null>(null);
 
@@ -504,15 +508,15 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     e: React.MouseEvent<HTMLElement> | React.TouchEvent<HTMLElement>
   ) => {
     const clientX =
-      'touches' in e && e.touches.length > 0
+      'touches' in e && e.touches && e.touches.length > 0
         ? e.touches[0].clientX
         : (e as React.MouseEvent).clientX;
     const clientY =
-      'touches' in e && e.touches.length > 0
+      'touches' in e && e.touches && e.touches.length > 0
         ? e.touches[0].clientY
         : (e as React.MouseEvent).clientY;
-    const target = e.target as HTMLElement;
-    const tile = (target.closest('.map-canvas-tile') as HTMLElement) || null;
+    const target = (e && e.target as HTMLElement) || null;
+    const tile = (target && typeof target.closest === 'function' ? target.closest('.map-canvas-tile') as HTMLElement : null) || null;
     return getCoordinatesFromClient(clientX, clientY, tile);
   };
 
@@ -851,6 +855,9 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       setIsPanning(false);
       setMouseDownPos(null);
     } else if (e.touches.length === 1) {
+      if ((activeTool === 'pen' || activeTool === 'arrow' || activeTool === 'eraser') && e.cancelable) {
+        e.preventDefault();
+      }
       initialPinchDistRef.current = null;
       const touch = e.touches[0];
       handleMouseDown({
@@ -874,10 +881,14 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       const newZoom = Math.max(0.1, Math.min(2.0, initialPinchZoomRef.current * factor));
       setZoom(Math.round(newZoom * 100) / 100);
     } else if (e.touches.length === 1) {
+      if ((activeTool === 'pen' || activeTool === 'arrow' || activeTool === 'eraser' || currentDrawing) && e.cancelable) {
+        e.preventDefault();
+      }
       const touch = e.touches[0];
       handleMouseMove({
         clientX: touch.clientX,
         clientY: touch.clientY,
+        target: e.target,
       } as unknown as React.MouseEvent<HTMLDivElement>);
     }
   };
@@ -1463,8 +1474,11 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     }
   };
 
-  // Filter callouts by zone
+  // Filter callouts by zone or single-edit focus
   const visibleCallouts = mapData.callouts.filter((c) => {
+    if (singleEditCalloutId) {
+      return c.id === singleEditCalloutId;
+    }
     if (selectedZoneFilter === 'all') return true;
     return c.zone === selectedZoneFilter;
   });
@@ -1784,17 +1798,23 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           preserveAspectRatio="none"
         >
           <defs>
-            <marker
-              id={`arrow-white-${tileLevel}`}
-              viewBox="0 0 10 10"
-              refX="6"
-              refY="5"
-              markerWidth="5"
-              markerHeight="5"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 1 L 10 5 L 0 9 z" fill="#ffffff" />
-            </marker>
+            {colors.map((c) => {
+              const colorId = c.replace('#', '');
+              return (
+                <marker
+                  key={`arrow_${colorId}_${tileLevel}`}
+                  id={`arrow-${colorId}-${tileLevel}`}
+                  viewBox="0 0 10 10"
+                  refX="6"
+                  refY="5"
+                  markerWidth="5"
+                  markerHeight="5"
+                  orient="auto-start-reverse"
+                >
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill={c} />
+                </marker>
+              );
+            })}
             <marker
               id={`arrow-eraser-${tileLevel}`}
               viewBox="0 0 10 10"
@@ -1916,6 +1936,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           {!isDrawingPolygonArea &&
             drawings.map((line) => {
               const isEraserHovered = hoveredLineId === line.id && activeTool === 'eraser';
+              const arrowColorId = (line.color || '#ffffff').replace('#', '');
               return (
                 <g key={line.id}>
                   <polyline
@@ -1926,7 +1947,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeDasharray={isEraserHovered ? '2,2' : undefined}
-                    markerEnd={line.hasArrow ? `url(#arrow-white-${tileLevel})` : undefined}
+                    markerEnd={line.hasArrow ? `url(#arrow-${isEraserHovered ? 'ef4444' : arrowColorId}-${tileLevel})` : undefined}
                     onMouseEnter={() => setHoveredLineId(line.id)}
                     onMouseLeave={() => setHoveredLineId(null)}
                     onClick={(e) => {
@@ -1950,7 +1971,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
               strokeWidth={0.8}
               strokeLinecap="round"
               strokeLinejoin="round"
-              markerEnd={currentDrawing.hasArrow ? `url(#arrow-white-${tileLevel})` : undefined}
+              markerEnd={currentDrawing.hasArrow ? `url(#arrow-${(currentDrawing.color || '#ffffff').replace('#', '')}-${tileLevel})` : undefined}
             />
           )}
         </svg>
@@ -2350,25 +2371,34 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             <HelpCircle className="w-4 h-4 text-amber-400" />
           </button>
 
-          {/* Bearbeiten Toggle */}
+          {/* Bearbeiten Haupt-Button */}
           <button
-            onClick={() => setIsEditMode(!isEditMode)}
-            className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-bold rounded-lg border transition-all ${
-              isEditMode
-                ? 'border-amber-400 bg-amber-400 text-zinc-950'
-                : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-white'
+            onClick={() => {
+              if (isEditMode || singleEditCalloutId) {
+                setIsEditMode(false);
+                setSingleEditCalloutId(null);
+              } else {
+                setIsEditOptionsModalOpen(true);
+              }
+            }}
+            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-xs font-bold rounded-lg border transition-all cursor-pointer ${
+              isEditMode || singleEditCalloutId
+                ? 'border-amber-400 bg-amber-400 text-zinc-950 shadow-md ring-2 ring-amber-400/30'
+                : 'border-zinc-800 bg-zinc-900 text-zinc-200 hover:text-white hover:bg-zinc-800'
             }`}
+            title={isDe ? 'Bearbeiten-Optionen (+Neu, Einzel-Bearbeitung, Alles Bearbeiten)' : 'Edit Options'}
           >
-            <Move className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">{isDe ? 'Bearbeiten' : 'Edit'}</span>
-          </button>
-
-          {/* DEDICATED "+Neu" BUTTON */}
-          <button
-            onClick={handleOpenAddNewCalloutModal}
-            className="px-2 py-1.5 text-[10px] sm:text-xs font-bold rounded-lg border border-emerald-500/50 bg-emerald-500/20 text-emerald-300 transition-all"
-          >
-            <span>+Neu</span>
+            {isEditMode || singleEditCalloutId ? (
+              <>
+                <Check className="w-3.5 h-3.5" />
+                <span>{isDe ? 'Fertig' : 'Done'}</span>
+              </>
+            ) : (
+              <>
+                <Move className="w-3.5 h-3.5 text-amber-400" />
+                <span>{isDe ? 'Bearbeiten' : 'Edit'}</span>
+              </>
+            )}
           </button>
 
           {/* Fullscreen */}
@@ -2668,19 +2698,44 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                   ? 'Callouts bleiben zentriert im Bereich • Schrift per Icon drehen • Klicke freie Stelle für neuen Callout'
                   : 'Callout stays centered in area • Rotate text • Click empty map to add callout'}
               </span>
-              <button
-                type="button"
-                data-no-map-click="true"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  e.preventDefault();
-                  setShowEditBanner(false);
-                }}
-                className="p-1 text-amber-400 hover:text-white rounded ml-1 transition-colors"
-                title={isDe ? 'Schließen' : 'Close'}
-              >
-                <X className="w-3.5 h-3.5 shrink-0 pointer-events-none" />
-              </button>
+            </div>
+          )}
+
+          {/* SINGLE-EDIT ACTIVE FLOATING BANNER */}
+          {!isDrawingPolygonArea && singleEditCalloutId && (
+            <div
+              data-no-map-click="true"
+              className="absolute top-4 left-1/2 -translate-x-1/2 z-40 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2.5 px-4 py-2 rounded-xl bg-sky-950/95 border-2 border-sky-400 text-sky-100 text-xs font-semibold backdrop-blur-md shadow-2xl print:hidden max-w-[92vw]"
+            >
+              <div className="flex items-center gap-2 shrink-0">
+                <Crosshair className="w-4 h-4 text-sky-400 animate-pulse shrink-0" />
+                <span>
+                  {isDe ? 'Einzel-Bearbeitung:' : 'Single Edit:'}{' '}
+                  <strong className="text-sky-300 font-extrabold">
+                    {mapData.callouts.find((c) => c.id === singleEditCalloutId)?.name || 'Callout'}
+                  </strong>
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsEditOptionsModalOpen(true)}
+                  className="px-2.5 py-1 rounded-lg bg-sky-800 hover:bg-sky-700 text-white font-bold text-[11px] transition-colors cursor-pointer"
+                >
+                  {isDe ? 'Anderes Callout' : 'Switch Callout'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSingleEditCalloutId(null);
+                    setIsEditMode(false);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-red-950/60 hover:bg-red-900 border border-red-800/80 text-red-200 font-bold text-[11px] transition-colors cursor-pointer"
+                  title={isDe ? 'Einzel-Bearbeitung beenden' : 'Exit single edit'}
+                >
+                  {isDe ? 'Beenden' : 'Exit'}
+                </button>
+              </div>
             </div>
           )}
 
@@ -4074,6 +4129,179 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         }}
         lang={lang}
       />
+
+      {/* EDIT MODE OPTIONS SELECTION MODAL (3 CHOICES) */}
+      {isEditOptionsModalOpen && (
+        <div
+          data-no-map-click="true"
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-150 overflow-y-auto"
+          onClick={() => setIsEditOptionsModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-lg bg-zinc-900 border border-zinc-700/80 rounded-2xl p-5 sm:p-6 shadow-2xl text-zinc-100 relative my-auto max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-start justify-between pb-3 border-b border-zinc-800 mb-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <Move className="w-5 h-5 text-amber-400" />
+                  <h3 className="text-lg font-black text-white">
+                    {isDe ? 'Bearbeitungs-Modus' : 'Edit Mode Options'}
+                  </h3>
+                </div>
+                <p className="text-xs text-zinc-400">
+                  {isDe
+                    ? 'Wähle, wie du die Karte oder Callouts anpassen möchtest:'
+                    : 'Choose how you want to edit map callouts:'}
+                </p>
+              </div>
+              <button
+                onClick={() => setIsEditOptionsModalOpen(false)}
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {/* OPTION 1: ALLES BEARBEITEN */}
+              <button
+                type="button"
+                onClick={() => {
+                  setSingleEditCalloutId(null);
+                  setIsEditMode(true);
+                  setIsEditOptionsModalOpen(false);
+                }}
+                className="w-full text-left p-4 rounded-xl bg-zinc-950/80 hover:bg-zinc-800/80 border border-zinc-800 hover:border-amber-500/60 transition-all group cursor-pointer flex items-start gap-3.5"
+              >
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 group-hover:scale-105 transition-transform shrink-0">
+                  <Move className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="font-extrabold text-sm text-white group-hover:text-amber-300 transition-colors">
+                      {isDe ? '1. Alles Bearbeiten (Global)' : '1. Edit All Callouts (Global)'}
+                    </span>
+                    <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                      {mapData.callouts.length} Callouts
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-400 leading-relaxed">
+                    {isDe
+                      ? 'Schaltet alle Callouts auf der Karte gleichzeitig interaktiv frei. Verschiebe Pins, erstelle Bereiche & rotiere Labels.'
+                      : 'Unlocks all callouts on the map simultaneously for interactive dragging and area resizing.'}
+                  </p>
+                </div>
+              </button>
+
+              {/* OPTION 2: EINZEL-BEARBEITUNG */}
+              <div className="p-4 rounded-xl bg-zinc-950/80 border border-zinc-800 space-y-2.5">
+                <div className="flex items-start gap-3.5">
+                  <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-400 shrink-0">
+                    <Crosshair className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1">
+                    <span className="font-extrabold text-sm text-white block mb-0.5">
+                      {isDe ? '2. Einzel-Bearbeitung (Fokussiert)' : '2. Single Callout Edit'}
+                    </span>
+                    <p className="text-xs text-zinc-400 leading-relaxed">
+                      {isDe
+                        ? 'Wähle ein bestimmtes Callout aus. Alle anderen Callouts werden ausgeblendet, damit du ungestört arbeiten kannst.'
+                        : 'Focus on a single callout. All other callouts will be hidden for distortion-free editing.'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Search & Selector List */}
+                <div className="pt-2 border-t border-zinc-800/80 space-y-2">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={singleEditSearchQuery}
+                      onChange={(e) => setSingleEditSearchQuery(e.target.value)}
+                      placeholder={isDe ? 'Callout suchen...' : 'Search callout...'}
+                      className="w-full bg-zinc-900 border border-zinc-700/80 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-sky-400"
+                    />
+                    <Crosshair className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-2.5" />
+                  </div>
+
+                  <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                    {mapData.callouts
+                      .filter((c) =>
+                        c.name.toLowerCase().includes(singleEditSearchQuery.toLowerCase()) ||
+                        c.zone.toLowerCase().includes(singleEditSearchQuery.toLowerCase())
+                      )
+                      .map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            setSingleEditCalloutId(c.id);
+                            setIsEditMode(true);
+                            setIsEditOptionsModalOpen(false);
+                          }}
+                          className={`w-full flex items-center justify-between p-2 rounded-lg text-left transition-all text-xs cursor-pointer ${
+                            singleEditCalloutId === c.id
+                              ? 'bg-sky-500/20 border border-sky-400 text-sky-200'
+                              : 'bg-zinc-900/90 hover:bg-zinc-800 text-zinc-200 border border-zinc-800'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <span className="font-bold truncate">{c.name}</span>
+                            <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase ${getZoneBadgeColor(c.zone)}`}>
+                              {c.zone.replace('_', ' ')}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-sky-400 font-semibold shrink-0">
+                            {isDe ? 'Bearbeiten →' : 'Edit →'}
+                          </span>
+                        </button>
+                      ))}
+                    {mapData.callouts.filter((c) =>
+                      c.name.toLowerCase().includes(singleEditSearchQuery.toLowerCase()) ||
+                      c.zone.toLowerCase().includes(singleEditSearchQuery.toLowerCase())
+                    ).length === 0 && (
+                      <div className="p-3 text-center text-xs text-zinc-500">
+                        {isDe ? 'Kein Callout gefunden.' : 'No callout found.'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* OPTION 3: NEUEN CALLOUT ERSTELLEN */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditOptionsModalOpen(false);
+                  handleOpenAddNewCalloutModal();
+                }}
+                className="w-full text-left p-4 rounded-xl bg-zinc-950/80 hover:bg-zinc-800/80 border border-zinc-800 hover:border-emerald-500/60 transition-all group cursor-pointer flex items-start gap-3.5"
+              >
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 group-hover:scale-105 transition-transform shrink-0">
+                  <Plus className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="font-extrabold text-sm text-white group-hover:text-emerald-300 transition-colors">
+                      {isDe ? '3. Neues Callout erstellen' : '3. Create New Callout'}
+                    </span>
+                    <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                      +Neu
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-400 leading-relaxed">
+                    {isDe
+                      ? 'Füge einen völlig neuen Ort, Bombenplatz-Bereich oder Callout-Punkt zu dieser Karte hinzu.'
+                      : 'Create a brand new callout point or custom area on this map.'}
+                  </p>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Scroll to Top Floating Button inside TacticalMapView */}
       {showTacticalScrollTop && (
