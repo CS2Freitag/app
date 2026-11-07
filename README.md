@@ -1,20 +1,29 @@
 <div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
+  <img src="image_gnrDcR.png" width="350" alt="CS2Freitag Dashboard Preview" />
 </div>
 
-# Run and deploy your AI Studio app
 
-This contains everything you need to run your app locally.
+# CS2Freitag – Tactics & Map Hub
 
-View your app in AI Studio: https://ai.studio/apps/df086a8d-40b3-4efd-a95b-006aed2b948f
+Flexibly customize, create, and easily share map callouts.
+
+* **➔ Open App in Browser:** [cs2freitag.github.io/app/](https://github.io)
+
+---
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
+This contains everything you need to run the **CS2Freitag** app locally.
 
+**Prerequisites:** Node.js
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+2. **Run the app:**
+   ```bash
+   npm run dev
+   ```
+   
