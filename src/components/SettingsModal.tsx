@@ -48,6 +48,8 @@ interface SettingsModalProps {
   onDownloadFromCloud: () => void;
   isAutosaveEnabled?: boolean;
   onToggleAutosave?: () => void;
+  isAutoCloudSyncEnabled?: boolean;
+  onToggleAutoCloudSync?: () => void;
   connectedFileName?: string;
   lastAutosaveTs?: number;
   onChooseSaveLocation?: () => Promise<boolean>;
@@ -78,6 +80,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onDownloadFromCloud,
   isAutosaveEnabled = true,
   onToggleAutosave,
+  isAutoCloudSyncEnabled = true,
+  onToggleAutoCloudSync,
   connectedFileName = '',
   lastAutosaveTs = 0,
   onChooseSaveLocation,
@@ -714,28 +718,60 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           {/* 3. CLOUD SYNC */}
-          <div className="p-4 rounded-xl bg-zinc-950/70 border border-zinc-800 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-mono uppercase font-bold text-zinc-400">
-                {isDe ? 'Cloud-Synchronisierung' : 'Cloud Synchronization'}
-              </h3>
-              {currentUser && (
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold">
-                  {isDe ? 'Angemeldet' : 'Logged In'}
+          <div className="p-4 rounded-xl bg-zinc-950/70 border border-zinc-800 space-y-3.5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 font-mono uppercase font-bold text-zinc-300">
+                <Globe className="w-4 h-4 text-sky-400" />
+                <span>{isDe ? 'Cloud-Synchronisierung' : 'Cloud Synchronization'}</span>
+                {currentUser && (
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold normal-case">
+                    {isDe ? 'Angemeldet' : 'Logged In'}
+                  </span>
+                )}
+              </div>
+
+              {/* Auto Cloud Sync Toggle Switch */}
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-semibold text-zinc-300 hidden sm:inline">
+                  {isDe ? 'Auto-Abgleich beim Anmelden' : 'Auto-Sync on Login'}
                 </span>
-              )}
+                <span className={`text-[10px] font-mono font-bold uppercase ${isAutoCloudSyncEnabled ? 'text-sky-400' : 'text-zinc-500'}`}>
+                  {isAutoCloudSyncEnabled ? (isDe ? 'Aktiviert' : 'Active') : (isDe ? 'Deaktiviert' : 'Disabled')}
+                </span>
+                <button
+                  type="button"
+                  onClick={onToggleAutoCloudSync}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    isAutoCloudSyncEnabled ? 'bg-sky-500' : 'bg-zinc-700'
+                  }`}
+                  role="switch"
+                  aria-checked={isAutoCloudSyncEnabled}
+                  title={isDe ? 'Automatischen Cloud-Abgleich beim Anmelden ein- oder ausschalten' : 'Toggle automatic cloud sync on login on/off'}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                      isAutoCloudSyncEnabled ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
             </div>
 
+            <p className="text-[11px] text-zinc-400 leading-relaxed">
+              {isDe
+                ? isAutoCloudSyncEnabled
+                  ? 'Beim Anmelden werden deine Karten, Callouts und Favoriten automatisch abgeglichen. Über die Knöpfe unten kannst du auch jederzeit manuell hoch- oder herunterladen.'
+                  : 'Automatischer Abgleich ist deaktiviert. Beim Anmelden werden Daten nicht automatisch synchronisiert, sondern nur auf deine Aufforderung über "Daten hochladen" oder "Cloud-Stand laden".'
+                : isAutoCloudSyncEnabled
+                  ? 'On sign-in, your maps, callouts, and favorites are automatically synced. You can also manually upload or fetch data using the buttons below.'
+                  : 'Auto-sync is disabled. Data will not sync on login automatically, only when requested via "Upload to Cloud" or "Fetch from Cloud".'}
+            </p>
+
             {!currentUser ? (
-              <div className="space-y-3">
-                <p className="text-[11px] text-zinc-400">
-                  {isDe
-                    ? 'Melde dich an, um deine Karten, Callouts und Favoriten automatisch zwischen PC und Smartphone zu synchronisieren.'
-                    : 'Sign in to automatically sync your maps, callouts, and favorites between PC and smartphone.'}
-                </p>
+              <div className="pt-1">
                 <button
                   onClick={onLogin}
-                  className="flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg bg-white text-zinc-950 hover:bg-zinc-200 transition-all shadow-sm"
+                  className="flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg bg-white text-zinc-950 hover:bg-zinc-200 transition-all shadow-sm cursor-pointer"
                 >
                   <Globe className="w-4 h-4 text-sky-600" />
                   <span>{isDe ? 'Mit Google anmelden' : 'Sign in with Google'}</span>
@@ -755,7 +791,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                   <button
                     onClick={onLogout}
-                    className="px-2 py-1 text-[10px] font-bold rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
+                    className="px-2 py-1 text-[10px] font-bold rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors cursor-pointer"
                   >
                     {isDe ? 'Abmelden' : 'Logout'}
                   </button>
@@ -765,7 +801,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <button
                     onClick={handleTriggerUpload}
                     disabled={isCheckingUploadConflict}
-                    className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-white font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                    className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-white font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50 text-xs"
                     title={isDe ? 'Aktuelle lokale Daten prüfen & in die Cloud hochladen' : 'Check & upload current local data to cloud'}
                   >
                     <Upload className="w-3.5 h-3.5 text-amber-400" />
@@ -777,7 +813,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </button>
                   <button
                     onClick={() => setShowDownloadConfirm(true)}
-                    className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-white font-bold transition-all shadow-xs cursor-pointer"
+                    className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-white font-bold transition-all shadow-xs cursor-pointer text-xs"
                     title={isDe ? 'Daten aus der Cloud auf dieses Gerät laden' : 'Download data from cloud'}
                   >
                     <Download className="w-3.5 h-3.5 text-sky-400" />

@@ -43,6 +43,8 @@ import {
   isFileSystemAccessSupported,
   loadAutosaveEnabled,
   saveAutosaveEnabled,
+  loadAutoCloudSyncEnabled,
+  saveAutoCloudSyncEnabled,
   loadAutosaveFilename,
   loadLastAutosaveTimestamp,
   saveLastAutosaveTimestamp,
@@ -96,10 +98,19 @@ export default function App() {
 
   // Autosave & File System Access State
   const [isAutosaveEnabled, setIsAutosaveEnabled] = useState<boolean>(() => loadAutosaveEnabled());
+  const [isAutoCloudSyncEnabled, setIsAutoCloudSyncEnabled] = useState<boolean>(() => loadAutoCloudSyncEnabled());
   const [fileHandle, setFileHandle] = useState<FileSystemFileHandle | null>(null);
   const [connectedFileName, setConnectedFileName] = useState<string>(() => loadAutosaveFilename());
   const [lastAutosaveTs, setLastAutosaveTs] = useState<number>(() => loadLastAutosaveTimestamp());
   const [isAutosaving, setIsAutosaving] = useState<boolean>(false);
+
+  const handleToggleAutoCloudSync = () => {
+    setIsAutoCloudSyncEnabled((prev) => {
+      const next = !prev;
+      saveAutoCloudSyncEnabled(next);
+      return next;
+    });
+  };
 
   // Retrieve stored FileSystemFileHandle on startup and auto-sync latest data from file
   useEffect(() => {
@@ -218,11 +229,11 @@ export default function App() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Monitor Auth State & Auto-sync latest cloud data on startup / sign-in
+  // Monitor Auth State & Auto-sync latest cloud data on startup / sign-in (if enabled)
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       setUser(u);
-      if (u) {
+      if (u && loadAutoCloudSyncEnabled()) {
         try {
           const { cloudMaps, cloudSettings } = await loadUserCloudData(u.uid);
 
@@ -252,7 +263,7 @@ export default function App() {
   const handleLogin = async () => {
     try {
       const res = await loginWithGoogle();
-      if (res?.user) {
+      if (res?.user && loadAutoCloudSyncEnabled()) {
         try {
           const { cloudMaps, cloudSettings } = await loadUserCloudData(res.user.uid);
           if (cloudSettings) {
@@ -1225,6 +1236,8 @@ export default function App() {
         onDownloadFromCloud={handleDownloadFromCloud}
         isAutosaveEnabled={isAutosaveEnabled}
         onToggleAutosave={handleToggleAutosave}
+        isAutoCloudSyncEnabled={isAutoCloudSyncEnabled}
+        onToggleAutoCloudSync={handleToggleAutoCloudSync}
         connectedFileName={connectedFileName}
         lastAutosaveTs={lastAutosaveTs}
         onChooseSaveLocation={handleChooseSaveLocation}

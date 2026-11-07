@@ -21,6 +21,7 @@ const HANDLE_KEY = 'autosave_handle';
 const AUTOSAVE_SETTINGS_KEY = 'cs2freitag_autosave_enabled_v1';
 const AUTOSAVE_FILENAME_KEY = 'cs2freitag_autosave_filename_v1';
 const AUTOSAVE_TIMESTAMP_KEY = 'cs2freitag_autosave_last_ts_v1';
+const AUTO_CLOUD_SYNC_SETTINGS_KEY = 'cs2freitag_auto_cloud_sync_enabled_v1';
 
 // Open or create IndexedDB store for structured cloning of FileSystemFileHandle
 function openDatabase(): Promise<IDBDatabase> {
@@ -109,6 +110,18 @@ export function loadAutosaveEnabled(): boolean {
 export function saveAutosaveEnabled(enabled: boolean): void {
   if (typeof window !== 'undefined') {
     localStorage.setItem(AUTOSAVE_SETTINGS_KEY, String(enabled));
+  }
+}
+
+export function loadAutoCloudSyncEnabled(): boolean {
+  if (typeof window === 'undefined') return true;
+  const val = localStorage.getItem(AUTO_CLOUD_SYNC_SETTINGS_KEY);
+  return val !== null ? val === 'true' : true; // Enabled by default
+}
+
+export function saveAutoCloudSyncEnabled(enabled: boolean): void {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(AUTO_CLOUD_SYNC_SETTINGS_KEY, String(enabled));
   }
 }
 
