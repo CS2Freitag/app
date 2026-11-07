@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="image_gnrDcR.png" width="350" alt="CS2Freitag Dashboard Preview" />
+  <img src="public/favicon.png" width="350" alt="CS2Freitag Dashboard Preview" />
 </div>
 
 
