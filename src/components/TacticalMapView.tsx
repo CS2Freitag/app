@@ -355,7 +355,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const [calloutFormDisplayMode, setCalloutFormDisplayMode] = useState<CalloutDisplayMode>('text');
   const [calloutFormCustomImage, setCalloutFormCustomImage] = useState<string>('');
   const [calloutFormImageSize, setCalloutFormImageSize] = useState<number>(36);
-  const [calloutFormHidePin, setCalloutFormHidePin] = useState<boolean>(false);
+  const [calloutFormHidePin, setCalloutFormHidePin] = useState<boolean>(true);
   const [calloutFormPinOffsetX, setCalloutFormPinOffsetX] = useState<number>(0);
   const [calloutFormPinOffsetY, setCalloutFormPinOffsetY] = useState<number>(0);
   const previewBoxRef = useRef<HTMLDivElement | null>(null);
@@ -1086,7 +1086,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     setCalloutFormDisplayMode('text');
     setCalloutFormCustomImage('');
     setCalloutFormImageSize(36);
-    setCalloutFormHidePin(false);
+    setCalloutFormHidePin(true);
     setCalloutFormPinOffsetX(0);
     setCalloutFormPinOffsetY(0);
     setCalloutFormDescDe('');
@@ -1095,7 +1095,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     setCalloutFormTipEn('');
     setCalloutFormAnglesDe('');
     setCalloutFormAnglesEn('');
-    setCalloutFormHasArea(true);
+    setCalloutFormHasArea(false);
     setCalloutFormAreaShape('rect');
     setCalloutFormAreaPoints([]);
     setIsDrawingPolygonArea(false);
