@@ -5,5 +5,5 @@ export const INITIAL_MAPS: MapData[] = (backupJson as any).maps || [];
 export const INITIAL_SETTINGS = (backupJson as any).settings || {
   theme: 'dark',
   lang: 'de',
-  favorites: ['cache', 'inferno', 'ancient', 'dust2', 'nuke', 'train', 'anubis']
+  favorites: ['inferno', 'cache', 'ancient', 'dust2', 'nuke', 'train', 'anubis']
 };

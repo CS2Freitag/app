@@ -185,6 +185,9 @@ export function loadStoredMaps(): MapData[] {
             m.category !== 'armsrace' &&
             m.id !== 'baggage' &&
             m.id !== 'shoots' &&
+            m.id !== 'poseidon' &&
+            m.id !== 'custom_1793729592299' &&
+            !(m.name === 'Poseidon' && (!m.callouts || m.callouts.length === 0)) &&
             !deletedIds.has(m.id)
         );
 
