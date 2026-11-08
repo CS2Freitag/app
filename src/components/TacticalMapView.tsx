@@ -297,6 +297,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const [draggingAreaCalloutId, setDraggingAreaCalloutId] = useState<string | null>(null);
   const [resizingAreaCalloutId, setResizingAreaCalloutId] = useState<string | null>(null);
   const [rotatingAreaCalloutId, setRotatingAreaCalloutId] = useState<string | null>(null);
+  const [movingAreaCalloutId, setMovingAreaCalloutId] = useState<string | null>(null);
   const [areaDragStart, setAreaDragStart] = useState<{
     clientX: number;
     clientY: number;
@@ -304,6 +305,9 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     initY: number;
     initW: number;
     initH: number;
+    initCalloutX?: number;
+    initCalloutY?: number;
+    initPoints?: { x: number; y: number }[];
   } | null>(null);
   const [rotationDragStart, setRotationDragStart] = useState<{
     clientX: number;
@@ -731,16 +735,6 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
       const updatedCallouts = mapData.callouts.map((c) => {
         if (c.id === draggingCalloutId) {
-          if (c.area) {
-            const newAreaX = Math.round((coords.x - c.area.width / 2) * 10) / 10;
-            const newAreaY = Math.round((coords.y - c.area.height / 2) * 10) / 10;
-            return {
-              ...c,
-              x: coords.x,
-              y: coords.y,
-              area: { ...c.area, x: newAreaX, y: newAreaY },
-            };
-          }
           return { ...c, x: coords.x, y: coords.y };
         }
         return c;
@@ -749,7 +743,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       return;
     }
 
-    // 3. Dragging Callout Area (Move) -> Pin is AUTOMATICALLY CENTERED!
+    // 3. Dragging Callout Area (Move)
     if (draggingAreaCalloutId && areaDragStart && mapContainerRef.current) {
       let targetTile: HTMLElement | null = null;
       if (currentLevel === 'both') {
@@ -769,14 +763,46 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
       const updatedCallouts = mapData.callouts.map((c) => {
         if (c.id === draggingAreaCalloutId && c.area) {
-          const centerX = Math.round((newX + c.area.width / 2) * 10) / 10;
-          const centerY = Math.round((newY + c.area.height / 2) * 10) / 10;
-          return {
-            ...c,
-            x: centerX,
-            y: centerY,
-            area: { ...c.area, x: newX, y: newY },
-          };
+          const calloutX = areaDragStart.initCalloutX !== undefined
+            ? Math.round((areaDragStart.initCalloutX + dxPercent) * 10) / 10
+            : c.x;
+          const calloutY = areaDragStart.initCalloutY !== undefined
+            ? Math.round((areaDragStart.initCalloutY + dyPercent) * 10) / 10
+            : c.y;
+
+          if (c.area.points && areaDragStart.initPoints) {
+            const newPoints = areaDragStart.initPoints.map((p: { x: number; y: number }) => ({
+              x: Math.round((p.x + dxPercent) * 10) / 10,
+              y: Math.round((p.y + dyPercent) * 10) / 10,
+            }));
+            const minX = Math.min(...newPoints.map((p: { x: number; y: number }) => p.x));
+            const minY = Math.min(...newPoints.map((p: { x: number; y: number }) => p.y));
+            const maxX = Math.max(...newPoints.map((p: { x: number; y: number }) => p.x));
+            const maxY = Math.max(...newPoints.map((p: { x: number; y: number }) => p.y));
+            const width = Math.round((maxX - minX) * 10) / 10;
+            const height = Math.round((maxY - minY) * 10) / 10;
+
+            return {
+              ...c,
+              x: calloutX,
+              y: calloutY,
+              area: {
+                ...c.area,
+                x: minX,
+                y: minY,
+                width,
+                height,
+                points: newPoints,
+              },
+            };
+          } else {
+            return {
+              ...c,
+              x: calloutX,
+              y: calloutY,
+              area: { ...c.area, x: newX, y: newY },
+            };
+          }
         }
         return c;
       });
@@ -784,7 +810,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       return;
     }
 
-    // 4. Resizing Callout Area (Bottom-Right handle) -> Pin is AUTOMATICALLY CENTERED!
+    // 4. Resizing Callout Area (Bottom-Right handle)
     if (resizingAreaCalloutId && areaDragStart && mapContainerRef.current) {
       const rect = mapContainerRef.current.getBoundingClientRect();
       const dxPercent = ((e.clientX - areaDragStart.clientX) / rect.width) * 100;
@@ -795,12 +821,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
       const updatedCallouts = mapData.callouts.map((c) => {
         if (c.id === resizingAreaCalloutId && c.area) {
-          const centerX = Math.round((c.area.x + newW / 2) * 10) / 10;
-          const centerY = Math.round((c.area.y + newH / 2) * 10) / 10;
           return {
             ...c,
-            x: centerX,
-            y: centerY,
             area: { ...c.area, width: newW, height: newH },
           };
         }
@@ -1010,6 +1032,9 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       initY: callout.area.y,
       initW: callout.area.width,
       initH: callout.area.height,
+      initCalloutX: callout.x,
+      initCalloutY: callout.y,
+      initPoints: callout.area.points ? JSON.parse(JSON.stringify(callout.area.points)) : undefined,
     });
   };
 
@@ -1661,9 +1686,10 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const renderMapTile = (tileLevel: 'upper' | 'lower') => {
     const isLower = tileLevel === 'lower';
     const tileImage = isLower && mapData.lowerImage ? mapData.lowerImage : mapData.image;
-    const tileCallouts = visibleCallouts.filter((c) =>
-      isCalloutForLevel(c, tileLevel, Boolean(mapData.lowerImage))
-    );
+    const tileCallouts = visibleCallouts.filter((c) => {
+      if (movingAreaCalloutId && c.id !== movingAreaCalloutId) return false;
+      return isCalloutForLevel(c, tileLevel, Boolean(mapData.lowerImage));
+    });
     const isBothMode = currentLevel === 'both';
 
     return (
@@ -1712,7 +1738,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           <img
             src={resolveAssetPath(tileImage)}
             alt={`${mapData.name} ${isLower ? 'Lower' : 'Upper'} Radar Map`}
-            className="w-full h-full object-cover pointer-events-none"
+            style={{ opacity: movingAreaCalloutId ? 0.25 : 1 }}
+            className="w-full h-full object-cover pointer-events-none transition-opacity"
             draggable={false}
             onError={(e) => {
               (e.target as HTMLImageElement).src = '/icon.svg';
@@ -1739,6 +1766,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           showAreas &&
           tileCallouts.map((callout) => {
             if (!callout.area || callout.area.shape === 'polygon' || (callout.area.points && callout.area.points.length >= 3)) return null;
+            if (movingAreaCalloutId && movingAreaCalloutId !== callout.id) return null;
             const isHovered = hoveredCallout?.id === callout.id;
             const isSelected = selectedCallout?.id === callout.id;
             const areaStyle = getAreaStyling(callout, colorMode);
@@ -1771,29 +1799,27 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                   handleOpenCalloutEditor(callout, e);
                 }}
                 className={`absolute rounded-sm border transition-all ${
-                  isEditMode
+                  movingAreaCalloutId === callout.id
                     ? 'border-dashed border-2 cursor-move z-40'
+                    : isEditMode
+                    ? 'border-dashed border-2 z-10'
                     : isHovered || isSelected
                     ? 'border-2 shadow-lg ring-1 ring-white/50 z-20 cursor-pointer scale-[1.01]'
                     : 'border-1 border-opacity-70 z-10 cursor-pointer hover:border-opacity-100'
                 }`}
+                onMouseDown={(e) => {
+                  if (movingAreaCalloutId === callout.id) {
+                    handleAreaMoveStart(callout, e);
+                  }
+                }}
+                onTouchStart={(e) => {
+                  if (movingAreaCalloutId === callout.id) {
+                    handleAreaMoveStart(callout, e);
+                  }
+                }}
               >
                 {isEditMode && (
                   <>
-                    <div
-                      onMouseDown={(e) => handleAreaMoveStart(callout, e)}
-                      onTouchStart={(e) => handleAreaMoveStart(callout, e)}
-                      onDoubleClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenCalloutEditor(callout, e);
-                      }}
-                      className="absolute inset-0 flex items-center justify-center cursor-move z-50 pointer-events-auto"
-                      title={isDe ? 'Bereich verschieben (Callout bleibt zentriert)' : 'Move area (Callout stays centered)'}
-                    >
-                      <div className="p-1 rounded bg-zinc-950/90 border border-zinc-700 text-zinc-200 hover:text-amber-400 shadow-md">
-                        <Move className="w-3 h-3" />
-                      </div>
-                    </div>
                     <div
                       onMouseDown={(e) => handleAreaResizeStart(callout, e)}
                       onTouchStart={(e) => handleAreaResizeStart(callout, e)}
@@ -1870,6 +1896,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             tileCallouts
               .filter((c) => c.area && (c.area.shape === 'polygon' || (c.area.points && c.area.points.length >= 3)))
               .map((callout) => {
+                if (movingAreaCalloutId && movingAreaCalloutId !== callout.id) return null;
                 const area = callout.area!;
                 const pts = area.points!;
                 const ptsString = pts.map((p) => `${p.x},${p.y}`).join(' ');
@@ -1894,16 +1921,29 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       stroke={strokeValue}
                       strokeWidth={isHovered || isSelected ? 1.0 : 0.5}
                       strokeDasharray={isEditMode ? '1,1' : undefined}
-                      className="pointer-events-auto cursor-pointer transition-all"
-                      onMouseEnter={() => !isEditMode && setHoveredCallout(callout)}
-                      onMouseLeave={() => !isEditMode && setHoveredCallout(null)}
-                      onClick={(e) => {
-                        if (!isEditMode && !hasMovedDistance) {
+                      className={`transition-all ${
+                        movingAreaCalloutId === callout.id
+                          ? 'cursor-move pointer-events-auto'
+                          : isEditMode
+                          ? 'pointer-events-auto'
+                          : 'pointer-events-auto cursor-pointer'
+                      }`}
+                      onMouseDown={(e) => {
+                        if (movingAreaCalloutId === callout.id) {
+                          handleAreaMoveStart(callout, e);
+                        } else if (!hasMovedDistance) {
                           e.stopPropagation();
                           setSelectedCallout(callout);
                           setHighlightedCalloutId(callout.id);
                         }
                       }}
+                      onTouchStart={(e) => {
+                        if (movingAreaCalloutId === callout.id) {
+                          handleAreaMoveStart(callout, e);
+                        }
+                      }}
+                      onMouseEnter={() => !isEditMode && setHoveredCallout(callout)}
+                      onMouseLeave={() => !isEditMode && setHoveredCallout(null)}
                       onDoubleClick={(e) => {
                         e.stopPropagation();
                         handleOpenCalloutEditor(callout, e as unknown as React.MouseEvent);
@@ -2129,8 +2169,20 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       </div>
                     ) : (
                       <div
-                        onMouseDown={(e) => handleCalloutDragStart(callout, e)}
-                        onTouchStart={(e) => handleCalloutDragStart(callout, e)}
+                        onMouseDown={(e) => {
+                          if (movingAreaCalloutId === callout.id) {
+                            handleAreaMoveStart(callout, e);
+                          } else {
+                            handleCalloutDragStart(callout, e);
+                          }
+                        }}
+                        onTouchStart={(e) => {
+                          if (movingAreaCalloutId === callout.id) {
+                            handleAreaMoveStart(callout, e);
+                          } else {
+                            handleCalloutDragStart(callout, e);
+                          }
+                        }}
                         className={`relative flex items-center justify-center transition-transform shrink-0 ${
                           isEditMode
                             ? 'cursor-grab active:cursor-grabbing hover:scale-125'
@@ -2159,11 +2211,25 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                   </div>
                 )}
 
+
+
                 {/* ROTATABLE CALLOUT LABEL */}
                 {showTextLabel && (
                   <div
-                    onMouseDown={(e) => handleCalloutDragStart(callout, e)}
-                    onTouchStart={(e) => handleCalloutDragStart(callout, e)}
+                    onMouseDown={(e) => {
+                      if (movingAreaCalloutId === callout.id) {
+                        handleAreaMoveStart(callout, e);
+                      } else {
+                        handleCalloutDragStart(callout, e);
+                      }
+                    }}
+                    onTouchStart={(e) => {
+                      if (movingAreaCalloutId === callout.id) {
+                        handleAreaMoveStart(callout, e);
+                      } else {
+                        handleCalloutDragStart(callout, e);
+                      }
+                    }}
                     style={{
                       fontSize: `${fontSize}px`,
                       fontFamily: getFontFamilyStyle(callout.fontFamily),
@@ -2171,7 +2237,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       transform: `translate(${offX}px, ${offY}px) rotate(${callout.textRotation !== undefined ? callout.textRotation : (callout.rotation || 0)}deg)`,
                       transformOrigin: 'center center',
                     }}
-                    className={`rounded font-bold tracking-tight whitespace-nowrap shadow-lg transition-transform shrink-0 relative z-20 ${
+                    className={`rounded font-bold tracking-tight whitespace-nowrap shadow-lg transition-transform shrink-0 relative z-30 ${
                       isEditMode
                         ? 'cursor-grab active:cursor-grabbing bg-zinc-950 border border-sky-400 text-sky-200 ring-1 ring-sky-400/50'
                         : isSelected || isHighlighted
@@ -2187,13 +2253,9 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                 {isEditMode && (
                   <div
                     style={{
-                      top: callout.area
-                        ? `calc(-${callout.area.height / 2}% - 18px)`
-                        : isImageMode
-                        ? `-${Math.round(calloutImgSize / 2 + 18)}px`
-                        : '-22px',
+                      transform: `translate(calc(-50% + ${offX}px), ${offY - Math.max(34, fontSize + 24)}px)`,
                     }}
-                    className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-zinc-900/95 rounded-lg border border-zinc-700 px-2 py-1 shadow-2xl z-[60] backdrop-blur-xs whitespace-nowrap"
+                    className="absolute left-1/2 flex items-center gap-1.5 bg-zinc-900/95 rounded-lg border border-zinc-700 px-2 py-1 shadow-2xl z-[60] backdrop-blur-xs whitespace-nowrap"
                   >
                     {/* Quick Rotate +45° for Text */}
                     <button
@@ -2222,6 +2284,41 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       <Edit3 className="w-3 h-3" />
                     </button>
 
+                    {/* Move Area & Hide Others */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (movingAreaCalloutId === callout.id) {
+                          setMovingAreaCalloutId(null);
+                          return;
+                        }
+                        if (!callout.area) {
+                          const width = 10;
+                          const height = 10;
+                          const areaX = Math.max(-50, Math.min(50 - width, Math.round((callout.x - width / 2) * 10) / 10));
+                          const areaY = Math.max(-50, Math.min(50 - height, Math.round((callout.y - height / 2) * 10) / 10));
+                          const updatedCallouts = mapData.callouts.map((c) =>
+                            c.id === callout.id
+                              ? {
+                                  ...c,
+                                  area: { x: areaX, y: areaY, width, height, shape: 'rect' as const },
+                                }
+                              : c
+                          );
+                          handleMapUpdate({ ...mapData, callouts: updatedCallouts });
+                        }
+                        setMovingAreaCalloutId(callout.id);
+                      }}
+                      className={`p-0.5 transition-colors ${
+                        movingAreaCalloutId === callout.id
+                          ? 'text-amber-400 bg-amber-400/20 rounded ring-1 ring-amber-400'
+                          : 'text-zinc-300 hover:text-amber-400'
+                      }`}
+                      title={isDe ? 'Bereich verschieben' : 'Move area'}
+                    >
+                      <Move className="w-3 h-3" />
+                    </button>
+
                     {/* Delete Callout */}
                     <button
                       onClick={(e) => {
@@ -2248,6 +2345,20 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       onClick={handleOutsideClick}
       className="fixed inset-0 z-50 flex flex-col bg-zinc-950 text-zinc-100 select-none overflow-hidden"
     >
+      {/* AREA MOVE MODE BANNER (HIDES OTHERS) */}
+      {movingAreaCalloutId && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 px-4 py-2.5 bg-amber-500 text-zinc-950 font-bold rounded-xl shadow-2xl animate-bounce">
+          <Move className="w-4 h-4" />
+          <span>{isDe ? 'Bereich-Verschiebungsmodus' : 'Area Move Mode'}</span>
+          <button
+            onClick={() => setMovingAreaCalloutId(null)}
+            className="flex items-center gap-1.5 px-3 py-1 bg-zinc-950 text-white rounded-lg text-xs hover:bg-zinc-900 transition-colors cursor-pointer"
+          >
+            <Check className="w-3.5 h-3.5 text-amber-400" />
+            <span>{isDe ? 'Fertig' : 'Done'}</span>
+          </button>
+        </div>
+      )}
       {/* 1. TOP HEADER BAR */}
       <div className="h-14 border-b border-zinc-800 bg-zinc-950/95 px-2 sm:px-4 flex items-center justify-between gap-2 shrink-0 backdrop-blur-md overflow-x-auto no-scrollbar print:hidden">
         {/* Left: Back & Title */}
@@ -2731,43 +2842,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             </div>
           )}
 
-          {/* SINGLE-EDIT ACTIVE FLOATING BANNER */}
-          {!isDrawingPolygonArea && singleEditCalloutId && (
-            <div
-              data-no-map-click="true"
-              className="absolute top-4 left-1/2 -translate-x-1/2 z-40 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2.5 px-4 py-2 rounded-xl bg-sky-950/95 border-2 border-sky-400 text-sky-100 text-xs font-semibold backdrop-blur-md shadow-2xl print:hidden max-w-[92vw]"
-            >
-              <div className="flex items-center gap-2 shrink-0">
-                <Crosshair className="w-4 h-4 text-sky-400 animate-pulse shrink-0" />
-                <span>
-                  {isDe ? 'Einzel-Bearbeitung:' : 'Single Edit:'}{' '}
-                  <strong className="text-sky-300 font-extrabold">
-                    {mapData.callouts.find((c) => c.id === singleEditCalloutId)?.name || 'Callout'}
-                  </strong>
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setIsEditOptionsModalOpen(true)}
-                  className="px-2.5 py-1 rounded-lg bg-sky-800 hover:bg-sky-700 text-white font-bold text-[11px] transition-colors cursor-pointer"
-                >
-                  {isDe ? 'Anderes Callout' : 'Switch Callout'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSingleEditCalloutId(null);
-                    setIsEditMode(false);
-                  }}
-                  className="px-2.5 py-1 rounded-lg bg-red-950/60 hover:bg-red-900 border border-red-800/80 text-red-200 font-bold text-[11px] transition-colors cursor-pointer"
-                  title={isDe ? 'Einzel-Bearbeitung beenden' : 'Exit single edit'}
-                >
-                  {isDe ? 'Beenden' : 'Exit'}
-                </button>
-              </div>
-            </div>
-          )}
+
 
           {/* FLOATING HOVER CARD */}
           {!isDrawingPolygonArea && hoveredCallout && !selectedCallout && !isEditMode && (
@@ -2913,28 +2988,48 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
           {/* CALLOUT LABEL SIZE SCALE CONTROL */}
           <div className="flex items-center gap-1.5 px-2 py-0.5 bg-zinc-900 rounded-lg border border-zinc-800">
-            <Type className="w-3.5 h-3.5 text-zinc-400" />
+            <Type className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
             <button
-              onClick={() => setCalloutScale((prev) => Math.max(0.4, Math.round((prev - 0.1) * 10) / 10))}
-              className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
-              title={isDe ? 'Beschriftung verkleinern' : 'Decrease text size'}
+              onClick={() => setCalloutScale((prev) => Math.max(0.2, Math.round((prev - 0.05) * 100) / 100))}
+              className="px-1 py-0.5 rounded text-[10px] font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
+              title={isDe ? 'Beschriftung verkleinern (-5%)' : 'Decrease text size (-5%)'}
             >
               A-
             </button>
-            <span className="text-[11px] font-mono font-bold text-zinc-200 min-w-[32px] text-center">
+            <input
+              type="range"
+              min="20"
+              max="200"
+              step="1"
+              value={Math.round(calloutScale * 100)}
+              onChange={(e) => setCalloutScale(Number(e.target.value) / 100)}
+              className="w-20 accent-zinc-100 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
+              title={`${Math.round(calloutScale * 100)}%`}
+            />
+            <button
+              onClick={() => setCalloutScale((prev) => Math.min(2.0, Math.round((prev + 0.05) * 100) / 100))}
+              className="px-1 py-0.5 rounded text-[10px] font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
+              title={isDe ? 'Beschriftung vergrößern (+5%)' : 'Increase text size (+5%)'}
+            >
+              A+
+            </button>
+            <span className="text-[11px] font-mono font-bold text-zinc-100 min-w-[36px] text-right">
               {Math.round(calloutScale * 100)}%
             </span>
             <button
-              onClick={() => setCalloutScale((prev) => Math.min(2.0, Math.round((prev + 0.1) * 10) / 10))}
-              className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
-              title={isDe ? 'Beschriftung vergrößern' : 'Increase text size'}
+              onClick={() => {
+                const defaultScale = typeof window !== 'undefined' && window.innerWidth < 768 ? 0.6 : 1.0;
+                setCalloutScale(defaultScale);
+              }}
+              className="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded bg-zinc-800 hover:bg-zinc-700 text-amber-300 ml-0.5 border border-zinc-700"
+              title={isDe ? 'Schriftgröße auf Standard zurücksetzen' : 'Reset font size to default'}
             >
-              A+
+              {isDe ? 'Std' : 'Def'}
             </button>
             <button
               onClick={() => setShowCalloutLabels(!showCalloutLabels)}
               className="p-1 rounded text-zinc-400 hover:text-white border-l border-zinc-800 pl-1.5 ml-0.5"
-              title={showCalloutLabels ? 'Beschriftung ausblenden' : 'Beschriftung einblenden'}
+              title={showCalloutLabels ? (isDe ? 'Beschriftung ausblenden' : 'Hide labels') : (isDe ? 'Beschriftung einblenden' : 'Show labels')}
             >
               {showCalloutLabels ? <Eye className="w-3.5 h-3.5 text-emerald-400" /> : <EyeOff className="w-3.5 h-3.5 text-zinc-500" />}
             </button>
