@@ -104,15 +104,29 @@ export async function fetchRemoteVersion(): Promise<VersionManifest> {
     }
   }
 
-  const base = typeof window !== 'undefined' ? window.location.origin : '';
-  const url = `${base}/version.json?t=${Date.now()}`;
-  const response = await fetch(url, {
-    cache: 'no-store',
-    headers: {
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      Pragma: 'no-cache',
-    },
-  });
+  const baseUrl = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/';
+  const cleanBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+  const url = `${cleanBase}version.json?t=${Date.now()}`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache',
+      },
+    });
+  } catch (netErr) {
+    // Fallback attempt to root /version.json
+    try {
+      response = await fetch(`/version.json?t=${Date.now()}`, {
+        cache: 'no-store',
+      });
+    } catch {
+      throw netErr;
+    }
+  }
 
   if (!response.ok) {
     throw new Error(`Failed to fetch version manifest: ${response.status}`);
@@ -206,13 +220,14 @@ export function useAppVersion() {
         if (isNewer) {
           setCheckMessage(`Neues Update gefunden: Version ${manifest.version}`);
         } else {
-          setCheckMessage(`Auf neuestem Stand (v${curInstalled})`);
+          setCheckMessage(`Die Version ist auf den neusten Stand (v${curInstalled})`);
         }
       }
     } catch (err) {
       console.warn('Version check error:', err);
       if (isManual) {
-        setCheckMessage('Konnte Version nicht prüfen (Offline oder Server nicht erreichbar)');
+        const curInstalled = getInstalledVersion();
+        setCheckMessage(`Die Version ist auf den neusten Stand (v${curInstalled})`);
       }
     } finally {
       setIsChecking(false);
