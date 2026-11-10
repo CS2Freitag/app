@@ -3333,7 +3333,22 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                   required
                   placeholder="z. B. Dark, Banana, Quad, Mirage Palace..."
                   value={calloutFormName}
-                  onChange={(e) => setCalloutFormName(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setCalloutFormName(val);
+                    const lower = val.toLowerCase();
+                    if (lower.includes('ct spawn') || lower === 'ct') {
+                      setCalloutFormZone('ct_spawn');
+                      setCalloutFormCustomImage('ct.png');
+                      setCalloutFormDisplayMode((prev) => prev === 'text' ? 'image' : prev);
+                      setCalloutFormHidePin(false);
+                    } else if (lower.includes('t spawn') || lower === 't') {
+                      setCalloutFormZone('t_spawn');
+                      setCalloutFormCustomImage('T.png');
+                      setCalloutFormDisplayMode((prev) => prev === 'text' ? 'image' : prev);
+                      setCalloutFormHidePin(false);
+                    }
+                  }}
                   className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-700 bg-zinc-950 text-white focus:outline-hidden focus:border-zinc-400"
                 />
               </div>
@@ -3373,6 +3388,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                     type="button"
                     onClick={() => {
                       setCalloutFormDisplayMode('image');
+                      setCalloutFormHidePin(false);
                       if (!calloutFormCustomImage) {
                         const isCT = calloutFormZone === 'ct_spawn' || calloutFormName.toLowerCase().includes('ct');
                         setCalloutFormCustomImage(isCT ? 'ct.png' : 'T.png');
@@ -3392,6 +3408,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                     type="button"
                     onClick={() => {
                       setCalloutFormDisplayMode('both');
+                      setCalloutFormHidePin(false);
                       if (!calloutFormCustomImage) {
                         const isCT = calloutFormZone === 'ct_spawn' || calloutFormName.toLowerCase().includes('ct');
                         setCalloutFormCustomImage(isCT ? 'ct.png' : 'T.png');
@@ -3447,7 +3464,11 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
-                          onClick={() => setCalloutFormCustomImage('ct.png')}
+                          onClick={() => {
+                            setCalloutFormCustomImage('ct.png');
+                            setCalloutFormDisplayMode((prev) => prev === 'text' ? 'image' : prev);
+                            setCalloutFormHidePin(false);
+                          }}
                           className={`flex items-center gap-2.5 p-2 rounded-xl border text-left transition-all ${
                             calloutFormCustomImage === 'ct.png' || calloutFormCustomImage === '/ct.png'
                               ? 'border-sky-400 bg-sky-950/40 text-white ring-1 ring-sky-400 shadow-md'
@@ -3467,7 +3488,11 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
                         <button
                           type="button"
-                          onClick={() => setCalloutFormCustomImage('T.png')}
+                          onClick={() => {
+                            setCalloutFormCustomImage('T.png');
+                            setCalloutFormDisplayMode((prev) => prev === 'text' ? 'image' : prev);
+                            setCalloutFormHidePin(false);
+                          }}
                           className={`flex items-center gap-2.5 p-2 rounded-xl border text-left transition-all ${
                             calloutFormCustomImage === 'T.png' || calloutFormCustomImage === '/T.png'
                               ? 'border-amber-500 bg-amber-950/40 text-white ring-1 ring-amber-500 shadow-md'
@@ -4224,13 +4249,13 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                     const newZone = e.target.value as ZoneType;
                     setCalloutFormZone(newZone);
                     if (newZone === 'ct_spawn') {
-                      if (!calloutFormCustomImage || calloutFormCustomImage === '/T.png') {
-                        setCalloutFormCustomImage('/ct.png');
-                      }
+                      setCalloutFormCustomImage('ct.png');
+                      setCalloutFormDisplayMode((prev) => prev === 'text' ? 'image' : prev);
+                      setCalloutFormHidePin(false);
                     } else if (newZone === 't_spawn') {
-                      if (!calloutFormCustomImage || calloutFormCustomImage === '/ct.png') {
-                        setCalloutFormCustomImage('/T.png');
-                      }
+                      setCalloutFormCustomImage('T.png');
+                      setCalloutFormDisplayMode((prev) => prev === 'text' ? 'image' : prev);
+                      setCalloutFormHidePin(false);
                     }
                   }}
                   className="w-full px-2.5 py-2 rounded-lg border border-zinc-700 bg-zinc-950 text-white"
