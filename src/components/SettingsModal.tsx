@@ -125,9 +125,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handlePerformUpdate = async () => {
     try {
       showNotification(isDe ? 'Update wird durchgeführt... App lädt neu.' : 'Applying update... Reloading app.');
-      if (onManualSaveNow) {
-        await onManualSaveNow().catch(() => {});
-      }
       setTimeout(async () => {
         await applyUpdateNow();
       }, 500);
