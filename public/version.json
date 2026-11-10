@@ -1,14 +1,14 @@
 {
-  "version": "2.174",
+  "version": "2.175",
   "major": 2,
-  "patch": 174,
+  "patch": 175,
   "releaseDate": "2026-11-10",
-  "title": "Callout-Optimierung & Manuelle Update-Steuerung",
-  "description": "Standard-Datenbestand & Callout-Positionen auf Anubis und Train stabilisiert. Manuelle Update-Steuerung und Status-Indikator integriert.",
+  "title": "Emblem-Anzeige & T/CT Spawn Optimierung",
+  "description": "Automatische Emblem-Aktivierung bei T- und CT-Spawns sowie erweiterte Update-Steuerung.",
   "changes": [
-    "Positionen der Callouts auf Anubis und Train exakt fixiert und stabilisiert",
-    "Manuelle Update-Steuerung: Updates werden erst nach Klick auf 'Update durchführen' angewendet",
-    "Status-Symbol in der Kopfzeile: Grün = App ist aktuell",
-    "Versions- und Update-Feld ganz oben in den Einstellungen"
+    "T- und CT-Embleme werden beim Auswählen sofort korrekt auf der Karte angezeigt",
+    "Automatisches Umschalten auf Bild-Modus beim Auswählen von Spawn-Zonen",
+    "Ausklappbarer 'Was ist neu?'-Bereich erscheint nur bei echten Updates",
+    "Stabiler Cloud-Sync und reibungsloses Offline-Autosave"
   ]
 }
