@@ -292,6 +292,15 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const [singleEditSearchQuery, setSingleEditSearchQuery] = useState<string>('');
   const [draggingCalloutId, setDraggingCalloutId] = useState<string | null>(null);
   const [draggedCoords, setDraggedCoords] = useState<{ x: number; y: number } | null>(null);
+  const [calloutDragStart, setCalloutDragStart] = useState<{
+    clientX: number;
+    clientY: number;
+    initX: number;
+    initY: number;
+    initAreaX?: number;
+    initAreaY?: number;
+    initPoints?: { x: number; y: number }[];
+  } | null>(null);
 
   // Area Interactive Dragging, Resizing & Rotation in Edit Mode
   const [draggingAreaCalloutId, setDraggingAreaCalloutId] = useState<string | null>(null);
@@ -720,22 +729,66 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       return;
     }
 
-    // 2. Dragging Callout Pin (If area exists, move area along so pin stays in center!)
-    if (draggingCalloutId && mapContainerRef.current) {
-      const callout = mapData.callouts.find((c) => c.id === draggingCalloutId);
+    // 2. Dragging Callout Pin (Smooth delta movement preserving initial relative offset)
+    if (draggingCalloutId && calloutDragStart && mapContainerRef.current) {
       let targetTile: HTMLElement | null = null;
-      if (currentLevel === 'both' && callout) {
-        const isLower = isCalloutForLevel(callout, 'lower') && !isCalloutForLevel(callout, 'upper');
+      if (currentLevel === 'both') {
+        const callout = mapData.callouts.find((c) => c.id === draggingCalloutId);
+        const isLower = callout && isCalloutForLevel(callout, 'lower') && !isCalloutForLevel(callout, 'upper');
         targetTile = document.getElementById(isLower ? 'map-tile-lower' : 'map-tile-upper');
       } else {
-        targetTile = (e.target as HTMLElement).closest('.map-canvas-tile') as HTMLElement || null;
+        targetTile = (e.target as HTMLElement).closest('.map-canvas-tile') as HTMLElement || mapContainerRef.current;
       }
-      const coords = getCoordinatesFromClient(e.clientX, e.clientY, targetTile);
-      setDraggedCoords(coords);
+      const tileEl = targetTile || mapContainerRef.current;
+      const rect = tileEl.getBoundingClientRect();
+      const dxPercent = ((e.clientX - calloutDragStart.clientX) / rect.width) * 100;
+      const dyPercent = ((e.clientY - calloutDragStart.clientY) / rect.height) * 100;
+
+      const newX = Math.round((calloutDragStart.initX + dxPercent) * 10) / 10;
+      const newY = Math.round((calloutDragStart.initY + dyPercent) * 10) / 10;
+      setDraggedCoords({ x: newX, y: newY });
 
       const updatedCallouts = mapData.callouts.map((c) => {
         if (c.id === draggingCalloutId) {
-          return { ...c, x: coords.x, y: coords.y };
+          if (c.area) {
+            if (c.area.points && calloutDragStart.initPoints) {
+              const newPoints = calloutDragStart.initPoints.map((p) => ({
+                x: Math.round((p.x + dxPercent) * 10) / 10,
+                y: Math.round((p.y + dyPercent) * 10) / 10,
+              }));
+              const xs = newPoints.map((p) => p.x);
+              const ys = newPoints.map((p) => p.y);
+              const minX = Math.min(...xs);
+              const maxX = Math.max(...xs);
+              const minY = Math.min(...ys);
+              const maxY = Math.max(...ys);
+              return {
+                ...c,
+                x: newX,
+                y: newY,
+                area: {
+                  ...c.area,
+                  x: Math.round(minX * 10) / 10,
+                  y: Math.round(minY * 10) / 10,
+                  width: Math.max(1, Math.round((maxX - minX) * 10) / 10),
+                  height: Math.max(1, Math.round((maxY - minY) * 10) / 10),
+                  points: newPoints,
+                },
+              };
+            } else if (calloutDragStart.initAreaX !== undefined && calloutDragStart.initAreaY !== undefined) {
+              return {
+                ...c,
+                x: newX,
+                y: newY,
+                area: {
+                  ...c.area,
+                  x: Math.round((calloutDragStart.initAreaX + dxPercent) * 10) / 10,
+                  y: Math.round((calloutDragStart.initAreaY + dyPercent) * 10) / 10,
+                },
+              };
+            }
+          }
+          return { ...c, x: newX, y: newY };
         }
         return c;
       });
@@ -859,6 +912,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const handleMouseUp = () => {
     if (draggingCalloutId) {
       setDraggingCalloutId(null);
+      setCalloutDragStart(null);
       setDraggedCoords(null);
     }
     if (draggingAreaCalloutId) {
@@ -1013,10 +1067,18 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const handleCalloutDragStart = (callout: Callout, e: React.MouseEvent | React.TouchEvent) => {
     if (!isEditMode) return;
     e.stopPropagation();
-    const pinX = callout.x;
-    const pinY = callout.y;
+    const { clientX, clientY } = getClientCoords(e);
     setDraggingCalloutId(callout.id);
-    setDraggedCoords({ x: pinX, y: pinY });
+    setDraggedCoords({ x: callout.x, y: callout.y });
+    setCalloutDragStart({
+      clientX,
+      clientY,
+      initX: callout.x,
+      initY: callout.y,
+      initAreaX: callout.area?.x,
+      initAreaY: callout.area?.y,
+      initPoints: callout.area?.points ? JSON.parse(JSON.stringify(callout.area.points)) : undefined,
+    });
   };
 
   // Area Move Drag Start
@@ -1282,6 +1344,15 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           : c
       );
       handleMapUpdate({ ...mapData, callouts: updatedCallouts });
+      const targetCallout = updatedCallouts.find((c) => c.id === editingCallout.id) || null;
+      if (targetCallout) {
+        setSelectedCallout(targetCallout);
+      }
+      setIsEditMode(true);
+      setSingleEditCalloutId(editingCallout.id);
+      if (areaObj) {
+        setShowAreas(true);
+      }
     } else {
       const newCallout: Callout = {
         id: `callout_${Date.now()}`,
@@ -1311,6 +1382,14 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         isCustom: true,
       };
       handleMapUpdate({ ...mapData, callouts: [...mapData.callouts, newCallout] });
+
+      // Stay in edit mode for this newly created callout until user clicks "Fertig"
+      setIsEditMode(true);
+      setSingleEditCalloutId(newCallout.id);
+      setSelectedCallout(newCallout);
+      if (areaObj) {
+        setShowAreas(true);
+      }
     }
 
     setIsAddingCallout(false);
@@ -1521,6 +1600,10 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     if (editingCallout?.id === calloutId) {
       setIsAddingCallout(false);
       setEditingCallout(null);
+    }
+    if (singleEditCalloutId === calloutId) {
+      setSingleEditCalloutId(null);
+      setIsEditMode(false);
     }
   };
 
@@ -2109,7 +2192,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
               <div
                 key={`callout_${tileLevel}_${callout.id}`}
                 style={{ left: `calc(50% + ${pinX}%)`, top: `calc(50% + ${pinY}%)` }}
-                className={`absolute -translate-x-1/2 -translate-y-1/2 group flex items-center justify-center pointer-events-auto ${
+                className={`absolute w-0 h-0 flex items-center justify-center pointer-events-auto group ${
                   isBeingDragged ? 'z-50' : 'z-25'
                 }`}
                 onMouseEnter={() => !draggingCalloutId && setHoveredCallout(callout)}
@@ -2128,7 +2211,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
               >
                 {!callout.hidePin && (
                   <div
-                    className="absolute z-10 flex items-center justify-center pointer-events-auto"
+                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 flex items-center justify-center pointer-events-auto"
                   >
                     {isImageMode ? (
                       <div
@@ -2237,7 +2320,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       transform: `translate(${offX}px, ${offY}px) rotate(${callout.textRotation !== undefined ? callout.textRotation : (callout.rotation || 0)}deg)`,
                       transformOrigin: 'center center',
                     }}
-                    className={`rounded font-bold tracking-tight whitespace-nowrap shadow-lg transition-transform shrink-0 relative z-30 ${
+                    className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded font-bold tracking-tight whitespace-nowrap shadow-lg transition-transform shrink-0 z-30 ${
                       isEditMode
                         ? 'cursor-grab active:cursor-grabbing bg-zinc-950 border border-sky-400 text-sky-200 ring-1 ring-sky-400/50'
                         : isSelected || isHighlighted
@@ -2253,9 +2336,9 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                 {isEditMode && (
                   <div
                     style={{
-                      transform: `translate(calc(-50% + ${offX}px), ${offY - Math.max(34, fontSize + 24)}px)`,
+                      transform: `translate(calc(-50% + ${offX}px), calc(-50% + ${offY - Math.max(34, fontSize + 24)}px))`,
                     }}
-                    className="absolute left-1/2 flex items-center gap-1.5 bg-zinc-900/95 rounded-lg border border-zinc-700 px-2 py-1 shadow-2xl z-[60] backdrop-blur-xs whitespace-nowrap"
+                    className="absolute top-1/2 left-1/2 flex items-center gap-1.5 bg-zinc-900/95 rounded-lg border border-zinc-700 px-2 py-1 shadow-2xl z-[60] backdrop-blur-xs whitespace-nowrap"
                   >
                     {/* Quick Rotate +45° for Text */}
                     <button
@@ -3656,7 +3739,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       <div className="absolute h-full w-[1px] bg-zinc-800 pointer-events-none" />
 
                       {/* FIXED Callout Pin Dot in Center (0,0) */}
-                      <div className="absolute z-10 w-4 h-4 rounded-full bg-amber-400 border-2 border-zinc-950 shadow-[0_0_10px_rgba(251,191,36,0.8)] pointer-events-none flex items-center justify-center">
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 w-4 h-4 rounded-full bg-amber-400 border-2 border-zinc-950 shadow-[0_0_10px_rgba(251,191,36,0.8)] pointer-events-none flex items-center justify-center">
                         <div className="w-1.5 h-1.5 rounded-full bg-zinc-950" />
                       </div>
 

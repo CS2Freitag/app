@@ -249,8 +249,15 @@ export function saveStoredMaps(maps: MapData[]): void {
 }
 
 export function loadFavorites(): string[] {
-  if (!isBrowser) return INITIAL_SETTINGS.favorites || ['inferno', 'cache', 'ancient', 'dust2', 'nuke', 'train', 'anubis'];
+  const defaultFavorites = INITIAL_SETTINGS.favorites || ['inferno', 'cache', 'ancient', 'dust2', 'nuke', 'train', 'anubis'];
+  if (!isBrowser) return defaultFavorites;
   try {
+    const backupVer = localStorage.getItem('cs2freitag_fav_backup_ver');
+    if (backupVer !== 'backup_a1dc33ad_v2') {
+      localStorage.setItem('cs2freitag_fav_backup_ver', 'backup_a1dc33ad_v2');
+      saveFavorites(defaultFavorites);
+      return defaultFavorites;
+    }
     const raw = localStorage.getItem(STORAGE_KEYS.FAVORITES) || localStorage.getItem('cs2freitag_favorites_v5_backup');
     if (raw) {
       const parsed = JSON.parse(raw);
@@ -261,7 +268,7 @@ export function loadFavorites(): string[] {
   } catch (e) {
     console.error('Failed to load favorites:', e);
   }
-  return INITIAL_SETTINGS.favorites || ['inferno', 'cache', 'ancient', 'dust2', 'nuke', 'train', 'anubis'];
+  return defaultFavorites;
 }
 
 export function saveFavorites(favorites: string[]): void {
