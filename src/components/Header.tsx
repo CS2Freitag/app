@@ -1,8 +1,9 @@
 import React from 'react';
-import { Globe, Crosshair, Settings, Cloud, CloudOff, Smartphone } from 'lucide-react';
+import { Globe, Crosshair, Settings, Cloud, CloudOff, Smartphone, CheckCircle2, ArrowUpCircle } from 'lucide-react';
 import { Language, Theme } from '../types';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { usePWAInstall } from '../hooks/usePWAInstall';
+import { useAppVersion } from '../services/versionService';
 
 interface HeaderProps {
   theme?: Theme;
@@ -14,6 +15,9 @@ interface HeaderProps {
   onOpenSettings?: () => void;
   onOpenTacticsHelp?: () => void;
   isLoggedIn?: boolean;
+  installedVersion?: string;
+  latestVersion?: string;
+  hasUpdate?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -23,6 +27,9 @@ export const Header: React.FC<HeaderProps> = ({
   totalCalloutsCount,
   onOpenSettings,
   isLoggedIn = false,
+  installedVersion: propInstalledVersion,
+  latestVersion: propLatestVersion,
+  hasUpdate: propHasUpdate,
 }) => {
   const isDe = lang === 'de';
   const [isTooltipOpen, setIsTooltipOpen] = React.useState(false);
@@ -34,6 +41,12 @@ export const Header: React.FC<HeaderProps> = ({
   const isOnline = useOnlineStatus();
   const { isInstalled } = usePWAInstall();
   const isCloudOnline = Boolean(isLoggedIn && isOnline);
+
+  // App Version & Update Status
+  const versionState = useAppVersion();
+  const curInstalledVersion = propInstalledVersion || versionState.installedVersion;
+  const curLatestVersion = propLatestVersion || versionState.latestVersion;
+  const curHasUpdate = propHasUpdate !== undefined ? propHasUpdate : versionState.hasUpdate;
 
   // Symbol 1: Cloud-Sync (Online / Offline)
   const cloudColorClasses = isCloudOnline
@@ -52,6 +65,15 @@ export const Header: React.FC<HeaderProps> = ({
   const installTooltip = isInstalled
     ? (isDe ? 'App-Status: Als App installiert (PWA)' : 'App Status: Installed as app (PWA)')
     : (isDe ? 'App-Status: Nicht installiert (Im Browser geöffnet)' : 'App Status: Not installed (Running in browser)');
+
+  // Symbol 3: App-Version & Updates (Grün = Aktuell / Orange = Update verfügbar)
+  const versionColorClasses = curHasUpdate
+    ? 'border-amber-400 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 animate-pulse shadow-[0_0_10px_rgba(251,191,36,0.4)]'
+    : 'border-emerald-500/50 bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 shadow-[0_0_8px_rgba(52,211,153,0.25)]';
+
+  const versionTooltip = curHasUpdate
+    ? (isDe ? `Neues Update verfügbar: v${curLatestVersion} (Klicken zum Aktualisieren)` : `New update available: v${curLatestVersion} (Click to update)`)
+    : (isDe ? `App-Version: v${curInstalledVersion} (Aktuell)` : `App Version: v${curInstalledVersion} (Up to date)`);
 
   // Close tooltip on outside click or escape key
   React.useEffect(() => {
@@ -187,6 +209,21 @@ export const Header: React.FC<HeaderProps> = ({
                   className={`w-4.5 h-4.5 sm:w-[19px] sm:h-[19px] rounded-full border flex items-center justify-center transition-all duration-150 cursor-pointer shadow-xs active:scale-90 ${installColorClasses}`}
                 >
                   <Smartphone className="w-2.5 h-2.5 sm:w-3 sm:h-3" strokeWidth={2.2} />
+                </button>
+
+                {/* 3. App-Version / Update-Status Symbol (Grün = Aktuell / Orange = Update verfügbar) */}
+                <button
+                  type="button"
+                  onClick={onOpenSettings}
+                  title={versionTooltip}
+                  aria-label={versionTooltip}
+                  className={`w-4.5 h-4.5 sm:w-[19px] sm:h-[19px] rounded-full border flex items-center justify-center transition-all duration-150 cursor-pointer shadow-xs active:scale-90 ${versionColorClasses}`}
+                >
+                  {curHasUpdate ? (
+                    <ArrowUpCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" strokeWidth={2.4} />
+                  ) : (
+                    <CheckCircle2 className="w-2.5 h-2.5 sm:w-3 sm:h-3" strokeWidth={2.4} />
+                  )}
                 </button>
               </div>
             </div>

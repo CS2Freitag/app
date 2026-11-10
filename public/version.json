@@ -1,0 +1,14 @@
+{
+  "version": "2.174",
+  "major": 2,
+  "patch": 174,
+  "releaseDate": "2026-11-10",
+  "title": "Callout-Optimierung & Manuelle Update-Steuerung",
+  "description": "Standard-Datenbestand & Callout-Positionen auf Anubis und Train stabilisiert. Manuelle Update-Steuerung und Status-Indikator integriert.",
+  "changes": [
+    "Positionen der Callouts auf Anubis und Train exakt fixiert und stabilisiert",
+    "Manuelle Update-Steuerung: Updates werden erst nach Klick auf 'Update durchführen' angewendet",
+    "Status-Symbol in der Kopfzeile: Grün = App ist aktuell",
+    "Versions- und Update-Feld ganz oben in den Einstellungen"
+  ]
+}

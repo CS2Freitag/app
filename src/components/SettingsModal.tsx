@@ -20,12 +20,16 @@ import {
   RefreshCw,
   ShieldCheck,
   Gamepad2,
+  Sparkles,
+  ArrowUpCircle,
+  ChevronDown,
 } from 'lucide-react';
 import { MapData, Language, Theme } from '../types';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { FAVICON_ICO_BASE64 } from '../data/embeddedIcoBase64';
 import { loadUserCloudData } from '../services/firebase';
 import { UploadConflictModal } from './UploadConflictModal';
+import { useAppVersion } from '../services/versionService';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -103,6 +107,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [showUploadConflict, setShowUploadConflict] = useState<boolean>(false);
   const [showDownloadConfirm, setShowDownloadConfirm] = useState<boolean>(false);
   const [isCheckingUploadConflict, setIsCheckingUploadConflict] = useState<boolean>(false);
+  const [showChangelog, setShowChangelog] = useState<boolean>(false);
+
+  const {
+    installedVersion,
+    latestVersion,
+    hasUpdate,
+    isChecking: isCheckingVersion,
+    versionManifest,
+    checkMessage: versionCheckMessage,
+    checkForUpdates,
+    applyUpdateNow,
+    simulateUpdateAvailable,
+    resetSimulation,
+  } = useAppVersion();
+
+  const handlePerformUpdate = async () => {
+    try {
+      showNotification(isDe ? 'Update wird durchgeführt... App lädt neu.' : 'Applying update... Reloading app.');
+      if (onManualSaveNow) {
+        await onManualSaveNow().catch(() => {});
+      }
+      setTimeout(async () => {
+        await applyUpdateNow();
+      }, 500);
+    } catch (err) {
+      showNotification(isDe ? 'Fehler beim Durchführen des Updates.' : 'Failed to apply update.', true);
+    }
+  };
 
   const fullBackupInputRef = useRef<HTMLInputElement>(null);
   const singleMapInputRef = useRef<HTMLInputElement>(null);
@@ -398,6 +430,123 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         />
 
         <div className="space-y-5 text-xs">
+          {/* 0. APP-VERSION & MANUELLE UPDATE-STEUERUNG (Ganz oben in den Einstellungen) */}
+          <div className={`p-4 rounded-xl border space-y-3.5 shadow-sm transition-all ${
+            hasUpdate
+              ? 'bg-amber-950/25 border-amber-500/60 ring-1 ring-amber-500/30'
+              : 'bg-zinc-950/70 border-zinc-800'
+          }`}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 font-mono uppercase font-bold text-zinc-200">
+                <Sparkles className={`w-4 h-4 ${hasUpdate ? 'text-amber-400' : 'text-emerald-400'}`} />
+                <span>{isDe ? 'App-Version & Online-Updates' : 'App Version & Online Updates'}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className={`text-[10px] font-mono px-2 py-0.5 rounded border font-bold flex items-center gap-1 ${
+                  hasUpdate
+                    ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 animate-pulse'
+                    : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                }`}>
+                  {hasUpdate ? (
+                    <>
+                      <ArrowUpCircle className="w-3 h-3" />
+                      <span>{isDe ? `Update v${latestVersion} verfügbar` : `Update v${latestVersion} available`}</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-3 h-3" />
+                      <span>{isDe ? `Version ${installedVersion} (Aktuell)` : `Version ${installedVersion} (Current)`}</span>
+                    </>
+                  )}
+                </span>
+              </div>
+            </div>
+
+            {/* When update is available: Show "Was ist neu?" toggle, changelog, and Update button */}
+            {hasUpdate && (
+              <div className="space-y-3 pt-0.5">
+                {/* Toggle Button for Changelog / "Was ist neu?" */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setShowChangelog((prev) => !prev)}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold text-amber-300 hover:text-amber-200 bg-amber-500/10 border border-amber-500/30 hover:border-amber-500/50 transition-colors cursor-pointer select-none"
+                    title={isDe ? 'Änderungen ein- oder ausblenden' : 'Toggle changelog'}
+                  >
+                    <ChevronDown className={`w-3.5 h-3.5 text-amber-400 transition-transform duration-200 ${showChangelog ? 'rotate-180' : ''}`} />
+                    <span>
+                      {isDe ? `Was ist neu in Version ${latestVersion}?` : `What's new in version ${latestVersion}?`}
+                    </span>
+                  </button>
+                </div>
+
+                {/* Expandable Changelog in short bullet points */}
+                {showChangelog && (
+                  <div className="p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 text-[11px] text-zinc-300 space-y-2 animate-in fade-in-50 duration-150">
+                    <div className="font-bold text-amber-300 text-xs flex items-center justify-between">
+                      <span>
+                        {isDe ? `Neuerungen in Version ${latestVersion}:` : `Changes in Version ${latestVersion}:`}
+                      </span>
+                      {versionManifest?.releaseDate && (
+                        <span className="text-[10px] font-mono text-zinc-500 font-normal">
+                          {versionManifest.releaseDate}
+                        </span>
+                      )}
+                    </div>
+                    <ul className="list-disc pl-4 space-y-1 text-zinc-300 text-[11px] leading-relaxed">
+                      {(versionManifest?.changes && versionManifest.changes.length > 0
+                        ? versionManifest.changes
+                        : [
+                            'Aktualisierte Callouts & Standard-Datenbestand',
+                            'Positions- und Layout-Optimierungen',
+                          ]
+                      ).map((change, idx) => (
+                        <li key={idx}>{change}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Prominent update action button */}
+                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 space-y-2.5">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <button
+                      onClick={handlePerformUpdate}
+                      className="flex items-center gap-2 px-4 py-2.5 text-xs font-black rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 transition-all shadow-md active:scale-[0.98] cursor-pointer"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>{isDe ? `Update durchführen (Auf v${latestVersion} aktualisieren)` : `Apply Update (Upgrade to v${latestVersion})`}</span>
+                    </button>
+                    <span className="text-[10px] text-zinc-400">
+                      {isDe ? '✓ Cloud-Sync, Autosave & eigene Callouts bleiben erhalten' : '✓ Cloud sync, autosave & custom callouts preserved'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Check button row (Test-Simulation button completely removed) */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-zinc-800/80">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => checkForUpdates(true)}
+                  disabled={isCheckingVersion}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
+                  title={isDe ? 'Server auf neuere Version prüfen' : 'Check server for newer release'}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-sky-400 ${isCheckingVersion ? 'animate-spin' : ''}`} />
+                  <span>{isCheckingVersion ? (isDe ? 'Prüfe...' : 'Checking...') : (isDe ? 'Nach Updates suchen' : 'Check for updates')}</span>
+                </button>
+
+                {versionCheckMessage && (
+                  <span className="text-[10px] text-zinc-400 animate-in fade-in-50">
+                    {versionCheckMessage}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* 1. PWA & DESKTOP APP CENTER */}
           <div className="p-4 rounded-xl bg-zinc-950/70 dark:bg-zinc-950/70 border border-amber-500/30 space-y-3.5 shadow-sm">
             <div className="flex items-center justify-between">
