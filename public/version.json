@@ -1,14 +1,12 @@
 {
-  "version": "2.175",
+  "version": "2.176",
   "major": 2,
-  "patch": 175,
+  "patch": 176,
   "releaseDate": "2026-11-10",
-  "title": "Emblem-Anzeige & T/CT Spawn Optimierung",
-  "description": "Automatische Emblem-Aktivierung bei T- und CT-Spawns sowie erweiterte Update-Steuerung.",
+  "title": "Boulder Callout-Erweiterung",
+  "description": "2 neue Callouts zur Karte Boulder hinzugefügt.",
   "changes": [
-    "T- und CT-Embleme werden beim Auswählen sofort korrekt auf der Karte angezeigt",
-    "Automatisches Umschalten auf Bild-Modus beim Auswählen von Spawn-Zonen",
-    "Ausklappbarer 'Was ist neu?'-Bereich erscheint nur bei echten Updates",
-    "Stabiler Cloud-Sync und reibungsloses Offline-Autosave"
+    "2 neue Callouts zur Karte Boulder hinzugefügt",
+    "Stabiler Datenabgleich & Update-Steuerung"
   ]
 }
