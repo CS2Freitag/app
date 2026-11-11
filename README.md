@@ -11,48 +11,48 @@ Flexibly customize, create, and easily share map callouts.
 
 ---
 
-## 🚀 Key Features & Impressionen
+## 🚀 Key Features & Impressions
 
-### 🗺️ 1. Interaktiver Map & Callout Hub
-Wähle aus über 28 detailgetreuen Counter-Strike 2 Karten deine Wunsch-Map aus. Das Dashboard bietet dir schnellen Zugriff auf deine Favoriten und zeigt dir direkt an, wie viele Callouts bereits hinterlegt sind.
+### 🗺️ 1. Interactive Map & Callout Hub
+Choose your desired map from over 28 detailed Counter-Strike 2 maps. The dashboard provides quick access to your favorites and directly displays how many callouts are already configured.
 
 <div align="center">
-  <img src="public/bild1.png" width="600" alt="Map Übersicht & Favoriten" />
+  <img src="public/bild1.png" width="600" alt="Map Overview & Favorites" />
 </div>
 
-### ✍️ 2. Taktik-Editor & Zeichentool
-Nutze professionelle Strategie-Werkzeuge direkt auf dem Radar. Zeichne präzise Laufwege, erstelle Linien, setze Pfeile für Rushes oder nutze den Radierer, um deine Pläne im Team abzustimmen.
+### ✍️ 2. Tactics Editor & Drawing Tool
+Use professional strategy tools directly on the radar. Draw precise paths, create lines, place arrows for rushes, or use the eraser to coordinate plans with your team.
 
 <div align="center">
-  <img src="public/bild4.png" width="600" alt="Taktik-Editor im Einsatz" />
+  <img src="public/bild4.png" width="600" alt="Tactics Editor in Action" />
 </div>
 
-### 🛠️ 3. Flexibler Bearbeitungs-Modus
-Passe die Benennungen vollständig nach deinen Wünschen an. Du kannst entscheiden, ob du alle Callouts auf der Karte gleichzeitig bearbeitest, dich fokussiert auf ein einzelnes Callout konzentriererst oder ein komplett neues Callout hinzufügst.
+### 🛠️ 3. Flexible Editing Mode
+Fully customize all names to your preference. You can choose to edit all callouts on the map simultaneously, focus tightly on a single callout, or add a completely new one.
 
 <div align="center">
-  <img src="public/bild5.png" width="600" alt="Auswahl des Bearbeitungsmodus" />
+  <img src="public/bild5.png" width="600" alt="Editing Mode Selection" />
 </div>
 
-### 📐 4. Eigene Bereiche & Labels erstellen
-Verschiebe Pins frei Hand, rotiere Labels für eine perfekte Lesbarkeit oder ziehe passgenaue, farbige Zonen (wie hier für "A LONG") auf dem Radar, um Callout-Grenzen exakt zu definieren.
+### 📐 4. Custom Zones & Labels
+Move pins freely, rotate labels for perfect readability, or draw tailored, colored zones (like "A LONG" shown here) on the radar to precisely define callout borders.
 
 <div align="center">
-  <img src="public/bild6.png" width="600" alt="Bereiche zeichnen und Callouts verschieben" />
+  <img src="public/bild6.png" width="600" alt="Drawing Zones and Moving Callouts" />
 </div>
 
-### 🧠 5. Callout-Trainer & Backup-Verwaltung
-Lerne die Callouts spielerisch im interaktiven Quiz-Modus auswendig. Deine erstellten Daten kannst du bequem als komplettes ZIP-Archiv sichern, hochladen oder einzelne Karten gezielt exportieren, um sie mit deinen Mates zu teilen.
+### 🧠 5. Callout Trainer & Backup Management
+Learn callouts playfully using the interactive quiz mode. Easily back up and upload your customized data as a complete ZIP archive, or export specific maps to share with your teammates.
 
 <div align="center">
-  <img src="public/bild3.png" width="600" alt="Cloud-Sync, ZIP-Backup & Quiz-Modus" />
+  <img src="public/bild3.png" width="600" alt="Cloud Sync, ZIP Backup & Quiz Mode" />
 </div>
 
-### 📱 6. Vollwertige App-Installation (PWA)
-CS2Freitag läuft dank modernster Progressive Web App Technologie nativ in einem eigenständigen Fenster auf Windows-PCs, Android-Smartphones und iPhones – inklusive 100% Offline-Funktionalität und automatischen Updates.
+### 📱 6. Full Progressive Web App (PWA) Support
+Thanks to modern Progressive Web App technology, CS2Freitag runs natively in a standalone window on Windows PCs, Android smartphones, and iPhones – featuring 100% offline functionality and automatic updates.
 
 <div align="center">
-  <img src="public/bild2.png" width="600" alt="App-Installation & PWA Einstellungen" />
+  <img src="public/bild2.png" width="600" alt="App Installation & PWA Settings" />
 </div>
 
 ---
