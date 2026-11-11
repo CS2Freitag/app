@@ -297,9 +297,6 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     clientY: number;
     initX: number;
     initY: number;
-    initAreaX?: number;
-    initAreaY?: number;
-    initPoints?: { x: number; y: number }[];
   } | null>(null);
 
   // Area Interactive Dragging, Resizing & Rotation in Edit Mode
@@ -314,8 +311,6 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     initY: number;
     initW: number;
     initH: number;
-    initCalloutX?: number;
-    initCalloutY?: number;
     initPoints?: { x: number; y: number }[];
   } | null>(null);
   const [rotationDragStart, setRotationDragStart] = useState<{
@@ -748,46 +743,9 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       const newY = Math.round((calloutDragStart.initY + dyPercent) * 10) / 10;
       setDraggedCoords({ x: newX, y: newY });
 
+      // Move only the callout name / pin independently - do not alter the zone area
       const updatedCallouts = mapData.callouts.map((c) => {
         if (c.id === draggingCalloutId) {
-          if (c.area) {
-            if (c.area.points && calloutDragStart.initPoints) {
-              const newPoints = calloutDragStart.initPoints.map((p) => ({
-                x: Math.round((p.x + dxPercent) * 10) / 10,
-                y: Math.round((p.y + dyPercent) * 10) / 10,
-              }));
-              const xs = newPoints.map((p) => p.x);
-              const ys = newPoints.map((p) => p.y);
-              const minX = Math.min(...xs);
-              const maxX = Math.max(...xs);
-              const minY = Math.min(...ys);
-              const maxY = Math.max(...ys);
-              return {
-                ...c,
-                x: newX,
-                y: newY,
-                area: {
-                  ...c.area,
-                  x: Math.round(minX * 10) / 10,
-                  y: Math.round(minY * 10) / 10,
-                  width: Math.max(1, Math.round((maxX - minX) * 10) / 10),
-                  height: Math.max(1, Math.round((maxY - minY) * 10) / 10),
-                  points: newPoints,
-                },
-              };
-            } else if (calloutDragStart.initAreaX !== undefined && calloutDragStart.initAreaY !== undefined) {
-              return {
-                ...c,
-                x: newX,
-                y: newY,
-                area: {
-                  ...c.area,
-                  x: Math.round((calloutDragStart.initAreaX + dxPercent) * 10) / 10,
-                  y: Math.round((calloutDragStart.initAreaY + dyPercent) * 10) / 10,
-                },
-              };
-            }
-          }
           return { ...c, x: newX, y: newY };
         }
         return c;
@@ -816,13 +774,6 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
       const updatedCallouts = mapData.callouts.map((c) => {
         if (c.id === draggingAreaCalloutId && c.area) {
-          const calloutX = areaDragStart.initCalloutX !== undefined
-            ? Math.round((areaDragStart.initCalloutX + dxPercent) * 10) / 10
-            : c.x;
-          const calloutY = areaDragStart.initCalloutY !== undefined
-            ? Math.round((areaDragStart.initCalloutY + dyPercent) * 10) / 10
-            : c.y;
-
           if (c.area.points && areaDragStart.initPoints) {
             const newPoints = areaDragStart.initPoints.map((p: { x: number; y: number }) => ({
               x: Math.round((p.x + dxPercent) * 10) / 10,
@@ -837,8 +788,6 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
             return {
               ...c,
-              x: calloutX,
-              y: calloutY,
               area: {
                 ...c.area,
                 x: minX,
@@ -851,8 +800,6 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           } else {
             return {
               ...c,
-              x: calloutX,
-              y: calloutY,
               area: { ...c.area, x: newX, y: newY },
             };
           }
@@ -1075,9 +1022,6 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       clientY,
       initX: callout.x,
       initY: callout.y,
-      initAreaX: callout.area?.x,
-      initAreaY: callout.area?.y,
-      initPoints: callout.area?.points ? JSON.parse(JSON.stringify(callout.area.points)) : undefined,
     });
   };
 
@@ -1094,8 +1038,6 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       initY: callout.area.y,
       initW: callout.area.width,
       initH: callout.area.height,
-      initCalloutX: callout.x,
-      initCalloutY: callout.y,
       initPoints: callout.area.points ? JSON.parse(JSON.stringify(callout.area.points)) : undefined,
     });
   };
@@ -1345,9 +1287,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       );
       handleMapUpdate({ ...mapData, callouts: updatedCallouts });
       const targetCallout = updatedCallouts.find((c) => c.id === editingCallout.id) || null;
-      if (targetCallout) {
-        setSelectedCallout(targetCallout);
-      }
+      setSelectedCallout(null);
       setIsEditMode(true);
       setSingleEditCalloutId(editingCallout.id);
       if (areaObj) {
@@ -1386,7 +1326,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       // Stay in edit mode for this newly created callout until user clicks "Fertig"
       setIsEditMode(true);
       setSingleEditCalloutId(newCallout.id);
-      setSelectedCallout(newCallout);
+      setSelectedCallout(null);
       if (areaObj) {
         setShowAreas(true);
       }
@@ -1604,6 +1544,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     if (singleEditCalloutId === calloutId) {
       setSingleEditCalloutId(null);
       setIsEditMode(false);
+      setSelectedCallout(null);
+      setHighlightedCalloutId(undefined);
     }
   };
 
@@ -2014,15 +1956,18 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       onMouseDown={(e) => {
                         if (movingAreaCalloutId === callout.id) {
                           handleAreaMoveStart(callout, e);
-                        } else if (!hasMovedDistance) {
-                          e.stopPropagation();
-                          setSelectedCallout(callout);
-                          setHighlightedCalloutId(callout.id);
                         }
                       }}
                       onTouchStart={(e) => {
                         if (movingAreaCalloutId === callout.id) {
                           handleAreaMoveStart(callout, e);
+                        }
+                      }}
+                      onClick={(e) => {
+                        if (!isEditMode && !hasMovedDistance) {
+                          e.stopPropagation();
+                          setSelectedCallout(callout);
+                          setHighlightedCalloutId(callout.id);
                         }
                       }}
                       onMouseEnter={() => !isEditMode && setHoveredCallout(callout)}
@@ -2601,6 +2546,9 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
               if (isEditMode || singleEditCalloutId) {
                 setIsEditMode(false);
                 setSingleEditCalloutId(null);
+                setSelectedCallout(null);
+                setHighlightedCalloutId(undefined);
+                setMovingAreaCalloutId(null);
               } else {
                 setIsEditOptionsModalOpen(true);
               }

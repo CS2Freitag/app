@@ -1,11 +1,12 @@
 {
-  "version": "2.177",
+  "version": "2.178",
   "major": 2,
-  "patch": 177,
-  "releaseDate": "2026-11-10",
-  "title": "Bugfix Update-Prozess",
-  "description": "Entfernung des ungewollten Dateidownloads beim Ausführen eines Updates.",
+  "patch": 178,
+  "releaseDate": "2026-11-11",
+  "title": "Bugfix Callout-Editor & Unabhängiges Verschieben",
+  "description": "Positionsbeschreibung öffnet sich nicht mehr unerwünscht nach 'Fertig'. Callout-Name/Icon ist wieder unabhängig vom Zonenbereich verschiebbar.",
   "changes": [
-    "Bugfix: Kein ungewollter Dateidownload mehr beim Klick auf 'Update durchführen'"
+    "Bugfix: Positionsbeschreibung schließt zuverlässig und öffnet sich nicht mehr nach Klick auf 'Fertig'",
+    "Bugfix: Callout-Bezeichnung (Name/Icon) wieder unabhängig vom Zonenbereich verschiebbar (Zonenbereich nur über 4-Pfeile-Button)"
   ]
 }
