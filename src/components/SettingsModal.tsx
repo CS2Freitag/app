@@ -869,9 +869,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="flex items-center gap-2 font-mono uppercase font-bold text-zinc-300">
                 <Globe className="w-4 h-4 text-sky-400" />
                 <span>{isDe ? 'Cloud-Synchronisierung' : 'Cloud Synchronization'}</span>
-                {currentUser && (
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold normal-case">
-                    {isDe ? 'Angemeldet' : 'Logged In'}
+                {currentUser ? (
+                  isAutoCloudSyncEnabled ? (
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold normal-case">
+                      {isDe ? 'Alles aktiviert' : 'All Active'}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-400 font-bold normal-case">
+                      {isDe ? 'Angemeldet (ohne Auto-Abgleich)' : 'Signed In (No Auto-Sync)'}
+                    </span>
+                  )
+                ) : (
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-500/10 border border-rose-500/30 text-rose-400 font-bold normal-case">
+                    {isDe ? 'Nicht angemeldet' : 'Not Signed In'}
                   </span>
                 )}
               </div>

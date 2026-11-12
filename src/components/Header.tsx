@@ -15,6 +15,7 @@ interface HeaderProps {
   onOpenSettings?: () => void;
   onOpenTacticsHelp?: () => void;
   isLoggedIn?: boolean;
+  isAutoCloudSyncEnabled?: boolean;
   installedVersion?: string;
   latestVersion?: string;
   hasUpdate?: boolean;
@@ -27,6 +28,7 @@ export const Header: React.FC<HeaderProps> = ({
   totalCalloutsCount,
   onOpenSettings,
   isLoggedIn = false,
+  isAutoCloudSyncEnabled = true,
   installedVersion: propInstalledVersion,
   latestVersion: propLatestVersion,
   hasUpdate: propHasUpdate,
@@ -36,11 +38,8 @@ export const Header: React.FC<HeaderProps> = ({
   const infoRef = React.useRef<HTMLDivElement>(null);
 
   // Online / Offline & PWA App Installation Status
-  // "Online" = Mit Google angemeldet & Cloud-Sync aktiv
-  // "Offline" = Nicht mit Google angemeldet oder kein Internet
   const isOnline = useOnlineStatus();
   const { isInstalled } = usePWAInstall();
-  const isCloudOnline = Boolean(isLoggedIn && isOnline);
 
   // App Version & Update Status
   const versionState = useAppVersion();
@@ -48,14 +47,25 @@ export const Header: React.FC<HeaderProps> = ({
   const curLatestVersion = propLatestVersion || versionState.latestVersion;
   const curHasUpdate = propHasUpdate !== undefined ? propHasUpdate : versionState.hasUpdate;
 
-  // Symbol 1: Cloud-Sync (Online / Offline)
-  const cloudColorClasses = isCloudOnline
-    ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 shadow-[0_0_8px_rgba(52,211,153,0.25)]'
-    : 'border-amber-500/50 bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 shadow-[0_0_8px_rgba(251,191,36,0.2)]';
+  // Symbol 1: Cloud-Sync Status (Rot = Nicht angemeldet | Orange = Angemeldet ohne Auto-Abgleich | Grün = Alles aktiviert)
+  let cloudColorClasses = 'border-rose-500/50 bg-rose-500/15 text-rose-400 hover:bg-rose-500/25 shadow-[0_0_8px_rgba(244,63,94,0.25)]';
+  let cloudTooltip = isDe
+    ? 'Google Cloud-Sync: Nicht angemeldet (Rot)'
+    : 'Google Cloud Sync: Not signed in (Red)';
 
-  const cloudTooltip = isCloudOnline
-    ? (isDe ? 'Google Cloud-Sync: Online (Angemeldet)' : 'Google Cloud Sync: Online (Signed in)')
-    : (isDe ? 'Google Cloud-Sync: Offline (Nicht angemeldet)' : 'Google Cloud Sync: Offline (Not signed in)');
+  if (isLoggedIn) {
+    if (isAutoCloudSyncEnabled) {
+      cloudColorClasses = 'border-emerald-500/50 bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 shadow-[0_0_8px_rgba(52,211,153,0.25)]';
+      cloudTooltip = isDe
+        ? 'Google Cloud-Sync: Alles aktiviert (Angemeldet & Auto-Abgleich an)'
+        : 'Google Cloud Sync: Fully active (Signed in & Auto-sync on)';
+    } else {
+      cloudColorClasses = 'border-amber-500/50 bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 shadow-[0_0_8px_rgba(251,191,36,0.2)]';
+      cloudTooltip = isDe
+        ? 'Google Cloud-Sync: Angemeldet (Ohne Auto-Abgleich beim Anmelden)'
+        : 'Google Cloud Sync: Signed in (Without auto-sync on login)';
+    }
+  }
 
   // Symbol 2: App-Installation (Installiert / Nicht installiert)
   const installColorClasses = isInstalled
@@ -193,7 +203,7 @@ export const Header: React.FC<HeaderProps> = ({
                   aria-label={cloudTooltip}
                   className={`w-4.5 h-4.5 sm:w-[19px] sm:h-[19px] rounded-full border flex items-center justify-center transition-all duration-150 cursor-pointer shadow-xs active:scale-90 ${cloudColorClasses}`}
                 >
-                  {isCloudOnline ? (
+                  {isLoggedIn ? (
                     <Cloud className="w-2.5 h-2.5 sm:w-3 sm:h-3" strokeWidth={2.2} />
                   ) : (
                     <CloudOff className="w-2.5 h-2.5 sm:w-3 sm:h-3" strokeWidth={2.2} />

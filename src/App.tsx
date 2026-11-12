@@ -1115,6 +1115,7 @@ export default function App() {
             totalCalloutsCount={totalCalloutsCount}
             onOpenSettings={handleOpenSettings}
             isLoggedIn={user !== null}
+            isAutoCloudSyncEnabled={isAutoCloudSyncEnabled}
           />
 
           {/* Main Content Area */}
