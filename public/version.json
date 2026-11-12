@@ -1,22 +1,15 @@
 {
-  "version": "2.287",
+  "version": "2.288",
   "major": 2,
-  "patch": 287,
+  "patch": 288,
   "releaseDate": "2026-11-12",
-  "title": "Update: Neue Standard-Callouts automatisch zusammengeführt",
-  "description": "Neue Callouts aus dem Backup (329 Callouts gesamt) werden jetzt automatisch in deine lokalen Karten integriert, ohne deine eigenen Bearbeitungen zu überschreiben.",
+  "title": "Update: Quiz-Modi, Taktik-PNG-Export & Audio-Ansagen",
+  "description": "Erweiterte Quiz-Spielmodi mit Radar-Klick-Trainer, Taktik-Sheet-Export als PNG (inkl. T/CT-Symbolen & Zeichnungen), englische Audio-Ansagen und UI-Optimierungen.",
   "changes": [
-    "Callout-Integration (329 Callouts): Neue offizielle Standard-Callouts aus dem Backup werden automatisch in vorhandene Karten ergänzt",
-    "Eigene Anpassungen bleiben geschützt: Deine individuellen Positionen, Texte und eigenen Callouts bleiben beim Update zu 100% erhalten",
-    "Bugfix Callout-Namen: Leerzeichen führen nicht mehr zu unerwünschten Zeilenumbrüchen – bestehende Callouts bleiben exakt einzeilig",
-    "Zeilenumbruch nur bei Enter: Eine 2. Zeile entsteht ausschließlich dann, wenn in der Callout-Bearbeitung explizit Enter gedrückt wurde",
-    "Strikt maximal 2 Zeilen: Keine 3. Zeile möglich – das Eingabefeld klappt erst bei Enter dynamisch auf 2 Zeilen auf",
-    "4. 'Meine Callout Auswahl': Eigene Callout-Auswahl pro Karte erstellen und per Schnellfilter-Button in der Kopfzeile umschalten",
-    "Mobile Ansicht optimiert: 'Bearbeiten'-Button in die Werkzeugleiste verlegt – kein Überlappen mehr bei langen Kartennamen",
-    "Callout-Bearbeitung: Callout-Namen/Labels lassen sich wieder unabhängig vom Zonenbereich verschieben",
-    "Karten-Zoom erweitert: Freier Zoom-Bereich von 50% bis 250% (Desktop & Mobil)",
-    "Schriftgrößen-Skalierung: Flexibel einstellbar von 50% bis 200% (Mobil: 50% bis 150%)",
-    "Doppelklick-Reset: Schneller Doppelklick auf die Karte setzt Zoom und Schriftgröße gleichzeitig auf Standard zurück",
-    "Versions-Anzeige: Aktuell installierte Version wird oben rechts in den Einstellungen in Orange klar ausgewiesen"
+    "Taktik-Sheet PNG-Export: Export-Button im Teilen-Menü generiert ein hochauflösendes PNG mit allen T/CT-Symbolen und Zeichnungen",
+    "4 Quiz-Modi: Klassisch (10 Fr.), Kurze Runde (5 Fr.), Klick auf Karte (10 Fr.) und Klick auf Karte (5 Fr.)",
+    "Direkter Quiz-Start: Quiz startet sofort beim Auswählen einer Karte",
+    "Englische Audio-Ansagen (TTS): Audio-Button in der Positionsbeschreibung & Mute-Speicherung für den Klick-auf-Karte Trainer",
+    "UI-Verfeinerung: Modus-Überschriften angepasst & aufgeräumt"
   ]
 }

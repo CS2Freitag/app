@@ -25,7 +25,8 @@ import { SettingsModal } from './components/SettingsModal';
 import { CalloutQuizModal } from './components/CalloutQuizModal';
 import { MapImportConflictModal } from './components/MapImportConflictModal';
 import { ShareTacticModal } from './components/ShareTacticModal';
-import { ExternalLink, ArrowUp, Check, Save } from 'lucide-react';
+import { ExternalLink, ArrowUp, Check, Save, Sparkles, Download } from 'lucide-react';
+import { useAppVersion } from './services/versionService';
 import JSZip from 'jszip';
 import LZString from 'lz-string';
 import { decodeCompactTactic } from './utils/tacticCodec';
@@ -95,6 +96,15 @@ export default function App() {
 
   // Firebase Auth State
   const [user, setUser] = useState<User | null>(null);
+
+  // App Version & Controlled Updates
+  const {
+    installedVersion,
+    latestVersion,
+    hasUpdate,
+    versionManifest,
+    applyUpdateNow,
+  } = useAppVersion();
 
   // Autosave & File System Access State
   const [isAutosaveEnabled, setIsAutosaveEnabled] = useState<boolean>(() => loadAutosaveEnabled());
@@ -1048,6 +1058,8 @@ export default function App() {
         }}
         className="hidden"
       />
+
+
 
       {/* Offline Mode Indicator */}
       <OfflineIndicator lang={lang} />

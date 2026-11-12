@@ -417,12 +417,11 @@ export const CalloutQuizModal: React.FC<CalloutQuizModalProps> = ({
                       : 'border-zinc-800 bg-zinc-900/80 text-zinc-400 hover:border-zinc-700 hover:bg-zinc-800'
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-extrabold text-xs text-white">{isDe ? 'Modus 1' : 'Mode 1'}</span>
-                    <Target className="w-4 h-4 text-amber-400" />
+                  <div className="flex items-center justify-between mb-1 gap-2">
+                    <p className="font-bold text-xs text-amber-300">{isDe ? 'Klassisch (10 Fragen)' : 'Classic (10 Qs)'}</p>
+                    <Target className="w-4 h-4 text-amber-400 shrink-0" />
                   </div>
-                  <p className="font-bold text-xs text-amber-300">{isDe ? 'Klassisch (10 Fragen)' : 'Classic (10 Qs)'}</p>
-                  <p className="text-[10px] text-zinc-400 mt-1 leading-tight">
+                  <p className="text-[10px] text-zinc-400 mt-0.5 leading-tight">
                     {isDe ? 'Multiple-Choice-Quiz mit 10 Fragen' : 'Multiple choice quiz with 10 questions'}
                   </p>
                 </button>
@@ -437,12 +436,11 @@ export const CalloutQuizModal: React.FC<CalloutQuizModalProps> = ({
                       : 'border-zinc-800 bg-zinc-900/80 text-zinc-400 hover:border-zinc-700 hover:bg-zinc-800'
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-extrabold text-xs text-white">{isDe ? 'Modus 2' : 'Mode 2'}</span>
-                    <Target className="w-4 h-4 text-amber-400" />
+                  <div className="flex items-center justify-between mb-1 gap-2">
+                    <p className="font-bold text-xs text-amber-300">{isDe ? 'Kurze Runde (5 Fragen)' : 'Quick Round (5 Qs)'}</p>
+                    <Target className="w-4 h-4 text-amber-400 shrink-0" />
                   </div>
-                  <p className="font-bold text-xs text-amber-300">{isDe ? 'Kurze Runde (5 Fragen)' : 'Quick Round (5 Qs)'}</p>
-                  <p className="text-[10px] text-zinc-400 mt-1 leading-tight">
+                  <p className="text-[10px] text-zinc-400 mt-0.5 leading-tight">
                     {isDe ? 'Schnelles Multiple-Choice mit 5 Fragen' : 'Quick multiple choice with 5 questions'}
                   </p>
                 </button>
@@ -457,12 +455,11 @@ export const CalloutQuizModal: React.FC<CalloutQuizModalProps> = ({
                       : 'border-zinc-800 bg-zinc-900/80 text-zinc-400 hover:border-zinc-700 hover:bg-zinc-800'
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-extrabold text-xs text-white">{isDe ? 'Modus 3' : 'Mode 3'}</span>
-                    <MousePointerClick className="w-4 h-4 text-amber-400" />
+                  <div className="flex items-center justify-between mb-1 gap-2">
+                    <p className="font-bold text-xs text-amber-300">{isDe ? 'Klick auf Karte (10 Fragen)' : 'Map Click Classic (10 Qs)'}</p>
+                    <MousePointerClick className="w-4 h-4 text-amber-400 shrink-0" />
                   </div>
-                  <p className="font-bold text-xs text-amber-300">{isDe ? 'Klick auf Karte (10 Fragen)' : 'Map Click Classic (10 Qs)'}</p>
-                  <p className="text-[10px] text-zinc-400 mt-1 leading-tight">
+                  <p className="text-[10px] text-zinc-400 mt-0.5 leading-tight">
                     {isDe ? 'Positionen auf Radar suchen (10 Fragen)' : 'Find positions on radar map (10 Qs)'}
                   </p>
                 </button>
@@ -477,12 +474,11 @@ export const CalloutQuizModal: React.FC<CalloutQuizModalProps> = ({
                       : 'border-zinc-800 bg-zinc-900/80 text-zinc-400 hover:border-zinc-700 hover:bg-zinc-800'
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-extrabold text-xs text-white">{isDe ? 'Modus 4' : 'Mode 4'}</span>
-                    <MousePointerClick className="w-4 h-4 text-amber-400" />
+                  <div className="flex items-center justify-between mb-1 gap-2">
+                    <p className="font-bold text-xs text-amber-300">{isDe ? 'Klick auf Karte (5 Fragen)' : 'Map Click Short (5 Qs)'}</p>
+                    <MousePointerClick className="w-4 h-4 text-amber-400 shrink-0" />
                   </div>
-                  <p className="font-bold text-xs text-amber-300">{isDe ? 'Klick auf Karte (5 Fragen)' : 'Map Click Short (5 Qs)'}</p>
-                  <p className="text-[10px] text-zinc-400 mt-1 leading-tight">
+                  <p className="text-[10px] text-zinc-400 mt-0.5 leading-tight">
                     {isDe ? 'Schnelle Radar-Klick-Runde mit 5 Fragen' : 'Quick radar click session with 5 Qs'}
                   </p>
                 </button>
