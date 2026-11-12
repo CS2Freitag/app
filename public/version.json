@@ -1,12 +1,13 @@
 {
-  "version": "2.286",
+  "version": "2.287",
   "major": 2,
-  "patch": 286,
+  "patch": 287,
   "releaseDate": "2026-11-12",
-  "title": "Update: Standard-Karten aus backup.json aktualisiert",
-  "description": "Alle Standard-Karten und Callouts wurden auf den neuesten Stand aus backup.json aktualisiert. Enthält alle Highlights seit Version 2.178: 'Meine Callout Auswahl', mobile Layout-Optimierung, freies Bewegen von Callout-Namen, flexibler Zoom & Anzeige der installierten Version.",
+  "title": "Update: Neue Standard-Callouts automatisch zusammengeführt",
+  "description": "Neue Callouts aus dem Backup (329 Callouts gesamt) werden jetzt automatisch in deine lokalen Karten integriert, ohne deine eigenen Bearbeitungen zu überschreiben.",
   "changes": [
-    "Standard-Karten aktualisiert: Alle 28 Standard-Karten und Callouts wurden vollständig anhand der backup.json aktualisiert",
+    "Callout-Integration (329 Callouts): Neue offizielle Standard-Callouts aus dem Backup werden automatisch in vorhandene Karten ergänzt",
+    "Eigene Anpassungen bleiben geschützt: Deine individuellen Positionen, Texte und eigenen Callouts bleiben beim Update zu 100% erhalten",
     "Bugfix Callout-Namen: Leerzeichen führen nicht mehr zu unerwünschten Zeilenumbrüchen – bestehende Callouts bleiben exakt einzeilig",
     "Zeilenumbruch nur bei Enter: Eine 2. Zeile entsteht ausschließlich dann, wenn in der Callout-Bearbeitung explizit Enter gedrückt wurde",
     "Strikt maximal 2 Zeilen: Keine 3. Zeile möglich – das Eingabefeld klappt erst bei Enter dynamisch auf 2 Zeilen auf",

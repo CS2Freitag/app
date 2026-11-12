@@ -147,6 +147,30 @@ function applyDefaultSpawnImages(maps: MapData[]): MapData[] {
 
 const isBrowser = typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
 
+function mergeDefaultCallouts(map: MapData, defaultMap?: MapData): MapData {
+  if (!defaultMap) return map;
+
+  const existingCalloutIds = new Set((map.callouts || []).map((c) => c.id));
+  const existingCalloutKeys = new Set(
+    (map.callouts || []).map((c) => `${(c.name || '').trim().toLowerCase()}_${c.zone || ''}`)
+  );
+
+  const mergedCallouts = [...(map.callouts || [])];
+  for (const defCallout of defaultMap.callouts || []) {
+    const key = `${(defCallout.name || '').trim().toLowerCase()}_${defCallout.zone || ''}`;
+    if (!existingCalloutIds.has(defCallout.id) && !existingCalloutKeys.has(key)) {
+      mergedCallouts.push(defCallout);
+      existingCalloutIds.add(defCallout.id);
+      existingCalloutKeys.add(key);
+    }
+  }
+
+  return {
+    ...map,
+    callouts: mergedCallouts,
+  };
+}
+
 export function loadStoredMaps(): MapData[] {
   if (!isBrowser) {
     return applyDefaultSpawnImages(INITIAL_MAPS);
@@ -154,20 +178,24 @@ export function loadStoredMaps(): MapData[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.MAPS);
     const deletedIds = loadDeletedMapIds();
-    const initialMapMap = new Map(INITIAL_MAPS.map(m => [m.id, m]));
+    const initialMapMap = new Map(INITIAL_MAPS.map((m) => [m.id, m]));
 
     if (raw) {
       let parsed: MapData[] = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        // Keep user's custom maps/edits from localStorage as-is, ensuring proper image path formatting
-        parsed = parsed.map(m => ({
-          ...m,
-          image: m.image && m.image.startsWith('/') ? m.image.substring(1) : m.image,
-          lowerImage: m.lowerImage && m.lowerImage.startsWith('/') ? m.lowerImage.substring(1) : m.lowerImage
-        }));
+        // Merge missing default callouts from INITIAL_MAPS into standard maps while preserving user custom edits
+        parsed = parsed.map((m) => {
+          const defaultVersion = initialMapMap.get(m.id);
+          const merged = defaultVersion ? mergeDefaultCallouts(m, defaultVersion) : m;
+          return {
+            ...merged,
+            image: merged.image && merged.image.startsWith('/') ? merged.image.substring(1) : merged.image,
+            lowerImage: merged.lowerImage && merged.lowerImage.startsWith('/') ? merged.lowerImage.substring(1) : merged.lowerImage,
+          };
+        });
 
         // Add any missing maps from INITIAL_MAPS (e.g. newly added standard maps)
-        const existingIds = new Set(parsed.map(m => m.id));
+        const existingIds = new Set(parsed.map((m) => m.id));
         for (const defaultMap of INITIAL_MAPS) {
           if (!existingIds.has(defaultMap.id) && !deletedIds.has(defaultMap.id)) {
             parsed.push(defaultMap);
