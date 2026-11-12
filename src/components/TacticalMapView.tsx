@@ -1210,7 +1210,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     const pinX = callout.x;
     const pinY = callout.y;
     setPendingCalloutCoords({ x: pinX, y: pinY });
-    setCalloutFormName(callout.name);
+    setCalloutFormName(callout.name.split(/\r?\n/).slice(0, 2).join('\n'));
     setCalloutFormZone(callout.zone);
     setCalloutFormDanger(callout.danger);
     setCalloutFormRotation(callout.rotation || 0);
@@ -1265,7 +1265,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   // Save Callout Form
   const handleSaveCalloutForm = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!calloutFormName.trim() || !pendingCalloutCoords) return;
+    const sanitizedName = calloutFormName.split(/\r?\n/).slice(0, 2).join('\n').trim();
+    if (!sanitizedName || !pendingCalloutCoords) return;
 
     let areaObj: CalloutArea | undefined = undefined;
     if (calloutFormHasArea) {
@@ -1323,7 +1324,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         c.id === editingCallout.id
           ? {
               ...c,
-              name: calloutFormName.trim(),
+              name: sanitizedName,
               // Strictly preserve existing callout pin coordinates
               x: c.x,
               y: c.y,
@@ -1361,7 +1362,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     } else {
       const newCallout: Callout = {
         id: `callout_${Date.now()}`,
-        name: calloutFormName.trim(),
+        name: sanitizedName,
         x: effectiveX,
         y: effectiveY,
         zone: calloutFormZone,
@@ -2335,7 +2336,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       transform: `translate(${offX}px, ${offY}px) rotate(${callout.textRotation !== undefined ? callout.textRotation : (callout.rotation || 0)}deg)`,
                       transformOrigin: 'center center',
                     }}
-                    className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded font-bold tracking-tight whitespace-nowrap shadow-lg transition-transform shrink-0 z-30 ${
+                    className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded font-bold tracking-tight whitespace-nowrap text-center leading-tight shadow-lg transition-transform shrink-0 z-30 ${
                       isEditMode
                         ? 'cursor-grab active:cursor-grabbing bg-zinc-950 border border-sky-400 text-sky-200 ring-1 ring-sky-400/50'
                         : isSelected || isHighlighted
@@ -2343,7 +2344,15 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                         : 'bg-zinc-950/85 text-zinc-200 border border-zinc-700/80 group-hover:bg-zinc-900 group-hover:text-white'
                     }`}
                   >
-                    {callout.name}
+                    {callout.name.includes('\n') ? (
+                      callout.name.split('\n').slice(0, 2).map((line, idx) => (
+                        <div key={idx} className="whitespace-nowrap leading-tight">
+                          {line}
+                        </div>
+                      ))
+                    ) : (
+                      <span className="whitespace-nowrap">{callout.name}</span>
+                    )}
                   </div>
                 )}
 
@@ -3066,7 +3075,15 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       {getDangerBadge(selectedCallout.danger).label}
                     </span>
                   </div>
-                  <h2 className="text-xl font-black text-white">{selectedCallout.name}</h2>
+                  <h2 className="text-xl font-black text-white leading-tight">
+                    {selectedCallout.name.includes('\n') ? (
+                      selectedCallout.name.split('\n').slice(0, 2).map((l, i) => (
+                        <div key={i} className="whitespace-nowrap">{l}</div>
+                      ))
+                    ) : (
+                      <span className="whitespace-nowrap">{selectedCallout.name}</span>
+                    )}
+                  </h2>
                 </div>
                 <button
                   onClick={() => setSelectedCallout(null)}
@@ -3392,8 +3409,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
               <h3 className="text-base font-bold text-white">
                 {editingCallout
                   ? isDe
-                    ? `Callout bearbeiten: ${editingCallout.name}`
-                    : `Edit Callout: ${editingCallout.name}`
+                    ? `Callout bearbeiten: ${editingCallout.name.replace(/\n/g, ' ')}`
+                    : `Edit Callout: ${editingCallout.name.replace(/\n/g, ' ')}`
                   : isDe
                   ? 'Neuen Callout anlegen'
                   : 'Create New Callout'}
@@ -3411,18 +3428,32 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             </div>
 
             <form onSubmit={handleSaveCalloutForm} className="space-y-4 text-xs">
-              {/* Callout Name */}
+              {/* Callout Name (Strictly max 2 lines, 2nd line only shown upon pressing Enter) */}
               <div>
-                <label className="block text-xs font-semibold uppercase text-zinc-400 mb-1">
-                  {isDe ? 'Callout-Name (Englisch)' : 'Callout Name (English)'} *
-                </label>
-                <input
-                  type="text"
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold uppercase text-zinc-400">
+                    {isDe ? 'Callout-Name (Englisch)' : 'Callout Name (English)'} *
+                  </label>
+                  {calloutFormName.includes('\n') ? (
+                    <span className="text-[10px] font-mono text-amber-400 font-bold px-1.5 py-0.2 rounded bg-amber-500/10 border border-amber-500/30">
+                      2 / 2 {isDe ? 'Zeilen' : 'Lines'}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-mono text-zinc-500">
+                      {isDe ? 'Enter für 2. Zeile' : 'Enter for 2nd line'}
+                    </span>
+                  )}
+                </div>
+                <textarea
+                  rows={calloutFormName.includes('\n') ? 2 : 1}
                   required
-                  placeholder="z. B. Dark, Banana, Quad, Mirage Palace..."
+                  placeholder={isDe ? "z. B. Bridge, Banana, Quad..." : "e.g. Bridge, Banana, Quad..."}
                   value={calloutFormName}
                   onChange={(e) => {
-                    const val = e.target.value;
+                    const rawLines = e.target.value.split(/\r?\n/);
+                    // Strictly clamp to at most 2 lines (no 3rd line ever)
+                    const limitedLines = rawLines.slice(0, 2);
+                    const val = limitedLines.join('\n');
                     setCalloutFormName(val);
                     const lower = val.toLowerCase();
                     if (lower.includes('ct spawn') || lower === 'ct') {
@@ -3437,8 +3468,31 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       setCalloutFormHidePin(false);
                     }
                   }}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-700 bg-zinc-950 text-white focus:outline-hidden focus:border-zinc-400"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const hasSecondLine = calloutFormName.includes('\n');
+                      if (hasSecondLine && !e.ctrlKey && !e.metaKey) {
+                        // STRICTLY block any 3rd line from ever being created!
+                        e.preventDefault();
+                        return;
+                      }
+                      if (e.ctrlKey || e.metaKey) {
+                        e.preventDefault();
+                        handleSaveCalloutForm(e);
+                      }
+                    }
+                  }}
+                  className={`w-full px-3 py-2 text-sm rounded-lg border border-zinc-700 bg-zinc-950 text-white focus:outline-hidden focus:border-zinc-400 resize-none font-medium leading-snug transition-all duration-150 ${
+                    calloutFormName.includes('\n')
+                      ? 'h-[62px]'
+                      : 'h-[38px] overflow-hidden'
+                  }`}
                 />
+                <span className="text-[10px] text-zinc-500 font-mono mt-0.5 block">
+                  {calloutFormName.includes('\n')
+                    ? (isDe ? '✓ 2. Zeile aktiv (Keine 3. Zeile möglich) • Strg+Enter zum Speichern' : '✓ 2nd line active (No 3rd line allowed) • Ctrl+Enter to save')
+                    : (isDe ? 'Tipp: Drücke Enter, um eine 2. Zeile hinzuzufügen' : 'Tip: Press Enter to add a 2nd line')}
+                </span>
               </div>
 
               {/* DARSTELLUNG: TEXT ODER BILD (MIT FREIER GRÖßENWAHL & 1:1 TATSÄCHLICHER VORSCHAU) */}
@@ -3760,9 +3814,15 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                                   fontFamily: getFontFamilyStyle(calloutFormFontFamily),
                                   transform: `rotate(${calloutFormTextRotation}deg)`,
                                 }}
-                                className="mt-3 px-2 py-0.5 rounded bg-zinc-950/90 border border-zinc-700 text-white font-bold whitespace-nowrap shadow"
+                                className="mt-3 px-2 py-0.5 rounded bg-zinc-950/90 border border-zinc-700 text-white font-bold whitespace-nowrap text-center leading-tight shadow"
                               >
-                                {calloutFormName.trim() || 'Callout-Name'}
+                                {calloutFormName.includes('\n') ? (
+                                  calloutFormName.split('\n').slice(0, 2).map((l, i) => (
+                                    <div key={i} className="whitespace-nowrap leading-tight">{l || '\u00A0'}</div>
+                                  ))
+                                ) : (
+                                  <span>{calloutFormName.trim() || 'Callout-Name'}</span>
+                                )}
                               </div>
                             )}
                           </div>
@@ -3863,9 +3923,15 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                           fontSize: `${calloutFormFontSize}px`,
                           fontFamily: getFontFamilyStyle(calloutFormFontFamily),
                         }}
-                        className="relative z-20 px-2.5 py-1 rounded bg-zinc-950 border border-sky-400 text-sky-200 font-bold shadow-lg pointer-events-none whitespace-nowrap transition-transform duration-75"
+                        className="relative z-20 px-2.5 py-1 rounded bg-zinc-950 border border-sky-400 text-sky-200 font-bold shadow-lg pointer-events-none whitespace-nowrap text-center leading-tight transition-transform duration-75"
                       >
-                        {calloutFormName.trim() || 'Schriftfeld'}
+                        {calloutFormName.includes('\n') ? (
+                          calloutFormName.split('\n').slice(0, 2).map((l, i) => (
+                            <div key={i} className="whitespace-nowrap leading-tight">{l || '\u00A0'}</div>
+                          ))
+                        ) : (
+                          <span>{calloutFormName.trim() || 'Schriftfeld'}</span>
+                        )}
                       </div>
 
                       <span className="absolute bottom-1.5 right-2 text-[9px] font-mono text-zinc-500 pointer-events-none">
@@ -3984,16 +4050,22 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                 </div>
 
                 {/* Rotation preview */}
-                <div className="h-10 flex items-center justify-center bg-zinc-900 rounded-lg border border-zinc-800 overflow-hidden">
+                <div className="min-h-[44px] py-2 px-3 flex items-center justify-center bg-zinc-900 rounded-lg border border-zinc-800 overflow-hidden">
                   <div
                     style={{
                       transform: `rotate(${calloutFormTextRotation}deg)`,
                       fontSize: `${calloutFormFontSize}px`,
                       fontFamily: getFontFamilyStyle(calloutFormFontFamily),
                     }}
-                    className="px-2.5 py-1 rounded bg-zinc-950 border border-zinc-700 text-white font-bold transition-all"
+                    className="px-2.5 py-1 rounded bg-zinc-950 border border-zinc-700 text-white font-bold transition-all whitespace-nowrap text-center leading-tight"
                   >
-                    {calloutFormName.trim() || 'Vorschau-Callout'}
+                    {calloutFormName.includes('\n') ? (
+                      calloutFormName.split('\n').slice(0, 2).map((l, i) => (
+                        <div key={i} className="whitespace-nowrap leading-tight">{l || '\u00A0'}</div>
+                      ))
+                    ) : (
+                      <span>{calloutFormName.trim() || 'Vorschau-Callout'}</span>
+                    )}
                   </div>
                 </div>
               </div>

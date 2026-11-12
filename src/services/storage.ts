@@ -159,20 +159,14 @@ export function loadStoredMaps(): MapData[] {
     if (raw) {
       let parsed: MapData[] = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        // Update with INITIAL_MAPS (backup) versions to ensure all backup updates are active
-        parsed = parsed.map(m => {
-          const defaultVersion = initialMapMap.get(m.id);
-          if (defaultVersion) {
-            return defaultVersion;
-          }
-          return {
-            ...m,
-            image: m.image && m.image.startsWith('/') ? m.image.substring(1) : m.image,
-            lowerImage: m.lowerImage && m.lowerImage.startsWith('/') ? m.lowerImage.substring(1) : m.lowerImage
-          };
-        });
+        // Keep user's custom maps/edits from localStorage as-is, ensuring proper image path formatting
+        parsed = parsed.map(m => ({
+          ...m,
+          image: m.image && m.image.startsWith('/') ? m.image.substring(1) : m.image,
+          lowerImage: m.lowerImage && m.lowerImage.startsWith('/') ? m.lowerImage.substring(1) : m.lowerImage
+        }));
 
-        // Add any missing maps from INITIAL_MAPS
+        // Add any missing maps from INITIAL_MAPS (e.g. newly added standard maps)
         const existingIds = new Set(parsed.map(m => m.id));
         for (const defaultMap of INITIAL_MAPS) {
           if (!existingIds.has(defaultMap.id) && !deletedIds.has(defaultMap.id)) {
@@ -252,12 +246,6 @@ export function loadFavorites(): string[] {
   const defaultFavorites = INITIAL_SETTINGS.favorites || ['inferno', 'cache', 'ancient', 'dust2', 'nuke', 'train', 'anubis'];
   if (!isBrowser) return defaultFavorites;
   try {
-    const backupVer = localStorage.getItem('cs2freitag_fav_backup_ver');
-    if (backupVer !== 'backup_a1dc33ad_v2') {
-      localStorage.setItem('cs2freitag_fav_backup_ver', 'backup_a1dc33ad_v2');
-      saveFavorites(defaultFavorites);
-      return defaultFavorites;
-    }
     const raw = localStorage.getItem(STORAGE_KEYS.FAVORITES) || localStorage.getItem('cs2freitag_favorites_v5_backup');
     if (raw) {
       const parsed = JSON.parse(raw);

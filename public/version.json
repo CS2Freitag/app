@@ -1,20 +1,21 @@
 {
-  "version": "2.282",
+  "version": "2.286",
   "major": 2,
-  "patch": 282,
+  "patch": 286,
   "releaseDate": "2026-11-12",
-  "title": "Großes Update: Alle Neuerungen seit v2.178 im Überblick",
-  "description": "Umfassende Zusammenfassung aller Neuerungen und Highlights seit Version 2.178: Eigene Callout-Auswahl mit Schnellfilter, mobiles Layout ohne Icon-Überlagerungen, freies Bewegen von Callout-Namen, erweiterter Zoom & Skalierung sowie transparente Anzeige der installierten Version.",
+  "title": "Update: Standard-Karten aus backup.json aktualisiert",
+  "description": "Alle Standard-Karten und Callouts wurden auf den neuesten Stand aus backup.json aktualisiert. Enthält alle Highlights seit Version 2.178: 'Meine Callout Auswahl', mobile Layout-Optimierung, freies Bewegen von Callout-Namen, flexibler Zoom & Anzeige der installierten Version.",
   "changes": [
+    "Standard-Karten aktualisiert: Alle 28 Standard-Karten und Callouts wurden vollständig anhand der backup.json aktualisiert",
+    "Bugfix Callout-Namen: Leerzeichen führen nicht mehr zu unerwünschten Zeilenumbrüchen – bestehende Callouts bleiben exakt einzeilig",
+    "Zeilenumbruch nur bei Enter: Eine 2. Zeile entsteht ausschließlich dann, wenn in der Callout-Bearbeitung explizit Enter gedrückt wurde",
+    "Strikt maximal 2 Zeilen: Keine 3. Zeile möglich – das Eingabefeld klappt erst bei Enter dynamisch auf 2 Zeilen auf",
     "4. 'Meine Callout Auswahl': Eigene Callout-Auswahl pro Karte erstellen und per Schnellfilter-Button in der Kopfzeile umschalten",
     "Mobile Ansicht optimiert: 'Bearbeiten'-Button in die Werkzeugleiste verlegt – kein Überlappen mehr bei langen Kartennamen",
     "Callout-Bearbeitung: Callout-Namen/Labels lassen sich wieder unabhängig vom Zonenbereich verschieben",
     "Karten-Zoom erweitert: Freier Zoom-Bereich von 50% bis 250% (Desktop & Mobil)",
     "Schriftgrößen-Skalierung: Flexibel einstellbar von 50% bis 200% (Mobil: 50% bis 150%)",
     "Doppelklick-Reset: Schneller Doppelklick auf die Karte setzt Zoom und Schriftgröße gleichzeitig auf Standard zurück",
-    "Versions-Anzeige: Aktuell installierte Version wird oben rechts in den Einstellungen in Orange klar ausgewiesen",
-    "Bugfix Update-Prozess: Saubere In-App-Aktualisierung des Datenbestands ohne unerwünschte Dateidownloads",
-    "Kürzere Beschreibungen: Aufgeräumte und prägnante Texte im Bearbeitungsmodus",
-    "Neue Callouts: Zusätzliche Callouts auf der Karte Boulder hinzugefügt"
+    "Versions-Anzeige: Aktuell installierte Version wird oben rechts in den Einstellungen in Orange klar ausgewiesen"
   ]
 }
