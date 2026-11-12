@@ -40,8 +40,10 @@ import {
   ArrowUp,
   Share2,
   Plus,
-  ListFilter
+  ListFilter,
+  Volume2
 } from 'lucide-react';
+import { playTTS } from '../utils/tts';
 import {
   MapData,
   Callout,
@@ -3085,12 +3087,23 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                     )}
                   </h2>
                 </div>
-                <button
-                  onClick={() => setSelectedCallout(null)}
-                  className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                <div className="flex flex-col items-end gap-1.5 shrink-0 ml-2">
+                  <button
+                    onClick={() => setSelectedCallout(null)}
+                    className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer"
+                    title={isDe ? 'Schließen' : 'Close'}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => playTTS(selectedCallout.name)}
+                    className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-bold rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 transition-all cursor-pointer shadow-xs active:scale-95"
+                    title={isDe ? 'Callout-Name per Sprachausgabe (TTS) vorlesen' : 'Read callout name aloud (TTS)'}
+                  >
+                    <Volume2 className="w-3.5 h-3.5" />
+                    <span>{isDe ? 'Vorlesen' : 'Listen'}</span>
+                  </button>
+                </div>
               </div>
 
               <div className="mb-4">

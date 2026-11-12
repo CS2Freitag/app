@@ -17,8 +17,11 @@ import {
   Upload, 
   ArrowRight,
   RefreshCw,
-  FolderOpen
+  FolderOpen,
+  Image as ImageIcon,
+  Download
 } from 'lucide-react';
+import { generateTacticSheetPng } from '../utils/tacticSheetExport';
 import { Language, MapData, TacticalDrawingLine, UtilityMarker, PlayerToken } from '../types';
 
 interface ShareTacticModalProps {
@@ -55,6 +58,25 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [isExportingZip, setIsExportingZip] = useState(false);
+  const [isExportingPng, setIsExportingPng] = useState(false);
+
+  const handleExportPngSheet = async () => {
+    try {
+      setIsExportingPng(true);
+      const title = tacticName.trim() || defaultTitle || mapData.name;
+      const dataUrl = await generateTacticSheetPng(mapData, tacticState, title);
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      const safeName = title.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+      a.download = `CS2Freitag_${safeName}_TacticSheet.png`;
+      a.click();
+    } catch (err) {
+      console.error('PNG export error:', err);
+      alert(isDe ? 'Fehler beim Erstellen des Taktik-Bildes.' : 'Error generating tactic image.');
+    } finally {
+      setIsExportingPng(false);
+    }
+  };
 
   // Load / Import state
   const [manualCodeInput, setManualCodeInput] = useState('');
@@ -623,10 +645,36 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
               </p>
             </div>
 
-            {/* 4. Export as JSON or ZIP Section */}
+            {/* 4. Export Tactic Sheet as PNG Image (for Discord/Teams) */}
+            <div className="p-3.5 bg-zinc-950/80 rounded-xl border border-amber-500/40 space-y-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                <ImageIcon className="w-4 h-4 text-amber-400" />
+                <span>{isDe ? '4. Taktik-Sheet als PNG-Bild exportieren:' : '4. Export Tactic Sheet as PNG Image:'}</span>
+              </label>
+              <button
+                type="button"
+                onClick={handleExportPngSheet}
+                disabled={isExportingPng}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-black transition-all shadow-lg active:scale-[0.98] cursor-pointer disabled:opacity-50 uppercase tracking-wider"
+              >
+                <Download className="w-4 h-4" />
+                <span>
+                  {isExportingPng
+                    ? isDe ? 'Erstelle PNG-Bild...' : 'Generating PNG...'
+                    : isDe ? 'Taktik-Sheet als PNG herunterladen' : 'Download Tactic Sheet as PNG'}
+                </span>
+              </button>
+              <p className="text-[11px] text-zinc-400 leading-relaxed">
+                {isDe
+                  ? 'Generiert ein hochauflösendes Bild deiner Karte inklusive aller Callouts, Aufstellungen und Zeichnungen – perfekt zum Teilen auf Discord.'
+                  : 'Generates a high-res image of your map with all callouts, utilities & drawings – perfect for Discord.'}
+              </p>
+            </div>
+
+            {/* 5. Export as JSON or ZIP Section */}
             <div className="p-3.5 bg-zinc-950/80 rounded-xl border border-zinc-800">
               <label className="block text-xs font-semibold text-zinc-300 mb-2">
-                {isDe ? '4. Datei-Export (JSON oder ZIP-Archiv):' : '4. File Export (JSON or ZIP archive):'}
+                {isDe ? '5. Datei-Export (JSON oder ZIP-Archiv):' : '5. File Export (JSON or ZIP archive):'}
               </label>
               <div className="grid grid-cols-2 gap-2">
                 <button
