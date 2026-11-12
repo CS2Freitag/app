@@ -1,15 +1,15 @@
 {
-  "version": "2.288",
+  "version": "2.289",
   "major": 2,
-  "patch": 288,
+  "patch": 289,
   "releaseDate": "2026-11-12",
-  "title": "Update: Quiz-Modi, Taktik-PNG-Export & Audio-Ansagen",
-  "description": "Erweiterte Quiz-Spielmodi mit Radar-Klick-Trainer, Taktik-Sheet-Export als PNG (inkl. T/CT-Symbolen & Zeichnungen), englische Audio-Ansagen und UI-Optimierungen.",
+  "title": "Update: Gewinner-Animation, Quiz-Modi & Taktik-PNG-Export",
+  "description": "Kontinuierliche Gewinner-Animation (Stopp per Klick/Touch), erweiterte Quiz-Spielmodi mit Radar-Klick-Trainer, Taktik-PNG-Export und Audio-Ansagen.",
   "changes": [
+    "Gewinner-Animation: Läuft nach einem Quiz-Gewinn durchgehend und stoppt sofort bei jedem Klick/Touch irgendwo auf den Bildschirm",
     "Taktik-Sheet PNG-Export: Export-Button im Teilen-Menü generiert ein hochauflösendes PNG mit allen T/CT-Symbolen und Zeichnungen",
     "4 Quiz-Modi: Klassisch (10 Fr.), Kurze Runde (5 Fr.), Klick auf Karte (10 Fr.) und Klick auf Karte (5 Fr.)",
     "Direkter Quiz-Start: Quiz startet sofort beim Auswählen einer Karte",
-    "Englische Audio-Ansagen (TTS): Audio-Button in der Positionsbeschreibung & Mute-Speicherung für den Klick-auf-Karte Trainer",
-    "UI-Verfeinerung: Modus-Überschriften angepasst & aufgeräumt"
+    "Englische Audio-Ansagen (TTS): Audio-Button in der Positionsbeschreibung & Mute-Speicherung"
   ]
 }
