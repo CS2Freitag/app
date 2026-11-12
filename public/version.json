@@ -1,12 +1,20 @@
 {
-  "version": "2.178",
+  "version": "2.282",
   "major": 2,
-  "patch": 178,
-  "releaseDate": "2026-11-11",
-  "title": "Bugfix Callout-Editor & Unabhängiges Verschieben",
-  "description": "Positionsbeschreibung öffnet sich nicht mehr unerwünscht nach 'Fertig'. Callout-Name/Icon ist wieder unabhängig vom Zonenbereich verschiebbar.",
+  "patch": 282,
+  "releaseDate": "2026-11-12",
+  "title": "Großes Update: Alle Neuerungen seit v2.178 im Überblick",
+  "description": "Umfassende Zusammenfassung aller Neuerungen und Highlights seit Version 2.178: Eigene Callout-Auswahl mit Schnellfilter, mobiles Layout ohne Icon-Überlagerungen, freies Bewegen von Callout-Namen, erweiterter Zoom & Skalierung sowie transparente Anzeige der installierten Version.",
   "changes": [
-    "Bugfix: Positionsbeschreibung schließt zuverlässig und öffnet sich nicht mehr nach Klick auf 'Fertig'",
-    "Bugfix: Callout-Bezeichnung (Name/Icon) wieder unabhängig vom Zonenbereich verschiebbar (Zonenbereich nur über 4-Pfeile-Button)"
+    "4. 'Meine Callout Auswahl': Eigene Callout-Auswahl pro Karte erstellen und per Schnellfilter-Button in der Kopfzeile umschalten",
+    "Mobile Ansicht optimiert: 'Bearbeiten'-Button in die Werkzeugleiste verlegt – kein Überlappen mehr bei langen Kartennamen",
+    "Callout-Bearbeitung: Callout-Namen/Labels lassen sich wieder unabhängig vom Zonenbereich verschieben",
+    "Karten-Zoom erweitert: Freier Zoom-Bereich von 50% bis 250% (Desktop & Mobil)",
+    "Schriftgrößen-Skalierung: Flexibel einstellbar von 50% bis 200% (Mobil: 50% bis 150%)",
+    "Doppelklick-Reset: Schneller Doppelklick auf die Karte setzt Zoom und Schriftgröße gleichzeitig auf Standard zurück",
+    "Versions-Anzeige: Aktuell installierte Version wird oben rechts in den Einstellungen in Orange klar ausgewiesen",
+    "Bugfix Update-Prozess: Saubere In-App-Aktualisierung des Datenbestands ohne unerwünschte Dateidownloads",
+    "Kürzere Beschreibungen: Aufgeräumte und prägnante Texte im Bearbeitungsmodus",
+    "Neue Callouts: Zusätzliche Callouts auf der Karte Boulder hinzugefügt"
   ]
 }

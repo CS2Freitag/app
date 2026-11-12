@@ -447,7 +447,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {hasUpdate ? (
                     <>
                       <ArrowUpCircle className="w-3 h-3" />
-                      <span>{isDe ? `Update v${latestVersion} verfügbar` : `Update v${latestVersion} available`}</span>
+                      <span>{isDe ? `Version ${installedVersion} (Installiert)` : `Version ${installedVersion} (Installed)`}</span>
                     </>
                   ) : (
                     <>

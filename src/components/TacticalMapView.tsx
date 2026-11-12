@@ -39,7 +39,8 @@ import {
   PenTool,
   ArrowUp,
   Share2,
-  Plus
+  Plus,
+  ListFilter
 } from 'lucide-react';
 import {
   MapData,
@@ -189,6 +190,10 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const [mouseDownPos, setMouseDownPos] = useState<{ x: number; y: number } | null>(null);
   const [hasMovedDistance, setHasMovedDistance] = useState(false);
 
+  const [isMobileView, setIsMobileView] = useState<boolean>(() => {
+    return typeof window !== 'undefined' && window.innerWidth < 768;
+  });
+
   // Callout Label Size Scale: 0.6 (60%) on smartphones (<768px), 1.0 (100%) on tablets/PC
   const [calloutScale, setCalloutScale] = useState<number>(() => {
     if (typeof window !== 'undefined' && window.innerWidth < 768) {
@@ -197,12 +202,14 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     return 1.0; // 100% auf Tablets & PC
   });
 
-  // Keep 60% on smartphones and 100% on tablets/PC on screen resize if not explicitly changed
+  // Keep 60% on smartphones and 100% on tablets/PC on screen resize and clamp to mobile max (150%)
   useEffect(() => {
     const handleScaleResize = () => {
       if (typeof window === 'undefined') return;
-      if (window.innerWidth < 768) {
-        setCalloutScale((prev) => (prev === 1.0 ? 0.6 : prev));
+      const mobile = window.innerWidth < 768;
+      setIsMobileView(mobile);
+      if (mobile) {
+        setCalloutScale((prev) => (prev > 1.5 ? 1.5 : (prev === 1.0 ? 0.6 : prev)));
       } else {
         setCalloutScale((prev) => (prev === 0.6 ? 1.0 : prev));
       }
@@ -290,6 +297,23 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const [isEditOptionsModalOpen, setIsEditOptionsModalOpen] = useState<boolean>(false);
   const [singleEditCalloutId, setSingleEditCalloutId] = useState<string | null>(null);
   const [singleEditSearchQuery, setSingleEditSearchQuery] = useState<string>('');
+
+  // Meine Callout-Auswahl (Custom Selection) states per map
+  const [customSelectedCalloutIds, setCustomSelectedCalloutIds] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const stored = localStorage.getItem(`cs2_callout_selection_${mapData.id}`);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [isCustomSelectionActive, setIsCustomSelectionActive] = useState<boolean>(false);
+  const [isCustomSelectionModalOpen, setIsCustomSelectionModalOpen] = useState<boolean>(false);
+  const [tempSelectedCalloutIds, setTempSelectedCalloutIds] = useState<string[]>([]);
+  const [customSelectionTab, setCustomSelectionTab] = useState<'all' | 'selected'>('all');
+  const [customSelectionSearch, setCustomSelectionSearch] = useState<string>('');
+
   const [draggingCalloutId, setDraggingCalloutId] = useState<string | null>(null);
   const [draggedCoords, setDraggedCoords] = useState<{ x: number; y: number } | null>(null);
   const [calloutDragStart, setCalloutDragStart] = useState<{
@@ -414,7 +438,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
   const calculateFitZoom = () => {
     if (typeof window !== 'undefined' && window.innerWidth < 768) {
-      return currentLevel === 'both' ? 0.45 : 1.0;
+      return currentLevel === 'both' ? 0.5 : 1.0;
     }
     if (!mainWrapperRef.current) return 0.75;
     const parentRect = mainWrapperRef.current.getBoundingClientRect();
@@ -423,11 +447,11 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       const availH = Math.max(300, parentRect.height - 48);
       const scaleW = availW / 1750;
       const scaleH = availH / 850;
-      return Math.max(0.2, Math.min(1.2, Math.min(scaleW, scaleH) * 0.92));
+      return Math.max(0.5, Math.min(2.5, Math.min(scaleW, scaleH) * 0.92));
     }
     const availableSize = Math.min(parentRect.width - 40, parentRect.height - 40);
     // Based on max-w-[850px], reduced by 10%
-    return Math.max(0.3, Math.min(1.5, (availableSize / 850) * 0.9));
+    return Math.max(0.5, Math.min(2.5, (availableSize / 850) * 0.9));
   };
 
   // Auto-fit map zoom when switching maps or selecting floor level
@@ -467,6 +491,45 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       }
     }
   }, [initialHighlightedCalloutId, mapData.callouts]);
+
+  // Sync custom callout selection when map changes
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(`cs2_callout_selection_${mapData.id}`);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setCustomSelectedCalloutIds(Array.isArray(parsed) ? parsed : []);
+      } else {
+        setCustomSelectedCalloutIds([]);
+      }
+    } catch {
+      setCustomSelectedCalloutIds([]);
+    }
+    setIsCustomSelectionActive(false);
+  }, [mapData.id]);
+
+  const handleOpenCustomSelectionModal = () => {
+    setTempSelectedCalloutIds([...customSelectedCalloutIds]);
+    setCustomSelectionSearch('');
+    setCustomSelectionTab('all');
+    setIsEditOptionsModalOpen(false);
+    setIsCustomSelectionModalOpen(true);
+  };
+
+  const handleSaveCustomSelection = (newIds: string[], activateFilter = true) => {
+    setCustomSelectedCalloutIds(newIds);
+    try {
+      localStorage.setItem(`cs2_callout_selection_${mapData.id}`, JSON.stringify(newIds));
+    } catch {
+      // ignore
+    }
+    if (activateFilter && newIds.length > 0) {
+      setIsCustomSelectionActive(true);
+    } else if (newIds.length === 0) {
+      setIsCustomSelectionActive(false);
+    }
+    setIsCustomSelectionModalOpen(false);
+  };
 
   // Keyboard shortcut listener (Undo: Ctrl+Z, Redo: Ctrl+Y / Ctrl+Shift+Z)
   useEffect(() => {
@@ -919,7 +982,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       const t2 = e.touches[1];
       const currentDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
       const factor = currentDist / initialPinchDistRef.current;
-      const newZoom = Math.max(0.1, Math.min(2.0, initialPinchZoomRef.current * factor));
+      const newZoom = Math.max(0.5, Math.min(2.5, initialPinchZoomRef.current * factor));
       setZoom(Math.round(newZoom * 100) / 100);
     } else if (e.touches.length === 1) {
       if ((activeTool === 'pen' || activeTool === 'arrow' || activeTool === 'eraser' || currentDrawing) && e.cancelable) {
@@ -943,17 +1006,17 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     }
   };
 
-  // Wheel zoom (up to 200%)
+  // Wheel zoom (50% to 250%)
   const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? -0.05 : 0.05;
     setZoom((prev) => {
-      return Math.max(0.1, Math.min(2.0, Math.round((prev + delta) * 100) / 100));
+      return Math.max(0.5, Math.min(2.5, Math.round((prev + delta) * 100) / 100));
     });
   };
 
   const handleZoomChange = (newZoom: number) => {
-    const clamped = Math.max(0.1, Math.min(2.0, Math.round(newZoom * 100) / 100));
+    const clamped = Math.max(0.5, Math.min(2.5, Math.round(newZoom * 100) / 100));
     setZoom(clamped);
   };
 
@@ -1000,7 +1063,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     return { clientX: me.clientX, clientY: me.clientY };
   };
 
-  // Double click map to fit to screen size
+  // Double click map to fit to screen size & reset font size to default
   const handleMapDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
     if (target.closest('button') || target.closest('[data-no-map-click]')) {
@@ -1008,6 +1071,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     }
     setZoom(calculateFitZoom());
     setPan({ x: 0, y: 0 });
+    const defaultScale = typeof window !== 'undefined' && window.innerWidth < 768 ? 0.6 : 1.0;
+    setCalloutScale(defaultScale);
   };
 
   // Callout Pin Drag Start
@@ -1549,10 +1614,15 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     }
   };
 
-  // Filter callouts by zone or single-edit focus
+  // Filter callouts by zone, single-edit focus or custom selection
   const visibleCallouts = mapData.callouts.filter((c) => {
     if (singleEditCalloutId) {
       return c.id === singleEditCalloutId;
+    }
+    if (isCustomSelectionActive && customSelectedCalloutIds.length > 0) {
+      if (!customSelectedCalloutIds.includes(c.id)) {
+        return false;
+      }
     }
     if (selectedZoneFilter === 'all') return true;
     return c.zone === selectedZoneFilter;
@@ -2387,6 +2457,27 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           </button>
         </div>
       )}
+
+      {/* CUSTOM SELECTION ACTIVE BANNER */}
+      {isCustomSelectionActive && !movingAreaCalloutId && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-3 py-1.5 bg-indigo-950/90 border border-indigo-500/40 text-indigo-200 text-xs font-semibold rounded-full shadow-xl backdrop-blur-md animate-in fade-in duration-200">
+          <ListFilter className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+          <span>{isDe ? `Meine Auswahl: ${visibleCallouts.length} Callouts` : `My Selection: ${visibleCallouts.length} Callouts`}</span>
+          <button
+            onClick={handleOpenCustomSelectionModal}
+            className="ml-1 text-[11px] underline text-indigo-300 hover:text-white cursor-pointer"
+          >
+            {isDe ? 'Anpassen' : 'Edit'}
+          </button>
+          <button
+            onClick={() => setIsCustomSelectionActive(false)}
+            className="ml-1 p-0.5 text-indigo-400 hover:text-white rounded hover:bg-indigo-900/60 cursor-pointer"
+            title={isDe ? 'Filter ausschalten (Alle anzeigen)' : 'Disable filter'}
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      )}
       {/* 1. TOP HEADER BAR */}
       <div className="h-14 border-b border-zinc-800 bg-zinc-950/95 px-2 sm:px-4 flex items-center justify-between gap-2 shrink-0 backdrop-blur-md overflow-x-auto no-scrollbar print:hidden">
         {/* Left: Back & Title */}
@@ -2494,11 +2585,11 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           {/* VEREINHEITLICHTER TEILEN / EXPORT BUTTON */}
           <button
             onClick={handleShareTactics}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-lg border border-sky-500/40 bg-sky-950/60 hover:bg-sky-900/80 text-sky-300 hover:text-white transition-all shadow-xs cursor-pointer"
+            className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg border border-sky-500/40 bg-sky-950/60 hover:bg-sky-900/80 text-sky-300 hover:text-white transition-all shadow-xs cursor-pointer flex items-center gap-1.5 shrink-0"
             title={isDe ? 'Taktik / Karte teilen & exportieren (Link, QR, JSON, ZIP)' : 'Share & export tactic (Link, QR, JSON, ZIP)'}
           >
             <Share2 className="w-4 h-4 text-sky-400" />
-            <span className="text-xs font-bold hidden sm:inline">{isDe ? 'Teilen' : 'Share'}</span>
+            <span className="text-xs font-bold hidden md:inline">{isDe ? 'Teilen' : 'Share'}</span>
           </button>
 
           {/* COLOR MODE TOGGLE */}
@@ -2527,6 +2618,44 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             </button>
           </div>
 
+          {/* Meine Callout-Auswahl Button (Links neben ?) */}
+          <button
+            onClick={() => {
+              if (customSelectedCalloutIds.length === 0) {
+                handleOpenCustomSelectionModal();
+              } else {
+                setIsCustomSelectionActive(!isCustomSelectionActive);
+              }
+            }}
+            className={`relative p-1.5 sm:p-2 rounded-lg border transition-all cursor-pointer ${
+              isCustomSelectionActive
+                ? 'border-indigo-400 bg-indigo-500/25 text-indigo-300 ring-2 ring-indigo-400/40 shadow-sm'
+                : customSelectedCalloutIds.length > 0
+                ? 'border-zinc-800 bg-zinc-900 text-indigo-400 hover:text-white hover:border-zinc-700'
+                : 'border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800'
+            }`}
+            title={
+              customSelectedCalloutIds.length === 0
+                ? (isDe ? 'Meine Callout-Auswahl erstellen' : 'Create Custom Callout Selection')
+                : isCustomSelectionActive
+                ? (isDe ? `Meine Auswahl aktiv (${customSelectedCalloutIds.length}) – Klicken für alle Callouts` : `Custom Selection active (${customSelectedCalloutIds.length}) – Click for all`)
+                : (isDe ? `Nur Meine Auswahl anzeigen (${customSelectedCalloutIds.length} Callouts)` : `Show only my selection (${customSelectedCalloutIds.length})`)
+            }
+          >
+            <ListFilter className="w-4 h-4" />
+            {customSelectedCalloutIds.length > 0 && (
+              <span
+                className={`absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 text-[9px] font-bold rounded-full flex items-center justify-center leading-none ${
+                  isCustomSelectionActive
+                    ? 'bg-indigo-500 text-white shadow-xs'
+                    : 'bg-zinc-700 text-zinc-200'
+                }`}
+              >
+                {customSelectedCalloutIds.length}
+              </span>
+            )}
+          </button>
+
           {/* Legend */}
           <button
             onClick={() => setShowLegend(!showLegend)}
@@ -2540,43 +2669,11 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             <HelpCircle className="w-4 h-4 text-amber-400" />
           </button>
 
-          {/* Bearbeiten Haupt-Button */}
-          <button
-            onClick={() => {
-              if (isEditMode || singleEditCalloutId) {
-                setIsEditMode(false);
-                setSingleEditCalloutId(null);
-                setSelectedCallout(null);
-                setHighlightedCalloutId(undefined);
-                setMovingAreaCalloutId(null);
-              } else {
-                setIsEditOptionsModalOpen(true);
-              }
-            }}
-            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-xs font-bold rounded-lg border transition-all cursor-pointer ${
-              isEditMode || singleEditCalloutId
-                ? 'border-amber-400 bg-amber-400 text-zinc-950 shadow-md ring-2 ring-amber-400/30'
-                : 'border-zinc-800 bg-zinc-900 text-zinc-200 hover:text-white hover:bg-zinc-800'
-            }`}
-            title={isDe ? 'Bearbeiten-Optionen (+Neu, Einzel-Bearbeitung, Alles Bearbeiten)' : 'Edit Options'}
-          >
-            {isEditMode || singleEditCalloutId ? (
-              <>
-                <Check className="w-3.5 h-3.5" />
-                <span>{isDe ? 'Fertig' : 'Done'}</span>
-              </>
-            ) : (
-              <>
-                <Move className="w-3.5 h-3.5 text-amber-400" />
-                <span>{isDe ? 'Bearbeiten' : 'Edit'}</span>
-              </>
-            )}
-          </button>
-
           {/* Fullscreen */}
           <button
             onClick={toggleFullscreen}
-            className="p-1.5 sm:p-2 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-white hidden sm:block"
+            className="p-1.5 sm:p-2 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-white hidden sm:block cursor-pointer"
+            title={isDe ? 'Vollbild' : 'Fullscreen'}
           >
             {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </button>
@@ -2727,6 +2824,41 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
               </button>
             )}
           </div>
+        </div>
+
+        {/* Right side of tactical toolbar: Bearbeiten / Fertig */}
+        <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+          <button
+            onClick={() => {
+              if (isEditMode || singleEditCalloutId) {
+                setIsEditMode(false);
+                setSingleEditCalloutId(null);
+                setSelectedCallout(null);
+                setHighlightedCalloutId(undefined);
+                setMovingAreaCalloutId(null);
+              } else {
+                setIsEditOptionsModalOpen(true);
+              }
+            }}
+            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-bold rounded-lg border transition-all cursor-pointer shadow-xs ${
+              isEditMode || singleEditCalloutId
+                ? 'border-amber-400 bg-amber-400 text-zinc-950 shadow-md ring-2 ring-amber-400/30'
+                : 'border-zinc-700/80 bg-zinc-800 text-zinc-200 hover:text-white hover:bg-zinc-700'
+            }`}
+            title={isDe ? 'Bearbeiten-Optionen (+Neu, Einzel-Bearbeitung, Meine Auswahl)' : 'Edit Options'}
+          >
+            {isEditMode || singleEditCalloutId ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-zinc-950 stroke-[3]" />
+                <span>{isDe ? 'Fertig' : 'Done'}</span>
+              </>
+            ) : (
+              <>
+                <Move className="w-3.5 h-3.5 text-amber-400" />
+                <span>{isDe ? 'Bearbeiten' : 'Edit'}</span>
+              </>
+            )}
+          </button>
         </div>
       </div>
 
@@ -3021,7 +3153,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           <div className="flex items-center gap-1.5 px-2 py-0.5 bg-zinc-900 rounded-lg border border-zinc-800">
             <Type className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
             <button
-              onClick={() => setCalloutScale((prev) => Math.max(0.2, Math.round((prev - 0.05) * 100) / 100))}
+              onClick={() => setCalloutScale((prev) => Math.max(0.5, Math.round((prev - 0.05) * 100) / 100))}
               className="px-1 py-0.5 rounded text-[10px] font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
               title={isDe ? 'Beschriftung verkleinern (-5%)' : 'Decrease text size (-5%)'}
             >
@@ -3029,16 +3161,22 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             </button>
             <input
               type="range"
-              min="20"
-              max="200"
+              min="50"
+              max={isMobileView ? "150" : "200"}
               step="1"
               value={Math.round(calloutScale * 100)}
-              onChange={(e) => setCalloutScale(Number(e.target.value) / 100)}
+              onChange={(e) => {
+                const maxVal = isMobileView ? 1.5 : 2.0;
+                setCalloutScale(Math.max(0.5, Math.min(maxVal, Number(e.target.value) / 100)));
+              }}
               className="w-20 accent-zinc-100 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
               title={`${Math.round(calloutScale * 100)}%`}
             />
             <button
-              onClick={() => setCalloutScale((prev) => Math.min(2.0, Math.round((prev + 0.05) * 100) / 100))}
+              onClick={() => {
+                const maxVal = isMobileView ? 1.5 : 2.0;
+                setCalloutScale((prev) => Math.min(maxVal, Math.round((prev + 0.05) * 100) / 100));
+              }}
               className="px-1 py-0.5 rounded text-[10px] font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
               title={isDe ? 'Beschriftung vergrößern (+5%)' : 'Increase text size (+5%)'}
             >
@@ -3077,8 +3215,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             </button>
             <input
               type="range"
-              min="10"
-              max="200"
+              min="50"
+              max="250"
               step="1"
               value={Math.round(zoom * 100)}
               onChange={(e) => handleZoomChange(Number(e.target.value) / 100)}
@@ -3097,11 +3235,13 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             </span>
             <button
               onClick={() => {
-                setZoom(isFullscreen ? 1.0 : 0.75);
+                setZoom(calculateFitZoom());
                 setPan({ x: 0, y: 0 });
+                const defaultScale = typeof window !== 'undefined' && window.innerWidth < 768 ? 0.6 : 1.0;
+                setCalloutScale(defaultScale);
               }}
               className="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded bg-zinc-800 hover:bg-zinc-700 text-amber-300 ml-1 border border-zinc-700"
-              title={isDe ? 'Zoom auf Standard zurücksetzen (75%)' : 'Reset zoom to fit (75%)'}
+              title={isDe ? 'Zoom & Schriftgröße auf Standard zurücksetzen' : 'Reset zoom and font to fit'}
             >
               Fit
             </button>
@@ -4499,8 +4639,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                   </div>
                   <p className="text-xs text-zinc-400 leading-relaxed">
                     {isDe
-                      ? 'Schaltet alle Callouts auf der Karte gleichzeitig interaktiv frei. Verschiebe Pins, erstelle Bereiche & rotiere Labels.'
-                      : 'Unlocks all callouts on the map simultaneously for interactive dragging and area resizing.'}
+                      ? 'Schaltet alle Callouts auf der Karte in den Bearbeitungsmodus.'
+                      : 'Switches all callouts on the map into edit mode.'}
                   </p>
                 </div>
               </button>
@@ -4517,8 +4657,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                     </span>
                     <p className="text-xs text-zinc-400 leading-relaxed">
                       {isDe
-                        ? 'Wähle ein bestimmtes Callout aus. Alle anderen Callouts werden ausgeblendet, damit du ungestört arbeiten kannst.'
-                        : 'Focus on a single callout. All other callouts will be hidden for distortion-free editing.'}
+                        ? 'Wähle ein Callout aus. Alle anderen werden ausgeblendet.'
+                        : 'Select a callout. All others will be hidden.'}
                     </p>
                   </div>
                 </div>
@@ -4603,11 +4743,373 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                   </div>
                   <p className="text-xs text-zinc-400 leading-relaxed">
                     {isDe
-                      ? 'Füge einen völlig neuen Ort, Bombenplatz-Bereich oder Callout-Punkt zu dieser Karte hinzu.'
-                      : 'Create a brand new callout point or custom area on this map.'}
+                      ? 'Füge ein neuen Callout / Bereich auf der Karte hinzu.'
+                      : 'Add a new callout / area to the map.'}
                   </p>
                 </div>
               </button>
+
+              {/* OPTION 4: MEINE CALLOUT AUSWAHL */}
+              <button
+                type="button"
+                onClick={handleOpenCustomSelectionModal}
+                className="w-full text-left p-4 rounded-xl bg-zinc-950/80 hover:bg-zinc-800/80 border border-zinc-800 hover:border-indigo-500/60 transition-all group cursor-pointer flex items-start gap-3.5"
+              >
+                <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 group-hover:scale-105 transition-transform shrink-0">
+                  <ListFilter className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="font-extrabold text-sm text-white group-hover:text-indigo-300 transition-colors">
+                      {isDe ? '4. Meine Callout Auswahl' : '4. My Callout Selection'}
+                    </span>
+                    <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
+                      {customSelectedCalloutIds.length > 0
+                        ? `${customSelectedCalloutIds.length} ausgewählt`
+                        : (isDe ? 'Auswahl' : 'Select')}
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-400 leading-relaxed">
+                    {isDe
+                      ? 'Wähle aus welche Callouts du angezeigt haben möchtest.'
+                      : 'Choose which callouts you want to display.'}
+                  </p>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MEINE CALLOUT AUSWAHL MODAL (DESKTOP SPLIT VIEW & MOBILE TABS) */}
+      {isCustomSelectionModalOpen && (
+        <div
+          data-no-map-click="true"
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/85 backdrop-blur-sm p-2 sm:p-4 animate-in fade-in duration-150 overflow-y-auto"
+          onClick={() => setIsCustomSelectionModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-4xl bg-zinc-900 border border-zinc-700/80 rounded-2xl p-4 sm:p-6 shadow-2xl text-zinc-100 relative my-auto max-h-[92vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-start justify-between pb-3 border-b border-zinc-800 mb-3 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 shrink-0">
+                  <ListFilter className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+                    <span>{isDe ? 'Meine Callout Auswahl' : 'My Callout Selection'}</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
+                      {tempSelectedCalloutIds.length} / {mapData.callouts.length}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-zinc-400">
+                    {isDe
+                      ? 'Wähle aus welche Callouts du angezeigt haben möchtest.'
+                      : 'Choose which callouts you want to display on this map.'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCustomSelectionModalOpen(false)}
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Mobile Tab Switcher (< md screens) */}
+            <div className="flex md:hidden items-center p-1 rounded-xl bg-zinc-950 border border-zinc-800 mb-3 gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => setCustomSelectionTab('all')}
+                className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  customSelectionTab === 'all'
+                    ? 'bg-zinc-800 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <span>{isDe ? 'Alle Callouts' : 'All Callouts'}</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-900 text-zinc-300 font-mono">
+                  {mapData.callouts.length}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCustomSelectionTab('selected')}
+                className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  customSelectionTab === 'selected'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <span>{isDe ? 'Meine Auswahl' : 'My Selection'}</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold ${
+                    tempSelectedCalloutIds.length > 0 ? 'bg-white text-indigo-900' : 'bg-zinc-900 text-zinc-400'
+                  }`}
+                >
+                  {tempSelectedCalloutIds.length}
+                </span>
+              </button>
+            </div>
+
+            {/* Main Selection Area: Responsive 2-column or tabbed view */}
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full">
+                {/* LEFT COLUMN: ALLE CALLOUTS (links bleiben immer alle erhalten) */}
+                <div
+                  className={`flex flex-col bg-zinc-950/70 border border-zinc-800/80 rounded-xl p-3 sm:p-3.5 ${
+                    customSelectionTab !== 'all' ? 'hidden md:flex' : 'flex'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-zinc-800 shrink-0">
+                    <div>
+                      <span className="text-xs font-extrabold uppercase tracking-wider text-zinc-200">
+                        {isDe ? 'Alle Callouts' : 'All Callouts'}
+                      </span>
+                      <span className="ml-1.5 text-[10px] font-mono text-zinc-500">
+                        ({mapData.callouts.length})
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const allIds = mapData.callouts.map((c) => c.id);
+                          setTempSelectedCalloutIds(allIds);
+                        }}
+                        className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer"
+                      >
+                        {isDe ? 'Alle hinzufügen' : 'Add all'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Search filter for all callouts */}
+                  <div className="relative mb-2.5 shrink-0">
+                    <input
+                      type="text"
+                      value={customSelectionSearch}
+                      onChange={(e) => setCustomSelectionSearch(e.target.value)}
+                      placeholder={isDe ? 'Callouts durchsuchen...' : 'Search callouts...'}
+                      className="w-full bg-zinc-900 border border-zinc-700/80 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-indigo-400"
+                    />
+                    <Crosshair className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-2.5" />
+                    {customSelectionSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setCustomSelectionSearch('')}
+                        className="absolute right-2.5 top-2 text-zinc-400 hover:text-white"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Scrollable list of all callouts */}
+                  <div className="flex-1 overflow-y-auto max-h-[46vh] sm:max-h-[50vh] space-y-1.5 pr-1">
+                    {mapData.callouts
+                      .filter(
+                        (c) =>
+                          c.name.toLowerCase().includes(customSelectionSearch.toLowerCase()) ||
+                          c.zone.toLowerCase().includes(customSelectionSearch.toLowerCase())
+                      )
+                      .map((c) => {
+                        const isAdded = tempSelectedCalloutIds.includes(c.id);
+                        return (
+                          <div
+                            key={c.id}
+                            onClick={() => {
+                              if (isAdded) {
+                                setTempSelectedCalloutIds((prev) => prev.filter((id) => id !== c.id));
+                              } else {
+                                setTempSelectedCalloutIds((prev) => [...prev, c.id]);
+                              }
+                            }}
+                            className={`flex items-center justify-between p-2 sm:p-2.5 rounded-xl border transition-all cursor-pointer ${
+                              isAdded
+                                ? 'bg-indigo-950/40 border-indigo-500/50 text-indigo-100 hover:bg-indigo-950/60'
+                                : 'bg-zinc-900/80 border-zinc-800 text-zinc-200 hover:bg-zinc-850 hover:border-zinc-700'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 truncate">
+                              <span
+                                className={`w-2 h-2 rounded-full shrink-0 ${
+                                  isAdded ? 'bg-indigo-400 ring-2 ring-indigo-400/30' : 'bg-zinc-600'
+                                }`}
+                              />
+                              <div className="truncate">
+                                <span className="text-xs font-bold block truncate">{c.name}</span>
+                                <span
+                                  className={`text-[9px] font-mono px-1 py-0.2 rounded border uppercase ${getZoneBadgeColor(
+                                    c.zone
+                                  )}`}
+                                >
+                                  {c.zone.replace('_', ' ')}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="shrink-0 ml-2">
+                              {isAdded ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setTempSelectedCalloutIds((prev) => prev.filter((id) => id !== c.id));
+                                  }}
+                                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[11px] font-bold hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/40 transition-colors"
+                                  title={isDe ? 'Aus Auswahl entfernen' : 'Remove from selection'}
+                                >
+                                  <Check className="w-3 h-3" />
+                                  <span>{isDe ? 'Ausgewählt' : 'Selected'}</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setTempSelectedCalloutIds((prev) => [...prev, c.id]);
+                                  }}
+                                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-zinc-800 hover:bg-indigo-600 text-zinc-300 hover:text-white transition-colors text-[11px] font-semibold cursor-pointer"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                  <span>{isDe ? 'Hinzufügen' : 'Add'}</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                    {mapData.callouts.filter(
+                      (c) =>
+                        c.name.toLowerCase().includes(customSelectionSearch.toLowerCase()) ||
+                        c.zone.toLowerCase().includes(customSelectionSearch.toLowerCase())
+                    ).length === 0 && (
+                      <div className="p-4 text-center text-xs text-zinc-500">
+                        {isDe ? 'Kein Callout gefunden.' : 'No callout found.'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* RIGHT COLUMN: MEINE AUSWAHL */}
+                <div
+                  className={`flex flex-col bg-zinc-950/70 border border-indigo-900/40 rounded-xl p-3 sm:p-3.5 ${
+                    customSelectionTab !== 'selected' ? 'hidden md:flex' : 'flex'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-zinc-800 shrink-0">
+                    <div className="flex items-center gap-1.5">
+                      <ListFilter className="w-3.5 h-3.5 text-indigo-400" />
+                      <span className="text-xs font-extrabold uppercase tracking-wider text-indigo-300">
+                        {isDe ? 'Meine Auswahl' : 'My Selection'}
+                      </span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                        {tempSelectedCalloutIds.length}
+                      </span>
+                    </div>
+                    {tempSelectedCalloutIds.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setTempSelectedCalloutIds([])}
+                        className="text-[11px] font-semibold text-red-400 hover:text-red-300 transition-colors cursor-pointer"
+                      >
+                        {isDe ? 'Alle entfernen' : 'Clear all'}
+                      </button>
+                    )}
+                  </div>
+
+                  {tempSelectedCalloutIds.length === 0 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center text-center p-6 rounded-xl border border-dashed border-zinc-800 bg-zinc-950/40 text-zinc-500 min-h-[200px]">
+                      <ListFilter className="w-8 h-8 text-zinc-600 mb-2 stroke-[1.5]" />
+                      <p className="text-xs font-bold text-zinc-300 mb-1">
+                        {isDe ? 'Noch keine Callouts in deiner Auswahl' : 'No callouts selected yet'}
+                      </p>
+                      <p className="text-[11px] text-zinc-400 max-w-xs mb-3">
+                        {isDe
+                          ? 'Klicke auf Callouts aus der linken Liste, um sie zu deiner eigenen Anzeige hinzuzufügen.'
+                          : 'Click callouts from the left list to add them to your custom display.'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const allIds = mapData.callouts.map((c) => c.id);
+                          setTempSelectedCalloutIds(allIds);
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/50 text-indigo-200 text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        {isDe ? 'Alle Callouts übernehmen' : 'Add all callouts'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex-1 overflow-y-auto max-h-[50vh] sm:max-h-[55vh] space-y-1.5 pr-1">
+                      {tempSelectedCalloutIds.map((id) => {
+                        const callout = mapData.callouts.find((c) => c.id === id);
+                        if (!callout) return null;
+                        return (
+                          <div
+                            key={id}
+                            className="flex items-center justify-between p-2 sm:p-2.5 rounded-xl bg-zinc-900/90 border border-indigo-500/30 text-zinc-100 hover:border-indigo-400 transition-all"
+                          >
+                            <div className="flex items-center gap-2 truncate">
+                              <span className="text-xs font-bold truncate">{callout.name}</span>
+                              <span
+                                className={`text-[9px] font-mono px-1 py-0.2 rounded border uppercase ${getZoneBadgeColor(
+                                  callout.zone
+                                )}`}
+                              >
+                                {callout.zone.replace('_', ' ')}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setTempSelectedCalloutIds((prev) => prev.filter((item) => item !== id))}
+                              className="p-1 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
+                              title={isDe ? 'Entfernen' : 'Remove'}
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="pt-3.5 border-t border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-3 mt-3 shrink-0">
+              <div className="text-xs text-zinc-400 w-full sm:w-auto text-center sm:text-left">
+                <span className="font-extrabold text-white">{tempSelectedCalloutIds.length}</span>{' '}
+                {isDe
+                  ? `von ${mapData.callouts.length} Callouts in deiner Auswahl`
+                  : `of ${mapData.callouts.length} callouts selected`}
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <button
+                  type="button"
+                  onClick={() => setIsCustomSelectionModalOpen(false)}
+                  className="flex-1 sm:flex-none px-4 py-2 text-xs font-semibold rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors cursor-pointer"
+                >
+                  {isDe ? 'Abbrechen' : 'Cancel'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveCustomSelection(tempSelectedCalloutIds, true)}
+                  className="flex-1 sm:flex-none px-4 py-2 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{isDe ? 'Auswahl anwenden & anzeigen' : 'Apply & Show Selection'}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

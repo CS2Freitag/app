@@ -72,7 +72,7 @@ export const Header: React.FC<HeaderProps> = ({
     : 'border-emerald-500/50 bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 shadow-[0_0_8px_rgba(52,211,153,0.25)]';
 
   const versionTooltip = curHasUpdate
-    ? (isDe ? `Neues Update verfügbar: v${curLatestVersion} (Klicken zum Aktualisieren)` : `New update available: v${curLatestVersion} (Click to update)`)
+    ? (isDe ? `Neues Update verfügbar: v${curLatestVersion} (Installiert: v${curInstalledVersion})` : `New update available: v${curLatestVersion} (Installed: v${curInstalledVersion})`)
     : (isDe ? `App-Version: v${curInstalledVersion} (Aktuell)` : `App Version: v${curInstalledVersion} (Up to date)`);
 
   // Close tooltip on outside click or escape key
