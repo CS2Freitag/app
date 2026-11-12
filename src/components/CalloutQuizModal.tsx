@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { MapData, Callout, Language } from '../types';
 import {
   Gamepad2,
@@ -105,12 +105,12 @@ export const CalloutQuizModal: React.FC<CalloutQuizModalProps> = ({
   // Confetti interval reference for click-anywhere dismissal
   const confettiIntervalRef = useRef<any>(null);
 
-  const stopConfetti = () => {
+  const stopConfetti = useCallback(() => {
     if (confettiIntervalRef.current) {
       clearInterval(confettiIntervalRef.current);
       confettiIntervalRef.current = null;
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (eligibleMaps.length > 0 && !selectedMapId) {
@@ -118,28 +118,33 @@ export const CalloutQuizModal: React.FC<CalloutQuizModalProps> = ({
     }
   }, [eligibleMaps, selectedMapId]);
 
-  // Perfect / High Score Celebration (Confetti)
+  // High Score Celebration (Confetti): Runs continuously until user clicks anywhere on screen
   useEffect(() => {
     if (isFinished && score > 0 && score >= Math.ceil(questions.length * 0.7)) {
-      const duration = 6 * 1000;
-      const animationEnd = Date.now() + duration;
       const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 100 };
       const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
 
+      // Continuous bursts until stopped
       confettiIntervalRef.current = setInterval(() => {
-        const timeLeft = animationEnd - Date.now();
-        if (timeLeft <= 0) {
-          stopConfetti();
-          return;
-        }
-        const particleCount = 40 * (timeLeft / duration);
-        confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
-        confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
-      }, 300);
+        confetti({ ...defaults, particleCount: 30, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
+        confetti({ ...defaults, particleCount: 30, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
+      }, 350);
 
-      return () => stopConfetti();
+      const handleGlobalInteraction = () => {
+        stopConfetti();
+      };
+
+      // Listen on window for capture phase to stop animation on any click/tap/button press anywhere on screen
+      window.addEventListener('click', handleGlobalInteraction, { capture: true, once: true });
+      window.addEventListener('pointerdown', handleGlobalInteraction, { capture: true, once: true });
+
+      return () => {
+        stopConfetti();
+        window.removeEventListener('click', handleGlobalInteraction, { capture: true });
+        window.removeEventListener('pointerdown', handleGlobalInteraction, { capture: true });
+      };
     }
-  }, [isFinished, score, questions.length]);
+  }, [isFinished, score, questions.length, stopConfetti]);
 
   const handleClose = () => {
     stopConfetti();
