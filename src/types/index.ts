@@ -67,6 +67,9 @@ export interface TacticSnapshot {
   label: string;
   changedCount: number;
   callouts: Callout[];
+  drawings?: TacticalDrawingLine[];
+  utilities?: UtilityMarker[];
+  players?: PlayerToken[];
 }
 
 export interface TacticalState {

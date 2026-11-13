@@ -61,6 +61,9 @@ import {
 import { UtilitySymbol, UTILITY_META } from './UtilitySymbol';
 import { TacticalLayersPanel } from './TacticalLayersPanel';
 import { TacticalHistoryPanel } from './TacticalHistoryPanel';
+import { HelpDocsModal } from './HelpDocsModal';
+import { CustomColorModal } from './CustomColorModal';
+import { TacticPreviewModal } from './TacticPreviewModal';
 import {
   MapData,
   Callout,
@@ -263,8 +266,13 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   // Toggle TotalCSGO-style areas overlay
   const [showAreas, setShowAreas] = useState<boolean>(true);
 
-  // Color Legend Modal/Panel
+  // Color Legend Modal/Panel & Help Guides Modal
   const [showLegend, setShowLegend] = useState<boolean>(false);
+  const [isHelpDocsOpen, setIsHelpDocsOpen] = useState<boolean>(false);
+  const [isCustomColorModalOpen, setIsCustomColorModalOpen] = useState<boolean>(false);
+  const [customColorTarget, setCustomColorTarget] = useState<'pen' | 'selection'>('pen');
+  const [isTacticPreviewOpen, setIsTacticPreviewOpen] = useState<boolean>(false);
+  const [previewSnapshot, setPreviewSnapshot] = useState<TacticSnapshot | null>(null);
 
   // Tactical tools
   const [activeTool, setActiveTool] = useState<TacticalTool>('select');
@@ -350,7 +358,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const [mobileSheetTab, setMobileSheetTab] = useState<'layers' | 'history'>('layers');
   const [isHistoryExpanded, setIsHistoryExpanded] = useState<boolean>(false);
 
-  // Map Version History Snapshots (max 3 saved versions per map in localStorage — map callouts & areas only)
+  // Map Version History Snapshots (max 5 saved versions per map in localStorage — callouts, areas, drawings, utilities & players)
   const [snapshots, setSnapshots] = useState<TacticSnapshot[]>(() => {
     if (typeof window === 'undefined') return [];
     try {
@@ -358,7 +366,24 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
-          const valid = parsed.filter((s) => s && Array.isArray(s.callouts)).slice(0, 3);
+          const valid = parsed
+            .filter((s) => s && Array.isArray(s.callouts))
+            .map((s) => ({
+              ...s,
+              drawings:
+                Array.isArray(s.drawings) && s.drawings.length > 0
+                  ? s.drawings
+                  : mapData.tacticData?.drawings || [],
+              utilities:
+                Array.isArray(s.utilities) && s.utilities.length > 0
+                  ? s.utilities
+                  : mapData.tacticData?.utilities || [],
+              players:
+                Array.isArray(s.players) && s.players.length > 0
+                  ? s.players
+                  : mapData.tacticData?.players || [],
+            }))
+            .slice(0, 5);
           if (valid.length > 0) return valid;
         }
       }
@@ -372,14 +397,17 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         label: isDe ? 'Ausgangsversion' : 'Initial map',
         changedCount: mapData.callouts.length,
         callouts: JSON.parse(JSON.stringify(mapData.callouts)),
+        drawings: JSON.parse(JSON.stringify(mapData.tacticData?.drawings || [])),
+        utilities: JSON.parse(JSON.stringify(mapData.tacticData?.utilities || [])),
+        players: JSON.parse(JSON.stringify(mapData.tacticData?.players || [])),
       },
     ];
   });
 
-  // Sync map history updates cleanly (keeps max 3 versions in localStorage)
+  // Sync map history updates cleanly (keeps max 5 versions in localStorage)
   useEffect(() => {
     try {
-      localStorage.setItem(`cs2_map_history_${mapData.id}`, JSON.stringify(snapshots.slice(0, 3)));
+      localStorage.setItem(`cs2_map_history_${mapData.id}`, JSON.stringify(snapshots.slice(0, 5)));
     } catch {
       // ignore
     }
@@ -685,8 +713,17 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     (customLabel?: string, overrideCallouts?: Callout[]) => {
       const targetCallouts = overrideCallouts || mapData.callouts;
       const serialized = JSON.stringify(targetCallouts);
+      const serializedDrawings = JSON.stringify(drawings);
+      const serializedUtilities = JSON.stringify(utilities);
+      const serializedPlayers = JSON.stringify(players);
       setSnapshots((prev) => {
-        if (prev.length > 0 && JSON.stringify(prev[0].callouts) === serialized) {
+        if (
+          prev.length > 0 &&
+          JSON.stringify(prev[0].callouts) === serialized &&
+          JSON.stringify(prev[0].drawings ?? []) === serializedDrawings &&
+          JSON.stringify(prev[0].utilities ?? []) === serializedUtilities &&
+          JSON.stringify(prev[0].players ?? []) === serializedPlayers
+        ) {
           return prev;
         }
         const areaCount = targetCallouts.filter((c) => Boolean(c.area)).length;
@@ -698,36 +735,72 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             `${mapData.name} ${isDe ? 'gesichert' : 'saved'} (${targetCallouts.length} / ${areaCount})`,
           changedCount: targetCallouts.length,
           callouts: JSON.parse(serialized),
+          drawings: JSON.parse(serializedDrawings),
+          utilities: JSON.parse(serializedUtilities),
+          players: JSON.parse(serializedPlayers),
         };
-        return [newSnap, ...prev].slice(0, 3);
+        return [newSnap, ...prev].slice(0, 5);
       });
     },
-    [mapData.callouts, mapData.name, isDe]
+    [mapData.callouts, mapData.name, isDe, drawings, utilities, players]
   );
 
   const handleRestoreSnapshot = useCallback(
     (snap: TacticSnapshot) => {
       const currentSerialized = JSON.stringify(mapData.callouts);
       const targetSerialized = JSON.stringify(snap.callouts || []);
-      if (currentSerialized !== targetSerialized) {
+      const currentDrawingsStr = JSON.stringify(drawings);
+      const currentUtilsStr = JSON.stringify(utilities);
+      const currentPlayersStr = JSON.stringify(players);
+      if (
+        currentSerialized !== targetSerialized ||
+        (snap.drawings && currentDrawingsStr !== JSON.stringify(snap.drawings)) ||
+        (snap.utilities && currentUtilsStr !== JSON.stringify(snap.utilities)) ||
+        (snap.players && currentPlayersStr !== JSON.stringify(snap.players))
+      ) {
         const safetyBackup: TacticSnapshot = {
           id: `map_snap_pre_restore_${Date.now()}`,
           timestamp: Date.now(),
           label: isDe ? 'Sicherung vor Wiederherstellung' : 'Backup before restore',
           changedCount: mapData.callouts.length,
           callouts: JSON.parse(currentSerialized),
+          drawings: JSON.parse(currentDrawingsStr),
+          utilities: JSON.parse(currentUtilsStr),
+          players: JSON.parse(currentPlayersStr),
         };
-        setSnapshots((prev) => [safetyBackup, ...prev].slice(0, 3));
+        setSnapshots((prev) => [safetyBackup, ...prev].slice(0, 5));
       }
 
       const restoredCallouts: Callout[] = JSON.parse(targetSerialized);
-      onUpdateMap({ ...mapData, callouts: restoredCallouts, updatedAt: Date.now() }, true);
+      const nextDrawings = snap.drawings ? JSON.parse(JSON.stringify(snap.drawings)) : drawings;
+      const nextUtilities = snap.utilities ? JSON.parse(JSON.stringify(snap.utilities)) : utilities;
+      const nextPlayers = snap.players ? JSON.parse(JSON.stringify(snap.players)) : players;
+
+      if (snap.drawings) setDrawings(nextDrawings);
+      if (snap.utilities) setUtilities(nextUtilities);
+      if (snap.players) setPlayers(nextPlayers);
+
+      onUpdateMap(
+        {
+          ...mapData,
+          callouts: restoredCallouts,
+          tacticData: {
+            ...(mapData.tacticData || {}),
+            drawings: nextDrawings,
+            utilities: nextUtilities,
+            players: nextPlayers,
+            layers,
+          },
+          updatedAt: Date.now(),
+        },
+        true
+      );
       setSelectedCallout(null);
       setSelectedCalloutIds([]);
       setHighlightedCalloutId(undefined);
       setHasChangesInSession(true);
     },
-    [mapData, onUpdateMap, isDe]
+    [mapData, onUpdateMap, isDe, drawings, utilities, players, layers]
   );
 
   const handleSelectElement = useCallback(
@@ -3691,30 +3764,6 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             <span>{isDe ? 'Ebenen' : 'Layers'}</span>
           </button>
 
-          {/* Meine Callout-Auswahl */}
-          <button
-            onClick={() => {
-              if (customSelectedCalloutIds.length === 0) {
-                handleOpenCustomSelectionModal();
-              } else {
-                setIsCustomSelectionActive(!isCustomSelectionActive);
-              }
-            }}
-            className={`relative p-1.5 rounded-lg border transition-all cursor-pointer hidden sm:inline-flex ${
-              isCustomSelectionActive
-                ? 'border-indigo-400 bg-indigo-500/25 text-indigo-300'
-                : 'border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white'
-            }`}
-            title={isDe ? 'Meine Callout-Auswahl' : 'My Callout Selection'}
-          >
-            <ListFilter className="w-4 h-4" />
-            {customSelectedCalloutIds.length > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-1 text-[9px] font-bold rounded-full flex items-center justify-center leading-none bg-indigo-500 text-white">
-                {customSelectedCalloutIds.length}
-              </span>
-            )}
-          </button>
-
           {/* Color Mode Toggle */}
           <div className="hidden sm:flex items-center gap-0.5 p-0.5 rounded-lg bg-zinc-900 border border-zinc-800">
             <button
@@ -3737,17 +3786,37 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             </button>
           </div>
 
-          {/* Quick Help & Color Legend */}
+          {/* Meine Callout-Auswahl (Desktop & Mobil) */}
           <button
-            onClick={() => setShowLegend(!showLegend)}
-            className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
-              showLegend
-                ? 'border-zinc-400 bg-zinc-200 text-zinc-950'
-                : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-white'
+            onClick={() => {
+              if (customSelectedCalloutIds.length === 0) {
+                handleOpenCustomSelectionModal();
+              } else {
+                setIsCustomSelectionActive(!isCustomSelectionActive);
+              }
+            }}
+            className={`relative p-1.5 rounded-lg border transition-all cursor-pointer inline-flex items-center ${
+              isCustomSelectionActive
+                ? 'border-indigo-400 bg-indigo-500/25 text-indigo-300'
+                : 'border-zinc-800 bg-zinc-900 text-indigo-400 hover:text-white'
             }`}
-            title={isDe ? 'Kurzhilfe & Farblegende' : 'Quick Help & Color Legend'}
+            title={isDe ? 'Meine Callout-Auswahl' : 'My Callout Selection'}
           >
-            <HelpCircle className="w-4 h-4 text-amber-400" />
+            <ListFilter className="w-4 h-4" />
+            {customSelectedCalloutIds.length > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-1 text-[9px] font-bold rounded-full flex items-center justify-center leading-none bg-indigo-500 text-white">
+                {customSelectedCalloutIds.length}
+              </span>
+            )}
+          </button>
+
+          {/* Quick Help & App Guide */}
+          <button
+            onClick={() => setIsHelpDocsOpen(true)}
+            className="p-1.5 rounded-lg border border-zinc-800 bg-zinc-900 text-amber-400 hover:text-white hover:bg-zinc-800 cursor-pointer transition-colors"
+            title={isDe ? 'Hilfe & App-Erklärungen' : 'Help & App Guide'}
+          >
+            <HelpCircle className="w-4 h-4" />
           </button>
 
           {/* Fullscreen (nur für die Karte — blendet Menüs links & rechts aus, oberes Menü bleibt sichtbar) */}
@@ -3900,6 +3969,18 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                 }`}
               />
             ))}
+            <button
+              type="button"
+              onClick={() => {
+                setCustomColorTarget('pen');
+                setIsCustomColorModalOpen(true);
+                setShowColorPicker(false);
+              }}
+              className="px-2.5 h-7 rounded-full bg-zinc-900 hover:bg-zinc-800 text-amber-300 border border-zinc-700 text-[11px] font-bold shrink-0 cursor-pointer flex items-center gap-1"
+            >
+              <Palette className="w-3 h-3" />
+              <span>{isDe ? 'Eigene' : 'Custom'}</span>
+            </button>
           </div>
         )}
 
@@ -4162,6 +4243,19 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                   />
                 ))}
               </div>
+              <div className="mt-2 px-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCustomColorTarget('pen');
+                    setIsCustomColorModalOpen(true);
+                  }}
+                  className="w-full py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-amber-300 border border-zinc-700 text-[10px] font-bold cursor-pointer transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <Palette className="w-3 h-3" />
+                  <span>{isDe ? 'Eigene Farbe...' : 'Custom Color...'}</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -4405,6 +4499,18 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                             className="w-6 h-6 rounded-full border border-zinc-600 hover:scale-115 transition-transform cursor-pointer"
                           />
                         ))}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCustomColorTarget('selection');
+                            setIsCustomColorModalOpen(true);
+                            setShowContextColorPicker(false);
+                          }}
+                          className="px-2 h-6 rounded-full bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-zinc-600 text-[10px] font-bold cursor-pointer flex items-center gap-1"
+                        >
+                          <Palette className="w-3 h-3" />
+                          <span>{isDe ? 'Eigene' : 'Custom'}</span>
+                        </button>
                       </div>
                     )}
                   </div>
@@ -5468,8 +5574,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
               }`}
               title={
                 isDe
-                  ? 'Versionsverlauf öffnen/schließen (max. 3 Versionen mit Vorschau)'
-                  : 'Toggle version history'
+                  ? 'Versionsverlauf öffnen/schließen (max. 5 Versionen mit Vorschau)'
+                  : 'Toggle version history (max 5 snapshots)'
               }
             >
               <History className="w-3.5 h-3.5" />
@@ -5479,7 +5585,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                   isHistoryExpanded ? 'bg-zinc-950/20 text-zinc-950' : 'bg-zinc-800 text-amber-300'
                 }`}
               >
-                {Math.min(3, snapshots.length)}
+                {Math.min(5, snapshots.length)}
               </span>
             </button>
           </div>
@@ -5494,6 +5600,13 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         onToggleExpand={() => setIsHistoryExpanded((p) => !p)}
         onSaveSnapshot={handleSaveSnapshot}
         onRestoreSnapshot={handleRestoreSnapshot}
+        onOpenPngPreview={(snap) => {
+          setPreviewSnapshot(snap);
+          setIsTacticPreviewOpen(true);
+        }}
+        drawings={drawings}
+        utilities={utilities}
+        players={players}
         mapImage={activeImage}
       />
 
@@ -5662,6 +5775,13 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                   onToggleExpand={() => {}}
                   onSaveSnapshot={handleSaveSnapshot}
                   onRestoreSnapshot={handleRestoreSnapshot}
+                  onOpenPngPreview={(snap) => {
+                    setPreviewSnapshot(snap);
+                    setIsTacticPreviewOpen(true);
+                  }}
+                  drawings={drawings}
+                  utilities={utilities}
+                  players={players}
                   mapImage={activeImage}
                   isEmbeddedMobile={true}
                 />
@@ -5742,8 +5862,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                     </div>
                     <p className="text-[11px] text-zinc-400 leading-relaxed">
                       {isDe
-                        ? 'Rechts Ebenen & Infos verwalten, unten Bereiche, Raster, Zoom, Fit & den Karten-Verlauf (max. 3 Stände mit Vorschau) steuern. Vollbild maximiert nur die Karte.'
-                        : 'Manage layers on the right; control Areas, Grid, Zoom, Fit & Map History (last 3 snapshots) at the bottom. Fullscreen maximizes the map only.'}
+                        ? 'Rechts Ebenen & Infos verwalten, unten Bereiche, Raster, Zoom, Fit & den Karten-Verlauf (max. 5 Stände mit PNG-Vorschau) steuern. Vollbild maximiert nur die Karte.'
+                        : 'Manage layers on the right; control Areas, Grid, Zoom, Fit & Map History (last 5 snapshots with PNG preview) at the bottom. Fullscreen maximizes the map only.'}
                     </p>
                   </div>
                 </div>
@@ -7682,6 +7802,62 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           <ArrowUp className="w-5 h-5 transition-transform group-hover:-translate-y-0.5" />
         </button>
       )}
+
+      {/* Help & App Explanations Modal */}
+      <HelpDocsModal
+        isOpen={isHelpDocsOpen}
+        onClose={() => setIsHelpDocsOpen(false)}
+        lang={lang}
+      />
+
+      {/* Custom Color Selection Modal */}
+      <CustomColorModal
+        isOpen={isCustomColorModalOpen}
+        onClose={() => setIsCustomColorModalOpen(false)}
+        currentColor={penColor}
+        onSelectColor={(c) => {
+          if (customColorTarget === 'selection') {
+            handleUpdateSelectedElementsProps({ color: c });
+          } else {
+            setPenColor(c);
+          }
+        }}
+        lang={lang}
+      />
+
+      {/* Tactical Sheet PNG Preview Modal (opened from Map History) */}
+      <TacticPreviewModal
+        isOpen={isTacticPreviewOpen}
+        onClose={() => {
+          setIsTacticPreviewOpen(false);
+          setPreviewSnapshot(null);
+        }}
+        mapData={
+          previewSnapshot
+            ? { ...mapData, callouts: previewSnapshot.callouts || mapData.callouts }
+            : mapData
+        }
+        tacticState={{
+          drawings:
+            previewSnapshot?.drawings && previewSnapshot.drawings.length > 0
+              ? previewSnapshot.drawings
+              : drawings,
+          utilities:
+            previewSnapshot?.utilities && previewSnapshot.utilities.length > 0
+              ? previewSnapshot.utilities
+              : utilities,
+          players:
+            previewSnapshot?.players && previewSnapshot.players.length > 0
+              ? previewSnapshot.players
+              : players,
+        }}
+        tacticTitle={
+          previewSnapshot
+            ? `${mapData.name} — ${previewSnapshot.label}`
+            : `${mapData.name} — ${isDe ? 'Aktuelle Taktik' : 'Current Tactic'}`
+        }
+        lang={lang}
+      />
     </div>
   );
 };

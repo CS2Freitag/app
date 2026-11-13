@@ -1,12 +1,14 @@
 {
-  "version": "3.71",
+  "version": "3.93",
   "major": 3,
-  "patch": 71,
+  "patch": 93,
   "releaseDate": "2026-11-13",
-  "title": "Update v3.71: Schieberegler für Karte & Schrift auf dem Handy",
-  "description": "In der mobilen Ansicht lassen sich jetzt sowohl der Karten-Zoom als auch die Callout-Schriftgröße unabhängig und flüssig über eigene Schieberegler bedienen.",
+  "title": "Update v3.93: Vollständige Taktik- & Bereichs-Vorschau (PNG)",
+  "description": "Korrektur der Taktik-PNG-Vorschau: Alle Bereiche (Polygone & Rechtecke mit Zonen-Farben und Bombsite-Schraffur), gezeichnete Linien, Pfeile, Granaten (Utilitys) und Spieler-Tokens werden nun vollständig und hochauflösend dargestellt.",
   "changes": [
-    "Mobiler Karten-Zoom-Schieberegler (blau, 50%–250%) direkt neben Zoom-/+ & Fit ergänzt",
-    "Mobiler Schrift-Schieberegler (gelb, 40%–200%) bleibt als eigene Reihe direkt darunter mit A-, A+ und Fit"
+    "Bereiche (Polygone & Rechtecke) werden im PNG-Export mit kräftiger Kontur, Zonen-Farben und Bombenplatz-Schraffur gezeichnet",
+    "Alle gezeichneten Linien, Pfeile, Utility-Symbole und Spieler-Tokens sind im Taktik-Vorschau-Bild vollständig sichtbar",
+    "Neuer Button „Live-PNG“ / „Live-Taktik (PNG)“ im Verlauf für den sofortigen Export des aktuellen Arbeitsstands",
+    "Sicherung und Wiederherstellung von Linien, Utilitys und Spielern in allen 5 Verlaufsständen optimiert"
   ]
 }

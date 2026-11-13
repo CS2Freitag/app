@@ -23,6 +23,7 @@ import { TacticalMapView } from './components/TacticalMapView';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { SettingsModal } from './components/SettingsModal';
 import { CalloutQuizModal } from './components/CalloutQuizModal';
+import { HelpDocsModal } from './components/HelpDocsModal';
 import { MapImportConflictModal } from './components/MapImportConflictModal';
 import { ShareTacticModal } from './components/ShareTacticModal';
 import { ExternalLink, ArrowUp, Check, Save, Sparkles, Download } from 'lucide-react';
@@ -78,6 +79,7 @@ export default function App() {
   const [mapToEdit, setMapToEdit] = useState<MapData | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isQuizOpen, setIsQuizOpen] = useState<boolean>(false);
+  const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
   const [isGlobalLoadTacticOpen, setIsGlobalLoadTacticOpen] = useState<boolean>(false);
 
   // Custom Map Groups / Pools
@@ -1258,6 +1260,14 @@ export default function App() {
         onLoadFromFileLocation={handleLoadFromFileLocation}
         onDisconnectFileLocation={handleDisconnectFileLocation}
         onStartQuiz={() => setIsQuizOpen(true)}
+        onOpenHelp={() => setIsHelpOpen(true)}
+      />
+
+      {/* Help & App Explanations Modal */}
+      <HelpDocsModal
+        isOpen={isHelpOpen}
+        onClose={() => setIsHelpOpen(false)}
+        lang={lang}
       />
 
       {/* Global Load & QR Scan Modal for Eigene Taktiken */}

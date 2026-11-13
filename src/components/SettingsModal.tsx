@@ -23,6 +23,7 @@ import {
   Sparkles,
   ArrowUpCircle,
   ChevronDown,
+  HelpCircle,
 } from 'lucide-react';
 import { MapData, Language, Theme } from '../types';
 import { usePWAInstall } from '../hooks/usePWAInstall';
@@ -61,6 +62,7 @@ interface SettingsModalProps {
   onLoadFromFileLocation?: () => Promise<boolean>;
   onDisconnectFileLocation?: () => Promise<void>;
   onStartQuiz?: () => void;
+  onOpenHelp?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -93,6 +95,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onLoadFromFileLocation,
   onDisconnectFileLocation,
   onStartQuiz,
+  onOpenHelp,
 }) => {
   const isDe = lang === 'de';
   const { isInstallable, isInstalled, isIOS, isInIframe, install } = usePWAInstall();
@@ -1095,6 +1098,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             >
               <Gamepad2 className="w-4 h-4" />
               <span>{isDe ? '🎯 Quiz-Modus starten' : '🎯 Start Quiz Mode'}</span>
+            </button>
+          </div>
+
+          {/* HILFE & ANLEITUNGEN */}
+          <div className="p-4 rounded-xl bg-zinc-950/70 border border-sky-500/30 space-y-3">
+            <div className="flex items-center gap-2 font-mono uppercase font-bold text-sky-400">
+              <HelpCircle className="w-4 h-4" />
+              <span>{isDe ? 'Hilfe & App-Erklärungen' : 'Help & App Guide'}</span>
+            </div>
+
+            <p className="text-[11px] text-zinc-400 leading-relaxed">
+              {isDe
+                ? 'Erfahre alles über Ebenen, Mehrfachauswahl, Callout-Auswahl, Sprachausgabe, Karten-Verlauf und PNG-Vorschau.'
+                : 'Learn all about layers, multi-select, callout selection, voice output, map history, and PNG preview.'}
+            </p>
+
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                if (onOpenHelp) onOpenHelp();
+              }}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-zinc-950 font-black transition-all shadow-md active:scale-[0.98] cursor-pointer text-xs uppercase tracking-wider"
+            >
+              <HelpCircle className="w-4 h-4" />
+              <span>{isDe ? '📖 Hilfe & Anleitungen öffnen' : '📖 Open Help & Guides'}</span>
             </button>
           </div>
 
