@@ -51,7 +51,7 @@ export const TacticPreviewModal: React.FC<TacticPreviewModalProps> = ({
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 print:hidden animate-in fade-in"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 print:hidden animate-in fade-in"
     >
       <div
         onClick={(e) => e.stopPropagation()}

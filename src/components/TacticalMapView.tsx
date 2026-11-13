@@ -7,6 +7,7 @@ import { ShareTacticModal } from './ShareTacticModal';
 import { resolveAssetPath } from '../utils/assets';
 import { encodeCompactTactic } from '../utils/tacticCodec';
 import {
+  Info,
   ArrowLeft,
   ZoomIn,
   ZoomOut,
@@ -60,7 +61,7 @@ import {
 } from 'lucide-react';
 import { UtilitySymbol, UTILITY_META } from './UtilitySymbol';
 import { TacticalLayersPanel } from './TacticalLayersPanel';
-import { TacticalHistoryPanel } from './TacticalHistoryPanel';
+import { TacticalHistoryPanel, isAusgangsversion } from './TacticalHistoryPanel';
 import { HelpDocsModal } from './HelpDocsModal';
 import { CustomColorModal } from './CustomColorModal';
 import { TacticPreviewModal } from './TacticPreviewModal';
@@ -499,6 +500,24 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const [showEditBanner, setShowEditBanner] = useState<boolean>(true);
   const editBannerTimerRef = useRef<number | null>(null);
 
+  // Mobile initial shortcut hint banner (auto-hides after 10 seconds or on first tap/click anywhere)
+  const [showMobileHintBanner, setShowMobileHintBanner] = useState<boolean>(true);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setShowMobileHintBanner(false);
+    }, 10000);
+    const dismissHandler = () => {
+      setShowMobileHintBanner(false);
+    };
+    window.addEventListener('click', dismissHandler, { capture: true });
+    window.addEventListener('touchstart', dismissHandler, { capture: true, passive: true });
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('click', dismissHandler, { capture: true });
+      window.removeEventListener('touchstart', dismissHandler, { capture: true });
+    };
+  }, []);
+
   // Form modal state
   const [isAddingCallout, setIsAddingCallout] = useState<boolean>(false);
   const [editingCallout, setEditingCallout] = useState<Callout | null>(null);
@@ -739,11 +758,29 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           utilities: JSON.parse(serializedUtilities),
           players: JSON.parse(serializedPlayers),
         };
-        return [newSnap, ...prev].slice(0, 5);
+        // Ausgangsversion is permanent and exempt from eviction; keep max 5 user snapshots
+        const userSnaps = prev.filter((s) => !isAusgangsversion(s));
+        const initSnap = prev.find((s) => isAusgangsversion(s));
+        const nextUserSnaps = [newSnap, ...userSnaps].slice(0, 5);
+        return initSnap ? [...nextUserSnaps, initSnap] : nextUserSnaps;
       });
     },
     [mapData.callouts, mapData.name, isDe, drawings, utilities, players]
   );
+
+  const handleDeleteSnapshot = useCallback((snapshotId: string) => {
+    setSnapshots((prev) => prev.filter((s) => s.id !== snapshotId || isAusgangsversion(s)));
+  }, []);
+
+  const handleClearHistory = useCallback(() => {
+    setSnapshots((prev) => {
+      const userSnaps = prev.filter((s) => !isAusgangsversion(s));
+      const initSnap = prev.find((s) => isAusgangsversion(s));
+      // Keep newest user snapshot + permanent Ausgangsversion
+      const keptUserSnap = userSnaps[0] ? [userSnaps[0]] : [];
+      return initSnap ? [...keptUserSnap, initSnap] : keptUserSnap;
+    });
+  }, []);
 
   const handleRestoreSnapshot = useCallback(
     (snap: TacticSnapshot) => {
@@ -768,7 +805,12 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           utilities: JSON.parse(currentUtilsStr),
           players: JSON.parse(currentPlayersStr),
         };
-        setSnapshots((prev) => [safetyBackup, ...prev].slice(0, 5));
+        setSnapshots((prev) => {
+          const userSnaps = prev.filter((s) => !isAusgangsversion(s));
+          const initSnap = prev.find((s) => isAusgangsversion(s));
+          const nextUserSnaps = [safetyBackup, ...userSnaps].slice(0, 5);
+          return initSnap ? [...nextUserSnaps, initSnap] : nextUserSnaps;
+        });
       }
 
       const restoredCallouts: Callout[] = JSON.parse(targetSerialized);
@@ -3661,8 +3703,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
         {/* Right: Undo/Redo/Clear, Share, Edit/Done, Filter, Color Mode, Legend, Tablet Drawer, Fullscreen */}
         <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-          {/* Undo / Redo / Clear Board */}
-          <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-zinc-900 border border-zinc-800">
+          {/* Undo / Redo / Clear Board (Mobil & Tablet: lg:hidden; auf PC unter Werkzeuge) */}
+          <div className="flex lg:hidden items-center gap-0.5 p-0.5 rounded-lg bg-zinc-900 border border-zinc-800">
             <button
               onClick={handleUndoDrawing}
               disabled={drawings.length === 0}
@@ -4256,18 +4298,69 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                   <span>{isDe ? 'Eigene Farbe...' : 'Custom Color...'}</span>
                 </button>
               </div>
+
+              {/* PC Version: Rückgängig, Vorwärts & Löschen unter Werkzeuge / Eigene Farbe */}
+              <div className="mt-2.5 pt-2 border-t border-zinc-800/80 px-1 space-y-1.5">
+                <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                  <span>{isDe ? 'Aktionen' : 'Actions'}</span>
+                </div>
+                <div className="flex items-center gap-1 p-1 rounded-xl bg-zinc-900/90 border border-zinc-800 shadow-inner">
+                  <button
+                    type="button"
+                    onClick={handleUndoDrawing}
+                    disabled={drawings.length === 0}
+                    className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg border text-xs font-semibold transition-colors ${
+                      drawings.length > 0
+                        ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border-zinc-700 cursor-pointer shadow-xs'
+                        : 'bg-zinc-950 text-zinc-600 border-zinc-900 cursor-not-allowed opacity-50'
+                    }`}
+                    title={isDe ? 'Rückgängig (Strg+Z)' : 'Undo (Ctrl+Z)'}
+                  >
+                    <Undo2 className="w-3.5 h-3.5" />
+                    <span className="text-[11px]">{isDe ? 'Zurück' : 'Undo'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRedoDrawing}
+                    disabled={drawingsRedoStack.length === 0}
+                    className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg border text-xs font-semibold transition-colors ${
+                      drawingsRedoStack.length > 0
+                        ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border-zinc-700 cursor-pointer shadow-xs'
+                        : 'bg-zinc-950 text-zinc-600 border-zinc-900 cursor-not-allowed opacity-50'
+                    }`}
+                    title={isDe ? 'Wiederholen (Strg+Y)' : 'Redo (Ctrl+Y)'}
+                  >
+                    <Redo2 className="w-3.5 h-3.5" />
+                    <span className="text-[11px]">{isDe ? 'Vor' : 'Redo'}</span>
+                  </button>
+                  {(drawings.length > 0 || utilities.length > 0 || players.length > 0) && (
+                    <button
+                      type="button"
+                      onClick={handleClearTactics}
+                      className="p-1.5 rounded-lg border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors cursor-pointer"
+                      title={isDe ? 'Board leeren (entsperrte Linien, Utilitys & Spieler löschen)' : 'Clear board'}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Shortcut Hint Footer */}
-          <div className="pt-3 mt-3 border-t border-zinc-800/80 px-1 text-[10px] text-zinc-500 leading-relaxed space-y-1">
-            <div>
-              <span className="text-zinc-300 font-semibold">Strg+Klick</span>:{' '}
-              {isDe ? 'Mehrfachauswahl' : 'Multi-select'}
+          {/* Shortcut Hint Footer (vergrößert mit Tasten-Badges) */}
+          <div className="pt-3 mt-3 border-t border-zinc-800/80 px-1 text-xs text-zinc-200 leading-relaxed space-y-1.5">
+            <div className="flex items-center gap-1.5">
+              <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-amber-300 font-mono text-[11px] font-bold shadow-xs">
+                Strg+Klick
+              </kbd>
+              <span className="text-zinc-300">{isDe ? 'Mehrfachauswahl' : 'Multi-select'}</span>
             </div>
-            <div>
-              <span className="text-zinc-300 font-semibold">Rechtsklick</span>:{' '}
-              {isDe ? 'Kontextmenü' : 'Context menu'}
+            <div className="flex items-center gap-1.5">
+              <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-sky-300 font-mono text-[11px] font-bold shadow-xs">
+                Rechtsklick
+              </kbd>
+              <span className="text-zinc-300">{isDe ? 'Kontextmenü' : 'Context menu'}</span>
             </div>
           </div>
         </aside>
@@ -4406,6 +4499,10 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             !contextMenu &&
             (selectedElementIds.length > 0 || selectedCalloutIds.length > 0) && (() => {
               const totalCount = selectedElementIds.length + selectedCalloutIds.length;
+              const singleSelectedCallout =
+                selectedCalloutIds.length > 0
+                  ? mapData.callouts.find((c) => selectedCalloutIds.includes(c.id)) || null
+                  : null;
               const selectedGroupSet = new Set([
                 ...drawings.filter((d) => selectedElementIds.includes(d.id) && d.groupId).map((d) => d.groupId),
                 ...utilities.filter((u) => selectedElementIds.includes(u.id) && u.groupId).map((u) => u.groupId),
@@ -4427,12 +4524,88 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                   className="absolute top-3 left-1/2 -translate-x-1/2 z-40 flex flex-wrap items-center justify-center gap-1 px-2 py-1 rounded-xl bg-zinc-950/95 border border-zinc-700 shadow-2xl backdrop-blur-md text-xs text-zinc-100 w-max max-w-[calc(100%-72px)] print:hidden"
                 >
                   <span className="px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono font-bold tabular-nums shrink-0">
-                    {totalCount} {isDe ? 'gewählt' : 'selected'}
+                    {totalCount}
+                    <span className="hidden sm:inline"> {isDe ? 'gewählt' : 'selected'}</span>
                   </span>
                   {isGrouped && (
                     <span className="px-1.5 py-0.5 rounded border border-sky-500/50 bg-sky-500/10 text-sky-300 text-[10px] font-bold shrink-0">
                       {isDe ? 'Gruppe' : 'Group'}
                     </span>
+                  )}
+
+                  {/* Callout Bearbeiten */}
+                  {singleSelectedCallout && (
+                    <button
+                      type="button"
+                      onClick={(e) => handleOpenCalloutEditor(singleSelectedCallout, e)}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-zinc-800 text-zinc-200 hover:text-white transition-colors shrink-0 cursor-pointer"
+                      title={isDe ? 'Callout bearbeiten' : 'Edit callout'}
+                    >
+                      <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                      <span className="hidden sm:inline">{isDe ? 'Bearbeiten' : 'Edit'}</span>
+                    </button>
+                  )}
+
+                  {/* Bereich verschieben */}
+                  {singleSelectedCallout && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (movingAreaCalloutId === singleSelectedCallout.id) {
+                          setMovingAreaCalloutId(null);
+                        } else {
+                          if (!singleSelectedCallout.area) {
+                            const width = 10;
+                            const height = 10;
+                            const areaX = Math.max(
+                              -50,
+                              Math.min(50 - width, Math.round((singleSelectedCallout.x - width / 2) * 10) / 10)
+                            );
+                            const areaY = Math.max(
+                              -50,
+                              Math.min(50 - height, Math.round((singleSelectedCallout.y - height / 2) * 10) / 10)
+                            );
+                            const updatedCallouts = mapData.callouts.map((c) =>
+                              c.id === singleSelectedCallout.id
+                                ? {
+                                    ...c,
+                                    area: { x: areaX, y: areaY, width, height, shape: 'rect' as const },
+                                  }
+                                : c
+                            );
+                            handleMapUpdate({ ...mapData, callouts: updatedCallouts });
+                          }
+                          setIsEditMode(true);
+                          setMovingAreaCalloutId(singleSelectedCallout.id);
+                        }
+                      }}
+                      className={`flex items-center gap-1 px-2 py-1 rounded-lg transition-colors shrink-0 cursor-pointer ${
+                        movingAreaCalloutId === singleSelectedCallout.id
+                          ? 'bg-amber-500/25 text-amber-300 border border-amber-500/50'
+                          : 'hover:bg-zinc-800 text-zinc-200 hover:text-white'
+                      }`}
+                      title={
+                        movingAreaCalloutId === singleSelectedCallout.id
+                          ? isDe
+                            ? 'Bereich-Verschieben beenden'
+                            : 'Stop moving area'
+                          : isDe
+                          ? 'Bereich verschieben'
+                          : 'Move area'
+                      }
+                    >
+                      <Move className="w-3.5 h-3.5 text-amber-400" />
+                      <span className="hidden sm:inline">
+                        {movingAreaCalloutId === singleSelectedCallout.id
+                          ? isDe
+                            ? 'Verschieben beenden'
+                            : 'Stop move'
+                          : isDe
+                          ? 'Bereich verschieben'
+                          : 'Move area'}
+                      </span>
+                    </button>
                   )}
 
                   {(totalCount >= 2 || isGrouped) && (
@@ -4866,6 +5039,40 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             </div>
           )}
 
+          {/* MOBILE INITIAL SHORTCUT HINT BANNER (10 Sekunden oder Klick/Tap zum Schließen) */}
+          {showMobileHintBanner && !isDrawingPolygonArea && !isEditMode && (
+            <div
+              data-no-map-click="true"
+              onClick={() => setShowMobileHintBanner(false)}
+              className="md:hidden absolute top-4 left-3 right-3 z-40 flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-zinc-950/95 border border-sky-500/60 text-zinc-100 text-xs font-medium backdrop-blur-md shadow-2xl cursor-pointer transition-all animate-in fade-in slide-in-from-top-2 print:hidden"
+              title={isDe ? 'Tippen zum Schließen' : 'Tap to dismiss'}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Info className="w-4 h-4 text-sky-400 shrink-0 animate-pulse" />
+                <div className="flex flex-wrap items-center gap-1.5 leading-snug">
+                  <span className="inline-flex items-center gap-1">
+                    <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-amber-300 font-mono text-[10px] font-bold">
+                      Strg+Klick
+                    </kbd>
+                    <span className="text-zinc-300 text-[11px]">
+                      {isDe ? 'Mehrfachauswahl' : 'Multi-select'}
+                    </span>
+                  </span>
+                  <span className="text-zinc-600">·</span>
+                  <span className="inline-flex items-center gap-1">
+                    <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-sky-300 font-mono text-[10px] font-bold">
+                      Rechtsklick
+                    </kbd>
+                    <span className="text-zinc-300 text-[11px]">
+                      {isDe ? 'Kontextmenü' : 'Context menu'}
+                    </span>
+                  </span>
+                </div>
+              </div>
+              <X className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+            </div>
+          )}
+
           {/* FLOATING HOVER CARD (Desktop Hover Preview) */}
           {!isDrawingPolygonArea && hoveredCallout && !selectedCallout && !isEditMode && (
             <div className="hidden md:block absolute bottom-16 left-3 z-30 max-w-sm rounded-xl border border-zinc-700 bg-zinc-950/95 p-3.5 shadow-2xl backdrop-blur-md text-zinc-100 pointer-events-none print:hidden">
@@ -5034,7 +5241,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                         width: `${viewWFrac * 100}%`,
                         height: `${viewHFrac * 100}%`,
                       }}
-                      className="absolute border-[1.5px] border-sky-400 bg-sky-400/15 rounded-[2px] shadow-[0_0_8px_rgba(56,189,248,0.65)] pointer-events-none"
+                      className="absolute border-[1.5px] border-sky-400 bg-transparent rounded-[2px] pointer-events-none"
                     />
                   </div>
                 </div>
@@ -5600,6 +5807,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         onToggleExpand={() => setIsHistoryExpanded((p) => !p)}
         onSaveSnapshot={handleSaveSnapshot}
         onRestoreSnapshot={handleRestoreSnapshot}
+        onDeleteSnapshot={handleDeleteSnapshot}
+        onClearHistory={handleClearHistory}
         onOpenPngPreview={(snap) => {
           setPreviewSnapshot(snap);
           setIsTacticPreviewOpen(true);
@@ -5610,8 +5819,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         mapImage={activeImage}
       />
 
-      {/* MOBILE BOTTOM SHEET DRAWER (Ebenen, Eigenschaften, Callout-Info & Verlauf — md:hidden) */}
-      {(isMobileSheetOpen || (Boolean(selectedCallout) && !isEditMode && !contextMenu)) && !isDrawingPolygonArea && (
+      {/* MOBILE BOTTOM SHEET DRAWER (Ebenen, Eigenschaften, Callout-Info & Verlauf — nur bei explizitem Öffnen) */}
+      {isMobileSheetOpen && !isDrawingPolygonArea && (
         <div
           data-no-map-click="true"
           className="md:hidden fixed inset-0 z-50 flex flex-col justify-end print:hidden"
@@ -5775,7 +5984,10 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                   onToggleExpand={() => {}}
                   onSaveSnapshot={handleSaveSnapshot}
                   onRestoreSnapshot={handleRestoreSnapshot}
+                  onDeleteSnapshot={handleDeleteSnapshot}
+                  onClearHistory={handleClearHistory}
                   onOpenPngPreview={(snap) => {
+                    setIsMobileSheetOpen(false);
                     setPreviewSnapshot(snap);
                     setIsTacticPreviewOpen(true);
                   }}

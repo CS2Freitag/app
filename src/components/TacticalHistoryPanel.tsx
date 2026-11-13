@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { History, RotateCcw, Plus, X, Info, Eye, Image as ImageIcon } from 'lucide-react';
+import { History, RotateCcw, Plus, X, Info, Eye, Image as ImageIcon, Trash2 } from 'lucide-react';
 import {
   Callout,
   Language,
@@ -10,6 +10,11 @@ import {
 } from '../types';
 import { resolveAssetPath } from '../utils/assets';
 
+export const isAusgangsversion = (s: TacticSnapshot): boolean =>
+  s.id.includes('init') ||
+  s.label.toLowerCase().includes('ausgangsversion') ||
+  s.label.toLowerCase().includes('initial map');
+
 interface TacticalHistoryPanelProps {
   lang: Language;
   snapshots: TacticSnapshot[];
@@ -17,6 +22,8 @@ interface TacticalHistoryPanelProps {
   onToggleExpand: () => void;
   onSaveSnapshot: (customLabel?: string) => void;
   onRestoreSnapshot: (snapshot: TacticSnapshot) => void;
+  onDeleteSnapshot?: (snapshotId: string) => void;
+  onClearHistory?: () => void;
   onOpenPngPreview?: (snapshot: TacticSnapshot | null) => void;
   drawings?: TacticalDrawingLine[];
   utilities?: UtilityMarker[];
@@ -83,12 +90,12 @@ const SnapshotMiniRadarPreview: React.FC<{
 
   return (
     <div
-      className={`relative ${sizeClass} rounded-lg overflow-hidden border border-zinc-700/80 bg-zinc-900 shrink-0 shadow-inner`}
+      className={`relative ${sizeClass} rounded-lg overflow-hidden border border-zinc-700/80 bg-zinc-950 shrink-0 shadow-inner`}
     >
       <img
         src={resolveAssetPath(mapImage)}
         alt="Map Version Mini Preview"
-        className="w-full h-full object-cover opacity-85"
+        className="w-full h-full object-cover opacity-90"
       />
       <svg
         className="absolute inset-0 w-full h-full pointer-events-none"
@@ -105,9 +112,9 @@ const SnapshotMiniRadarPreview: React.FC<{
                 key={`area_poly_${c.id}`}
                 points={c.area.points.map((p) => `${p.x},${p.y}`).join(' ')}
                 fill={color}
-                fillOpacity={0.28}
+                fillOpacity={0.35}
                 stroke={color}
-                strokeWidth={0.9}
+                strokeWidth={1.2}
               />
             );
           }
@@ -121,9 +128,9 @@ const SnapshotMiniRadarPreview: React.FC<{
               width={c.area.width}
               height={c.area.height}
               fill={color}
-              fillOpacity={0.26}
+              fillOpacity={0.35}
               stroke={color}
-              strokeWidth={0.9}
+              strokeWidth={1.2}
               transform={c.rotation ? `rotate(${c.rotation} ${cx} ${cy})` : undefined}
             />
           );
@@ -138,7 +145,7 @@ const SnapshotMiniRadarPreview: React.FC<{
               points={d.points.map((p) => `${p.x},${p.y}`).join(' ')}
               fill="none"
               stroke={d.color || '#f59e0b'}
-              strokeWidth={1.3}
+              strokeWidth={1.6}
               strokeLinecap="round"
               strokeLinejoin="round"
             />
@@ -151,10 +158,10 @@ const SnapshotMiniRadarPreview: React.FC<{
             key={`util_${u.id}`}
             cx={u.x}
             cy={u.y}
-            r={1.9}
+            r={2.2}
             fill={getUtilityHex(u.type)}
             stroke="#09090b"
-            strokeWidth={0.5}
+            strokeWidth={0.6}
           />
         ))}
 
@@ -164,10 +171,10 @@ const SnapshotMiniRadarPreview: React.FC<{
             key={`player_${p.id}`}
             cx={p.x}
             cy={p.y}
-            r={2.1}
+            r={2.4}
             fill={p.side === 'ct' ? '#2563eb' : '#ea580c'}
             stroke="#ffffff"
-            strokeWidth={0.5}
+            strokeWidth={0.6}
           />
         ))}
 
@@ -179,10 +186,10 @@ const SnapshotMiniRadarPreview: React.FC<{
               key={`pin_${c.id}`}
               cx={c.x}
               cy={c.y}
-              r={1.5}
+              r={1.6}
               fill={color}
               stroke="#09090b"
-              strokeWidth={0.5}
+              strokeWidth={0.6}
             />
           );
         })}
@@ -198,6 +205,8 @@ export const TacticalHistoryPanel: React.FC<TacticalHistoryPanelProps> = ({
   onToggleExpand,
   onSaveSnapshot,
   onRestoreSnapshot,
+  onDeleteSnapshot,
+  onClearHistory,
   onOpenPngPreview,
   drawings = [],
   utilities = [],
@@ -206,7 +215,8 @@ export const TacticalHistoryPanel: React.FC<TacticalHistoryPanelProps> = ({
   isEmbeddedMobile = false,
 }) => {
   const isDe = lang === 'de';
-  const visibleSnapshots = snapshots.slice(0, 5);
+  // Ausgangsversion is permanent; user snapshots up to 5 + 1 Ausgangsversion = up to 6 total
+  const visibleSnapshots = snapshots.slice(0, 6);
   const [previewSnapId, setPreviewSnapId] = useState<string | null>(null);
 
   const activePreviewSnap =
@@ -226,13 +236,19 @@ export const TacticalHistoryPanel: React.FC<TacticalHistoryPanelProps> = ({
   const countAreas = (snap: TacticSnapshot) =>
     (snap.callouts || []).filter((c) => Boolean(c.area)).length;
 
+  const userSnapshotsCount = visibleSnapshots.filter((s) => !isAusgangsversion(s)).length;
+
   if (isEmbeddedMobile) {
     return (
       <div className="p-3 space-y-3 text-zinc-100">
+        {/* Top Control Bar */}
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-xs font-bold">
+          <div className="flex items-center gap-1.5 text-xs font-bold">
             <History className="w-4 h-4 text-amber-400" />
-            <span>{isDe ? 'Karten-Verlauf (max. 5)' : 'Map History (max. 5)'}</span>
+            <span>{isDe ? 'Karten-Verlauf' : 'Map History'}</span>
+            <span className="text-[10px] text-zinc-400 font-mono">
+              ({userSnapshotsCount}/5)
+            </span>
           </div>
           <div className="flex items-center gap-1.5">
             {onOpenPngPreview && (
@@ -244,6 +260,21 @@ export const TacticalHistoryPanel: React.FC<TacticalHistoryPanelProps> = ({
               >
                 <ImageIcon className="w-3.5 h-3.5" />
                 <span>{isDe ? 'Live-PNG' : 'Live PNG'}</span>
+              </button>
+            )}
+            {onClearHistory && userSnapshotsCount > 1 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm(isDe ? 'Verlauf leeren? Der aktuellste Stand und die Ausgangsversion bleiben erhalten.' : 'Clear history? The newest version and initial map will be kept.')) {
+                    onClearHistory();
+                  }
+                }}
+                className="flex items-center gap-1 px-2 py-1.5 rounded-md bg-zinc-900 hover:bg-red-500/20 text-zinc-400 hover:text-red-300 border border-zinc-800 text-xs font-medium transition-colors cursor-pointer"
+                title={isDe ? 'Verlauf leeren (aktuellster Stand & Ausgangsversion bleiben)' : 'Clear history'}
+              >
+                <Trash2 className="w-3 h-3" />
+                <span>{isDe ? 'Leeren' : 'Clear'}</span>
               </button>
             )}
             <button
@@ -269,7 +300,9 @@ export const TacticalHistoryPanel: React.FC<TacticalHistoryPanelProps> = ({
             />
             <div className="min-w-0 flex-1 space-y-1.5">
               <div className="text-[10px] font-mono uppercase text-sky-400">
-                {isDe ? 'Karten-Vorschau' : 'Map Preview'}
+                {isAusgangsversion(activePreviewSnap)
+                  ? (isDe ? 'Ausgangsversion (Dauerhaft)' : 'Initial Version (Permanent)')
+                  : (isDe ? 'Karten-Vorschau' : 'Map Preview')}
               </div>
               <div className="text-xs font-bold text-white truncate">{activePreviewSnap.label}</div>
               <div className="text-[11px] font-mono tabular-nums text-zinc-400">
@@ -282,7 +315,7 @@ export const TacticalHistoryPanel: React.FC<TacticalHistoryPanelProps> = ({
                   onClick={() => onOpenPngPreview(activePreviewSnap)}
                   className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-sky-500 hover:bg-sky-400 text-zinc-950 text-[11px] font-bold cursor-pointer transition-colors"
                 >
-                  <ImageIcon className="w-3.5 h-3.5" />
+                  <Eye className="w-3.5 h-3.5" />
                   <span>{isDe ? 'Vorschau-Bild (PNG)' : 'Preview Image (PNG)'}</span>
                 </button>
               )}
@@ -291,53 +324,74 @@ export const TacticalHistoryPanel: React.FC<TacticalHistoryPanelProps> = ({
         )}
 
         <div className="space-y-2">
-          {visibleSnapshots.map((snap, idx) => (
-            <div
-              key={snap.id}
-              onClick={() => setPreviewSnapId(snap.id)}
-              className={`flex items-center justify-between p-2.5 rounded-lg border text-xs cursor-pointer transition-colors ${
-                activePreviewSnap?.id === snap.id
-                  ? 'bg-sky-950/30 border-sky-500/50'
-                  : 'bg-zinc-900/70 border-zinc-800'
-              }`}
-            >
-              <div className="min-w-0 pr-2">
-                <div className="font-semibold text-zinc-100 truncate">
-                  {idx + 1}. {snap.label}
+          {visibleSnapshots.map((snap, idx) => {
+            const isInit = isAusgangsversion(snap);
+            return (
+              <div
+                key={snap.id}
+                onClick={() => setPreviewSnapId(snap.id)}
+                className={`flex items-center justify-between p-2.5 rounded-lg border text-xs cursor-pointer transition-colors ${
+                  activePreviewSnap?.id === snap.id
+                    ? 'bg-sky-950/30 border-sky-500/50'
+                    : 'bg-zinc-900/70 border-zinc-800'
+                }`}
+              >
+                <div className="min-w-0 pr-2">
+                  <div className="flex items-center gap-1.5 font-semibold text-zinc-100 truncate">
+                    <span>{idx + 1}. {snap.label}</span>
+                    {isInit && (
+                      <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-mono text-[9px] shrink-0 font-bold border border-amber-500/30">
+                        {isDe ? 'Ausgangsversion' : 'Permanent'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] font-mono tabular-nums text-zinc-400">
+                    {formatTime(snap.timestamp)} · {(snap.callouts || []).length} Callouts
+                  </div>
                 </div>
-                <div className="text-[11px] font-mono tabular-nums text-zinc-400">
-                  {formatTime(snap.timestamp)} · {(snap.callouts || []).length} Callouts
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                {onOpenPngPreview && (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {onOpenPngPreview && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPreviewSnapId(snap.id);
+                        onOpenPngPreview(snap);
+                      }}
+                      className="p-1.5 rounded-md bg-zinc-800 hover:bg-zinc-700 text-sky-400 border border-zinc-700 cursor-pointer"
+                      title={isDe ? 'Als PNG-Bild anzeigen' : 'View as PNG'}
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setPreviewSnapId(snap.id);
-                      onOpenPngPreview(snap);
+                      onRestoreSnapshot(snap);
                     }}
-                    className="p-1.5 rounded-md bg-zinc-800 hover:bg-zinc-700 text-sky-400 border border-zinc-700 cursor-pointer"
-                    title={isDe ? 'Als PNG-Bild anzeigen' : 'View as PNG'}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-zinc-800 hover:bg-sky-500 hover:text-zinc-950 text-sky-300 border border-zinc-700 text-[11px] font-bold transition-colors cursor-pointer"
                   >
-                    <ImageIcon className="w-3.5 h-3.5" />
+                    <RotateCcw className="w-3 h-3" />
+                    <span>{isDe ? 'Laden' : 'Restore'}</span>
                   </button>
-                )}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRestoreSnapshot(snap);
-                  }}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-zinc-800 hover:bg-sky-500 hover:text-zinc-950 text-sky-300 border border-zinc-700 text-[11px] font-bold transition-colors cursor-pointer"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  <span>{isDe ? 'Wiederherstellen' : 'Restore'}</span>
-                </button>
+                  {!isInit && onDeleteSnapshot && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteSnapshot(snap.id);
+                      }}
+                      className="p-1.5 rounded-md bg-zinc-800 hover:bg-red-500/20 text-zinc-400 hover:text-red-400 border border-zinc-700 cursor-pointer transition-colors"
+                      title={isDe ? 'Diesen Stand löschen' : 'Delete snapshot'}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );
@@ -355,14 +409,14 @@ export const TacticalHistoryPanel: React.FC<TacticalHistoryPanelProps> = ({
         <div className="flex items-center gap-2.5">
           <History className="w-3.5 h-3.5 text-amber-400" />
           <span className="text-xs font-bold text-white">
-            {isDe ? 'Karten-Versionsverlauf (letzte 5 Stände)' : 'Map Version History (last 5)'}
+            {isDe ? 'Karten-Versionsverlauf (max. 5)' : 'Map Version History (max 5)'}
           </span>
           <span className="inline-flex items-center gap-1 text-[11px] text-zinc-400 ml-2">
             <Info className="w-3.5 h-3.5 text-zinc-500" />
             <span>
               {isDe
-                ? 'Speichert bis zu 5 Kartenstände mit Linien, Utilitys & Vorschau.'
-                : 'Stores up to 5 snapshots with lines, utilities & PNG preview.'}
+                ? 'Speichert bis zu 5 Stände. Ältester Stand wird bei neuem Stand überschrieben. Ausgangsversion bleibt immer.'
+                : 'Stores up to 5 versions. Oldest is replaced when full. Initial map always remains.'}
             </span>
           </span>
         </div>
@@ -377,6 +431,21 @@ export const TacticalHistoryPanel: React.FC<TacticalHistoryPanelProps> = ({
             >
               <ImageIcon className="w-3 h-3" />
               <span>{isDe ? 'Live-Taktik (PNG)' : 'Live Tactic (PNG)'}</span>
+            </button>
+          )}
+          {onClearHistory && userSnapshotsCount > 1 && (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm(isDe ? 'Verlauf leeren? Der aktuellste Stand und die Ausgangsversion bleiben erhalten.' : 'Clear history? The newest version and initial map will be kept.')) {
+                  onClearHistory();
+                }
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-zinc-900 hover:bg-red-500/20 text-zinc-400 hover:text-red-300 border border-zinc-800 text-[11px] font-medium transition-colors cursor-pointer"
+              title={isDe ? 'Verlauf leeren (aktuellster Stand & Ausgangsversion bleiben)' : 'Clear history'}
+            >
+              <Trash2 className="w-3 h-3" />
+              <span>{isDe ? 'Verlauf leeren' : 'Clear History'}</span>
             </button>
           )}
           <button
@@ -398,9 +467,9 @@ export const TacticalHistoryPanel: React.FC<TacticalHistoryPanelProps> = ({
         </div>
       </div>
 
-      {/* Body: Max 5 map versions list + Live Mini-Radar & PNG Preview Card */}
+      {/* Body: Map versions list + Live Mini-Radar & PNG Preview Card */}
       <div className="px-4 py-3 flex items-center gap-5 bg-zinc-950">
-        {/* Timeline (max 5 versions) */}
+        {/* Timeline */}
         <div className="flex-1 space-y-1.5 min-w-0 max-h-48 overflow-y-auto pr-1">
           {visibleSnapshots.length === 0 ? (
             <div className="py-6 text-center text-xs text-zinc-500">
@@ -409,6 +478,7 @@ export const TacticalHistoryPanel: React.FC<TacticalHistoryPanelProps> = ({
           ) : (
             visibleSnapshots.map((snap, idx) => {
               const isSelectedPreview = activePreviewSnap?.id === snap.id;
+              const isInit = isAusgangsversion(snap);
               return (
                 <div
                   key={snap.id}
@@ -423,36 +493,26 @@ export const TacticalHistoryPanel: React.FC<TacticalHistoryPanelProps> = ({
                   <div className="flex items-center gap-3 min-w-0">
                     <span
                       className={`w-2 h-2 rounded-full shrink-0 ${
-                        idx === 0 ? 'bg-sky-400' : 'bg-zinc-500'
+                        idx === 0 ? 'bg-sky-400' : isInit ? 'bg-amber-400' : 'bg-zinc-500'
                       }`}
                     />
                     <span className="font-mono text-[11px] tabular-nums text-zinc-400 shrink-0">
                       {formatTime(snap.timestamp)}
                     </span>
                     <span className="font-semibold truncate">{snap.label}</span>
-                    {idx === 0 && (
+                    {idx === 0 && !isInit && (
                       <span className="text-[10px] font-mono uppercase text-sky-400 shrink-0">
                         · {isDe ? 'Aktuell' : 'Latest'}
+                      </span>
+                    )}
+                    {isInit && (
+                      <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-mono text-[9px] shrink-0 font-bold border border-amber-500/30">
+                        {isDe ? 'Ausgangsversion' : 'Permanent'}
                       </span>
                     )}
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPreviewSnapId(snap.id);
-                      }}
-                      className={`flex items-center gap-1 px-2 py-1 rounded-md border text-[11px] font-medium cursor-pointer transition-colors ${
-                        isSelectedPreview
-                          ? 'bg-zinc-800 border-zinc-600 text-white'
-                          : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
-                      }`}
-                    >
-                      <Eye className="w-3 h-3" />
-                      <span>{isDe ? 'Vorschau' : 'Preview'}</span>
-                    </button>
                     {onOpenPngPreview && (
                       <button
                         type="button"
@@ -461,11 +521,11 @@ export const TacticalHistoryPanel: React.FC<TacticalHistoryPanelProps> = ({
                           setPreviewSnapId(snap.id);
                           onOpenPngPreview(snap);
                         }}
-                        className="flex items-center gap-1 px-2 py-1 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-amber-300 text-[11px] font-medium cursor-pointer transition-colors"
-                        title={isDe ? 'Als PNG-Bild öffnen (mit Linien & Utilitys)' : 'Open as PNG image'}
+                        className="flex items-center gap-1 px-2 py-1 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-sky-300 text-[11px] font-semibold cursor-pointer transition-colors"
+                        title={isDe ? 'Als PNG-Vorschau öffnen' : 'Open as PNG preview'}
                       >
-                        <ImageIcon className="w-3 h-3" />
-                        <span>PNG</span>
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>{isDe ? 'Vorschau' : 'Preview'}</span>
                       </button>
                     )}
                     <button
@@ -479,6 +539,19 @@ export const TacticalHistoryPanel: React.FC<TacticalHistoryPanelProps> = ({
                       <RotateCcw className="w-3 h-3" />
                       <span>{isDe ? 'Wiederherstellen' : 'Restore'}</span>
                     </button>
+                    {!isInit && onDeleteSnapshot && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteSnapshot(snap.id);
+                        }}
+                        className="p-1 rounded-md text-zinc-400 hover:text-red-400 hover:bg-zinc-800 transition-colors cursor-pointer"
+                        title={isDe ? 'Diesen Stand löschen' : 'Delete snapshot'}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -499,7 +572,9 @@ export const TacticalHistoryPanel: React.FC<TacticalHistoryPanelProps> = ({
             />
             <div className="space-y-1.5 min-w-0 flex-1">
               <div className="text-[10px] font-mono uppercase tracking-wider text-sky-400">
-                {isDe ? 'Verlauf · Vorschau' : 'History · Preview'}
+                {isAusgangsversion(activePreviewSnap)
+                  ? (isDe ? 'Ausgangsversion (Dauerhaft)' : 'Initial Version (Permanent)')
+                  : (isDe ? 'Verlauf · Vorschau' : 'History · Preview')}
               </div>
               <div className="text-xs font-bold text-white truncate">{activePreviewSnap.label}</div>
               <div className="text-[11px] text-zinc-400 font-mono tabular-nums space-y-0.5">
@@ -516,7 +591,7 @@ export const TacticalHistoryPanel: React.FC<TacticalHistoryPanelProps> = ({
                     onClick={() => onOpenPngPreview(activePreviewSnap)}
                     className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500 hover:bg-amber-400 text-zinc-950 text-[11px] font-bold cursor-pointer transition-colors"
                   >
-                    <ImageIcon className="w-3 h-3" />
+                    <Eye className="w-3.5 h-3.5" />
                     <span>{isDe ? 'Vorschau-Bild (PNG)' : 'Preview Image (PNG)'}</span>
                   </button>
                 )}
