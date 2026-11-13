@@ -198,35 +198,94 @@ export async function generateTacticSheetPng(
     }
   }
 
-  // 5. Draw Utility Markers
+  // 5. Draw Utility Markers (without surrounding circle, keeping colors at full marker size)
   if (tacticState.utilities && Array.isArray(tacticState.utilities)) {
     for (const u of tacticState.utilities) {
       const ux = ((u.x + 50) / 100) * size;
       const uy = ((u.y + 50) / 100) * size;
-      const r = 20;
+      const symbolSize = 44; // Matches full circle size
+      const scale = symbolSize / 24;
+
+      let color = '#0ea5e9'; // smoke
+      if (u.type === 'flash') color = '#fcd34d';
+      if (u.type === 'molotov') color = '#f97316';
+      if (u.type === 'he') color = '#dc2626';
+      if (u.type === 'decoy') color = '#9333ea';
 
       ctx.save();
-      ctx.beginPath();
-      ctx.arc(ux, uy, r, 0, Math.PI * 2);
+      ctx.translate(ux - 12 * scale, uy - 12 * scale);
+      ctx.scale(scale, scale);
+      ctx.shadowColor = 'rgba(0,0,0,0.95)';
+      ctx.shadowBlur = 4;
+      ctx.shadowOffsetY = 1;
 
-      let color = '#38bdf8'; // smoke
-      if (u.type === 'flash') color = '#facc15';
-      if (u.type === 'molotov') color = '#f97316';
-      if (u.type === 'he') color = '#ef4444';
-      if (u.type === 'decoy') color = '#a855f7';
-
-      ctx.fillStyle = color;
-      ctx.fill();
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-
-      ctx.fillStyle = '#000000';
-      ctx.font = 'bold 18px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      const label = (u.type || 'S').charAt(0).toUpperCase();
-      ctx.fillText(label, ux, uy);
+      if (u.type === 'smoke') {
+        ctx.fillStyle = color;
+        ctx.fill(
+          new Path2D(
+            'M7 16a4 4 0 0 1-.88-7.9A5 5 0 0 1 15.9 6a3.5 3.5 0 0 1 1.6 6.62A3 3 0 0 1 16 18H8a3 3 0 0 1-1-2z'
+          )
+        );
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(12,74,110,0.45)';
+        ctx.beginPath();
+        ctx.arc(9.5, 14, 1.4, 0, Math.PI * 2);
+        ctx.arc(14, 12, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (u.type === 'flash') {
+        ctx.fillStyle = color;
+        ctx.fill(
+          new Path2D(
+            'M12 2l2.2 5.4L20 6l-3.4 4.8L22 13l-5.6 1.8L18 20l-5.2-3.2L10 22l-.8-5.8L4 17l3.2-4.6L2 10l5.6-1.6L6 3.2l4.8 3.2L12 2z'
+          )
+        );
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(120,53,15,0.45)';
+        ctx.beginPath();
+        ctx.arc(12, 12, 2.6, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (u.type === 'molotov') {
+        ctx.fillStyle = color;
+        ctx.fill(
+          new Path2D(
+            'M12.5 2.5c.8 2.2 3.5 3.7 3.5 7.1 0 1.4-.5 2.5-1.3 3.3 1.4-.4 2.5-1.6 2.8-3.1 1.6 1.4 2.5 3.5 2.5 5.6A7 7 0 0 1 5 15.4c0-3.2 2-5.7 4-7.4 0 1.3.5 2.3 1.3 2.8-.2-2.8.8-5.6 2.2-8.3z'
+          )
+        );
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(254,240,138,0.9)';
+        ctx.fill(
+          new Path2D(
+            'M12 19.5a3 3 0 0 0 3-3c0-1.5-1.1-2.7-2.4-3.7-.3 1-.9 1.6-1.6 1.9-.6.3-1.4 1-1.4 2.1a2.7 2.7 0 0 0 2.4 2.7z'
+          )
+        );
+      } else if (u.type === 'he') {
+        ctx.fillStyle = color;
+        ctx.fill(new Path2D('M10 3h4a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z'));
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.stroke(new Path2D('M12 6v2'));
+        ctx.beginPath();
+        ctx.arc(12, 14, 6.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = '#7f1d1d';
+        ctx.lineWidth = 1.3;
+        ctx.stroke(new Path2D('M6.5 14h11M12 8v12M8.2 10.2l7.6 7.6M15.8 10.2l-7.6 7.6'));
+      } else {
+        // decoy
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(12, 12, 2.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = color;
+        ctx.lineCap = 'round';
+        ctx.lineWidth = 2;
+        ctx.stroke(new Path2D('M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4'));
+        ctx.globalAlpha *= 0.7;
+        ctx.lineWidth = 1.7;
+        ctx.stroke(new Path2D('M4.8 4.8a10.2 10.2 0 0 0 0 14.4M19.2 4.8a10.2 10.2 0 0 1 0 14.4'));
+      }
       ctx.restore();
     }
   }

@@ -1,0 +1,367 @@
+import React, { useState } from 'react';
+import { History, RotateCcw, Plus, X, Info, Eye } from 'lucide-react';
+import { Callout, Language, TacticSnapshot } from '../types';
+import { resolveAssetPath } from '../utils/assets';
+
+interface TacticalHistoryPanelProps {
+  lang: Language;
+  snapshots: TacticSnapshot[];
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  onSaveSnapshot: (customLabel?: string) => void;
+  onRestoreSnapshot: (snapshot: TacticSnapshot) => void;
+  mapImage: string;
+  isEmbeddedMobile?: boolean;
+}
+
+const getSnapshotCalloutColor = (c: Callout): string => {
+  if (c.area?.customColor) return c.area.customColor;
+  switch (c.zone) {
+    case 'a_site':
+      return '#f59e0b';
+    case 'b_site':
+      return '#38bdf8';
+    case 'ct_spawn':
+      return '#3b82f6';
+    case 't_spawn':
+      return '#b45309';
+    case 'mid':
+      return '#a855f7';
+    default:
+      return '#22c55e';
+  }
+};
+
+const SnapshotMiniRadarPreview: React.FC<{
+  snapshot: TacticSnapshot;
+  mapImage: string;
+  sizeClass?: string;
+}> = ({ snapshot, mapImage, sizeClass = 'w-28 h-28' }) => {
+  const callouts = snapshot.callouts || [];
+
+  return (
+    <div
+      className={`relative ${sizeClass} rounded-lg overflow-hidden border border-zinc-700/80 bg-zinc-900 shrink-0 shadow-inner`}
+    >
+      <img
+        src={resolveAssetPath(mapImage)}
+        alt="Map Version Mini Preview"
+        className="w-full h-full object-cover opacity-85"
+      />
+      <svg
+        className="absolute inset-0 w-full h-full pointer-events-none"
+        viewBox="-50 -50 100 100"
+        preserveAspectRatio="none"
+      >
+        {/* Callout Areas (Polygons & Rectangles) */}
+        {callouts.map((c) => {
+          if (!c.area) return null;
+          const color = getSnapshotCalloutColor(c);
+          if (c.area.points && c.area.points.length >= 3) {
+            return (
+              <polygon
+                key={`area_poly_${c.id}`}
+                points={c.area.points.map((p) => `${p.x},${p.y}`).join(' ')}
+                fill={color}
+                fillOpacity={0.28}
+                stroke={color}
+                strokeWidth={0.9}
+              />
+            );
+          }
+          const cx = c.area.x + c.area.width / 2;
+          const cy = c.area.y + c.area.height / 2;
+          return (
+            <rect
+              key={`area_rect_${c.id}`}
+              x={c.area.x}
+              y={c.area.y}
+              width={c.area.width}
+              height={c.area.height}
+              fill={color}
+              fillOpacity={0.26}
+              stroke={color}
+              strokeWidth={0.9}
+              transform={c.rotation ? `rotate(${c.rotation} ${cx} ${cy})` : undefined}
+            />
+          );
+        })}
+
+        {/* Callout Pin Positions */}
+        {callouts.map((c) => {
+          const color = getSnapshotCalloutColor(c);
+          return (
+            <circle
+              key={`pin_${c.id}`}
+              cx={c.x}
+              cy={c.y}
+              r={1.7}
+              fill={color}
+              stroke="#09090b"
+              strokeWidth={0.6}
+            />
+          );
+        })}
+      </svg>
+    </div>
+  );
+};
+
+export const TacticalHistoryPanel: React.FC<TacticalHistoryPanelProps> = ({
+  lang,
+  snapshots,
+  isExpanded,
+  onToggleExpand,
+  onSaveSnapshot,
+  onRestoreSnapshot,
+  mapImage,
+  isEmbeddedMobile = false,
+}) => {
+  const isDe = lang === 'de';
+  const visibleSnapshots = snapshots.slice(0, 3);
+  const [previewSnapId, setPreviewSnapId] = useState<string | null>(null);
+
+  const activePreviewSnap =
+    visibleSnapshots.find((s) => s.id === previewSnapId) || visibleSnapshots[0] || null;
+
+  const formatTime = (ts: number) => {
+    const d = new Date(ts);
+    const now = new Date();
+    const isToday = d.toDateString() === now.toDateString();
+    const timeStr = d.toLocaleTimeString(isDe ? 'de-DE' : 'en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    return isToday ? `${isDe ? 'Heute' : 'Today'}, ${timeStr}` : `${d.toLocaleDateString()} ${timeStr}`;
+  };
+
+  const countAreas = (snap: TacticSnapshot) =>
+    (snap.callouts || []).filter((c) => Boolean(c.area)).length;
+
+  if (isEmbeddedMobile) {
+    return (
+      <div className="p-3 space-y-3 text-zinc-100">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs font-bold">
+            <History className="w-4 h-4 text-amber-400" />
+            <span>{isDe ? 'Karten-Verlauf (max. 3)' : 'Map History (max. 3)'}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => onSaveSnapshot()}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 text-sky-300 text-xs font-semibold cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>{isDe ? 'Kartenstand sichern' : 'Save Map'}</span>
+          </button>
+        </div>
+
+        {activePreviewSnap && (
+          <div className="flex items-center gap-3 p-2.5 rounded-xl bg-zinc-900/90 border border-zinc-800">
+            <SnapshotMiniRadarPreview
+              snapshot={activePreviewSnap}
+              mapImage={mapImage}
+              sizeClass="w-20 h-20"
+            />
+            <div className="min-w-0 flex-1 space-y-1">
+              <div className="text-[10px] font-mono uppercase text-sky-400">
+                {isDe ? 'Karten-Vorschau' : 'Map Preview'}
+              </div>
+              <div className="text-xs font-bold text-white truncate">{activePreviewSnap.label}</div>
+              <div className="text-[11px] font-mono tabular-nums text-zinc-400">
+                {(activePreviewSnap.callouts || []).length} Callouts · {countAreas(activePreviewSnap)}{' '}
+                {isDe ? 'Bereiche' : 'Areas'}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-2">
+          {visibleSnapshots.map((snap, idx) => (
+            <div
+              key={snap.id}
+              onClick={() => setPreviewSnapId(snap.id)}
+              className={`flex items-center justify-between p-2.5 rounded-lg border text-xs cursor-pointer transition-colors ${
+                activePreviewSnap?.id === snap.id
+                  ? 'bg-sky-950/30 border-sky-500/50'
+                  : 'bg-zinc-900/70 border-zinc-800'
+              }`}
+            >
+              <div className="min-w-0 pr-2">
+                <div className="font-semibold text-zinc-100 truncate">
+                  {idx + 1}. {snap.label}
+                </div>
+                <div className="text-[11px] font-mono tabular-nums text-zinc-400">
+                  {formatTime(snap.timestamp)} · {(snap.callouts || []).length} Callouts
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRestoreSnapshot(snap);
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-zinc-800 hover:bg-sky-500 hover:text-zinc-950 text-sky-300 border border-zinc-700 text-[11px] font-bold transition-colors shrink-0 cursor-pointer"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>{isDe ? 'Wiederherstellen' : 'Restore'}</span>
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!isExpanded) return null;
+
+  return (
+    <div
+      data-no-map-click="true"
+      className="hidden md:flex flex-col border-t border-zinc-800 bg-zinc-950/98 text-zinc-100 shrink-0 shadow-2xl z-40 print:hidden"
+    >
+      {/* Header Row */}
+      <div className="h-9 px-4 flex items-center justify-between gap-4 border-b border-zinc-800/80 bg-zinc-900/60">
+        <div className="flex items-center gap-2.5">
+          <History className="w-3.5 h-3.5 text-amber-400" />
+          <span className="text-xs font-bold text-white">
+            {isDe ? 'Karten-Versionsverlauf (letzte 3 Stände)' : 'Map Version History (last 3)'}
+          </span>
+          <span className="inline-flex items-center gap-1 text-[11px] text-zinc-400 ml-2">
+            <Info className="w-3.5 h-3.5 text-zinc-500" />
+            <span>
+              {isDe
+                ? 'Speichert ausschließlich Callouts & Bereiche deiner Karte.'
+                : 'Stores only saved map callouts & areas.'}
+            </span>
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onSaveSnapshot()}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 text-sky-300 text-[11px] font-semibold transition-colors cursor-pointer"
+          >
+            <Plus className="w-3 h-3" />
+            <span>{isDe ? 'Kartenstand sichern' : 'Save Map Snapshot'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={onToggleExpand}
+            className="p-1 text-zinc-400 hover:text-white rounded hover:bg-zinc-800 transition-colors cursor-pointer"
+            title={isDe ? 'Verlauf schließen' : 'Close history'}
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Body: Max 3 map versions list + Live Mini-Radar Snapshot Preview */}
+      <div className="px-4 py-3 flex items-center gap-5 bg-zinc-950">
+        {/* Timeline (max 3 versions) */}
+        <div className="flex-1 space-y-1.5 min-w-0">
+          {visibleSnapshots.length === 0 ? (
+            <div className="py-6 text-center text-xs text-zinc-500">
+              {isDe ? 'Noch keine gespeicherten Kartenstände vorhanden.' : 'No saved map versions yet.'}
+            </div>
+          ) : (
+            visibleSnapshots.map((snap, idx) => {
+              const isSelectedPreview = activePreviewSnap?.id === snap.id;
+              return (
+                <div
+                  key={snap.id}
+                  onMouseEnter={() => setPreviewSnapId(snap.id)}
+                  onClick={() => setPreviewSnapId(snap.id)}
+                  className={`flex items-center justify-between px-3 py-2 rounded-lg border text-xs transition-colors cursor-pointer ${
+                    isSelectedPreview
+                      ? 'bg-sky-950/35 border-sky-500/50 text-zinc-100'
+                      : 'bg-zinc-900/50 border-zinc-800/80 text-zinc-300 hover:bg-zinc-900'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span
+                      className={`w-2 h-2 rounded-full shrink-0 ${
+                        idx === 0 ? 'bg-sky-400' : 'bg-zinc-500'
+                      }`}
+                    />
+                    <span className="font-mono text-[11px] tabular-nums text-zinc-400 shrink-0">
+                      {formatTime(snap.timestamp)}
+                    </span>
+                    <span className="font-semibold truncate">{snap.label}</span>
+                    {idx === 0 && (
+                      <span className="text-[10px] font-mono uppercase text-sky-400 shrink-0">
+                        · {isDe ? 'Aktuell' : 'Latest'}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPreviewSnapId(snap.id);
+                      }}
+                      className={`flex items-center gap-1 px-2 py-1 rounded-md border text-[11px] font-medium cursor-pointer transition-colors ${
+                        isSelectedPreview
+                          ? 'bg-zinc-800 border-zinc-600 text-white'
+                          : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      <Eye className="w-3 h-3" />
+                      <span>{isDe ? 'Vorschau' : 'Preview'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRestoreSnapshot(snap);
+                      }}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-sky-500 hover:bg-sky-400 text-zinc-950 text-[11px] font-bold transition-colors cursor-pointer"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>{isDe ? 'Wiederherstellen' : 'Restore'}</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Live Mini-Map & Prior State Preview Card */}
+        {activePreviewSnap && (
+          <div className="flex items-center gap-3.5 pl-5 border-l border-zinc-800 shrink-0 w-80">
+            <SnapshotMiniRadarPreview
+              snapshot={activePreviewSnap}
+              mapImage={mapImage}
+              sizeClass="w-28 h-28"
+            />
+            <div className="space-y-1.5 min-w-0 flex-1">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-sky-400">
+                {isDe ? 'Minikarte · Kartenstand' : 'Mini Map · Map Version'}
+              </div>
+              <div className="text-xs font-bold text-white truncate">{activePreviewSnap.label}</div>
+              <div className="text-[11px] text-zinc-400 font-mono tabular-nums space-y-0.5">
+                <div>{formatTime(activePreviewSnap.timestamp)}</div>
+                <div>
+                  {(activePreviewSnap.callouts || []).length} Callouts ·{' '}
+                  {countAreas(activePreviewSnap)} {isDe ? 'Bereiche' : 'Areas'}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => onRestoreSnapshot(activePreviewSnap)}
+                className="w-full mt-1 flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-md bg-zinc-900 hover:bg-sky-500 hover:text-zinc-950 text-sky-300 border border-zinc-700 text-[11px] font-bold cursor-pointer transition-colors"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>{isDe ? 'Diesen Kartenstand laden' : 'Load this map version'}</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};

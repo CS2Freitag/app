@@ -45,14 +45,35 @@ export interface Callout {
   commonAnglesDe: string;
   commonAnglesEn: string;
   isCustom?: boolean;
+  groupId?: string;
+  locked?: boolean;
 }
 
 export type MapCategory = 'active' | 'reserve' | 'wingman' | 'hostage' | 'community' | string;
+
+export interface TacticLayer {
+  id: string;
+  name: string;
+  color: string;
+  visible: boolean;
+  locked: boolean;
+  opacity: number; // 0.1 to 1.0
+  isExpanded?: boolean;
+}
+
+export interface TacticSnapshot {
+  id: string;
+  timestamp: number;
+  label: string;
+  changedCount: number;
+  callouts: Callout[];
+}
 
 export interface TacticalState {
   drawings: TacticalDrawingLine[];
   utilities: UtilityMarker[];
   players: PlayerToken[];
+  layers?: TacticLayer[];
 }
 
 export interface MapData {
@@ -80,6 +101,10 @@ export interface UtilityMarker {
   x: number;
   y: number;
   label?: string;
+  layerId?: string;
+  groupId?: string;
+  locked?: boolean;
+  opacity?: number;
 }
 
 export interface PlayerToken {
@@ -89,6 +114,10 @@ export interface PlayerToken {
   x: number;
   y: number;
   hasBomb?: boolean;
+  layerId?: string;
+  groupId?: string;
+  locked?: boolean;
+  opacity?: number;
 }
 
 export interface TacticalDrawingLine {
@@ -97,6 +126,11 @@ export interface TacticalDrawingLine {
   color: string;
   width: number;
   hasArrow?: boolean;
+  layerId?: string;
+  groupId?: string;
+  locked?: boolean;
+  opacity?: number;
+  label?: string;
 }
 
-export type TacticalTool = 'select' | 'pen' | 'arrow' | 'eraser' | 'utility' | 'player';
+export type TacticalTool = 'select' | 'marquee' | 'pen' | 'arrow' | 'eraser' | 'utility' | 'player';

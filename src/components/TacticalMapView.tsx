@@ -41,9 +41,26 @@ import {
   Share2,
   Plus,
   ListFilter,
-  Volume2
+  Volume2,
+  Layers,
+  Lock,
+  Unlock,
+  Copy,
+  Grid3X3,
+  Users,
+  CheckCircle2,
+  History,
+  MousePointer2,
+  BoxSelect,
+  ChevronRight,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightOpen,
+  Map as MapIcon,
 } from 'lucide-react';
-import { playTTS } from '../utils/tts';
+import { UtilitySymbol, UTILITY_META } from './UtilitySymbol';
+import { TacticalLayersPanel } from './TacticalLayersPanel';
+import { TacticalHistoryPanel } from './TacticalHistoryPanel';
 import {
   MapData,
   Callout,
@@ -58,7 +75,9 @@ import {
   UtilityMarker,
   PlayerToken,
   TacticalDrawingLine,
-  TacticalTool
+  TacticalTool,
+  TacticLayer,
+  TacticSnapshot
 } from '../types';
 
 export const isCalloutForLevel = (
@@ -168,12 +187,17 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
   const handleShareTactics = () => {
     try {
+      const visibleDrawings = drawings.filter((d) => isLayerVisible(d.layerId, 'layer_t'));
+      const visibleUtilities = utilities.filter((u) => isLayerVisible(u.layerId, 'layer_util'));
+      const visiblePlayers = players.filter((p) =>
+        isLayerVisible(p.layerId, p.side === 'ct' ? 'layer_ct' : 'layer_t')
+      );
       const compressed = encodeCompactTactic(
         mapData.id,
         mapData.name,
-        drawings,
-        utilities,
-        players
+        visibleDrawings,
+        visibleUtilities,
+        visiblePlayers
       );
       const url = `${window.location.origin}${window.location.pathname}#t=${compressed}`;
       setCurrentShareUrl(url);
@@ -285,6 +309,82 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const [utilities, setUtilities] = useState<UtilityMarker[]>(() => mapData.tacticData?.utilities || []);
   const [players, setPlayers] = useState<PlayerToken[]>(() => mapData.tacticData?.players || []);
 
+  // Studio Editor Layers, Selection, Grid & Responsive Drawers
+  const defaultLayers: TacticLayer[] = [
+    { id: 'layer_ct', name: 'CT-Setups', color: '#3b82f6', visible: true, locked: false, opacity: 1, isExpanded: false },
+    { id: 'layer_t', name: 'T-Rush', color: '#eab308', visible: true, locked: false, opacity: 1, isExpanded: true },
+    { id: 'layer_util', name: 'Utility', color: '#22c55e', visible: true, locked: false, opacity: 1, isExpanded: false },
+    { id: 'layer_retake', name: 'Retake', color: '#a855f7', visible: true, locked: false, opacity: 1, isExpanded: false },
+  ];
+  const [layers, setLayers] = useState<TacticLayer[]>(() =>
+    mapData.tacticData?.layers && mapData.tacticData.layers.length > 0
+      ? mapData.tacticData.layers
+      : defaultLayers
+  );
+  const [activeLayerId, setActiveLayerId] = useState<string>(() =>
+    mapData.tacticData?.layers?.[1]?.id || mapData.tacticData?.layers?.[0]?.id || 'layer_t'
+  );
+  const [selectedElementIds, setSelectedElementIds] = useState<string[]>([]);
+  const [selectedCalloutIds, setSelectedCalloutIds] = useState<string[]>([]);
+  const [isToolbarVisible, setIsToolbarVisible] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 768 : true
+  );
+  const [isRightPanelVisible, setIsRightPanelVisible] = useState<boolean>(true);
+  const [showMinimap, setShowMinimap] = useState<boolean>(true);
+  const [marqueeRect, setMarqueeRect] = useState<{
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
+  } | null>(null);
+  const marqueeAdditiveRef = useRef<boolean>(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [showContextColorSubmenu, setShowContextColorSubmenu] = useState<boolean>(false);
+  const minimapRef = useRef<HTMLDivElement | null>(null);
+  const [isDraggingMinimap, setIsDraggingMinimap] = useState<boolean>(false);
+
+  const [showGrid, setShowGrid] = useState<boolean>(false);
+  const [showContextColorPicker, setShowContextColorPicker] = useState<boolean>(false);
+  const [isTabletLayersOpen, setIsTabletLayersOpen] = useState<boolean>(false);
+  const [isMobileSheetOpen, setIsMobileSheetOpen] = useState<boolean>(false);
+  const [mobileSheetTab, setMobileSheetTab] = useState<'layers' | 'history'>('layers');
+  const [isHistoryExpanded, setIsHistoryExpanded] = useState<boolean>(false);
+
+  // Map Version History Snapshots (max 3 saved versions per map in localStorage — map callouts & areas only)
+  const [snapshots, setSnapshots] = useState<TacticSnapshot[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const stored = localStorage.getItem(`cs2_map_history_${mapData.id}`);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          const valid = parsed.filter((s) => s && Array.isArray(s.callouts)).slice(0, 3);
+          if (valid.length > 0) return valid;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return [
+      {
+        id: `map_snap_init_${Date.now()}`,
+        timestamp: Date.now(),
+        label: isDe ? 'Ausgangsversion' : 'Initial map',
+        changedCount: mapData.callouts.length,
+        callouts: JSON.parse(JSON.stringify(mapData.callouts)),
+      },
+    ];
+  });
+
+  // Sync map history updates cleanly (keeps max 3 versions in localStorage)
+  useEffect(() => {
+    try {
+      localStorage.setItem(`cs2_map_history_${mapData.id}`, JSON.stringify(snapshots.slice(0, 3)));
+    } catch {
+      // ignore
+    }
+  }, [snapshots, mapData.id]);
+
   // Callouts & Inspector state
   const [hoveredCallout, setHoveredCallout] = useState<Callout | null>(null);
   const [selectedCallout, setSelectedCallout] = useState<Callout | null>(null);
@@ -348,7 +448,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   } | null>(null);
 
   const handleAreaRotationStart = (callout: Callout, e: React.MouseEvent | React.TouchEvent) => {
-    if (!isEditMode || !callout.area) return;
+    if (!isEditMode || !callout.area || callout.locked) return;
+    if ('button' in e && e.button !== 0) return;
     e.stopPropagation();
     setRotatingAreaCalloutId(callout.id);
     const { clientX, clientY } = getClientCoords(e);
@@ -438,29 +539,51 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const initialPinchDistRef = useRef<number | null>(null);
   const initialPinchZoomRef = useRef<number>(1.0);
 
-  const calculateFitZoom = () => {
-    if (typeof window !== 'undefined' && window.innerWidth < 768) {
-      return currentLevel === 'both' ? 0.5 : 1.0;
+  const calculateFitZoom = (overrideFs?: boolean) => {
+    const fs = overrideFs !== undefined ? overrideFs : isFullscreen;
+    if (!mainWrapperRef.current) {
+      if (typeof window !== 'undefined' && window.innerWidth < 768) {
+        return currentLevel === 'both' ? 0.5 : 0.95;
+      }
+      return 0.78;
     }
-    if (!mainWrapperRef.current) return 0.75;
     const parentRect = mainWrapperRef.current.getBoundingClientRect();
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 1024;
+    const leftDeduction = fs || isMobile ? 0 : isToolbarVisible ? 224 : 0;
+    const rightDeduction = fs || isMobile ? 0 : isDesktop ? 304 : 0;
+    const topHeaderDeduction = fs ? 64 : isMobile ? (isToolbarVisible ? 116 : 64) : 80;
+    const availW = Math.max(260, parentRect.width - (leftDeduction + rightDeduction));
+    const availH = Math.max(260, parentRect.height - topHeaderDeduction);
+
     if (currentLevel === 'both') {
-      const availW = Math.max(300, parentRect.width - 48);
-      const availH = Math.max(300, parentRect.height - 48);
       const scaleW = availW / 1750;
       const scaleH = availH / 850;
-      return Math.max(0.5, Math.min(2.5, Math.min(scaleW, scaleH) * 0.92));
+      return Math.max(0.5, Math.min(2.5, Math.min(scaleW, scaleH) * (fs ? 0.96 : 0.92)));
     }
-    const availableSize = Math.min(parentRect.width - 40, parentRect.height - 40);
-    // Based on max-w-[850px], reduced by 10%
-    return Math.max(0.5, Math.min(2.5, (availableSize / 850) * 0.9));
+    const baseTileSize = Math.min(850, availW);
+    const availableSize = Math.min(availW, availH);
+    return Math.max(
+      0.5,
+      Math.min(2.5, (availableSize / Math.max(260, baseTileSize)) * (fs ? 0.95 : 0.92))
+    );
   };
 
-  // Auto-fit map zoom when switching maps or selecting floor level
+  // Ensure mobile bottom sheet switches to Layers/Callout tab when a callout is selected
   useEffect(() => {
-    setZoom(calculateFitZoom());
-    setPan({ x: 0, y: 0 });
-  }, [mapData.id, currentLevel]);
+    if (selectedCallout) {
+      setMobileSheetTab('layers');
+    }
+  }, [selectedCallout?.id]);
+
+  // Auto-fit map zoom when switching maps, floor levels, toolbar visibility, or map-only Fullscreen
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      setZoom(calculateFitZoom(isFullscreen));
+      setPan({ x: 0, y: 0 });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [mapData.id, currentLevel, isFullscreen, isToolbarVisible]);
 
   const startBannerTimer = useCallback(() => {
     setShowEditBanner(true);
@@ -533,9 +656,461 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     setIsCustomSelectionModalOpen(false);
   };
 
-  // Keyboard shortcut listener (Undo: Ctrl+Z, Redo: Ctrl+Y / Ctrl+Shift+Z)
+  // Layer, Selection & History Helpers
+  const isLayerLocked = useCallback(
+    (layerId?: string) => {
+      const target = layers.find((l) => l.id === (layerId || activeLayerId));
+      return Boolean(target?.locked);
+    },
+    [layers, activeLayerId]
+  );
+
+  const isLayerVisible = useCallback(
+    (layerId?: string, defaultFallbackId = 'layer_t') => {
+      const target = layers.find((l) => l.id === (layerId || defaultFallbackId));
+      return target ? target.visible : true;
+    },
+    [layers]
+  );
+
+  const getLayerOpacity = useCallback(
+    (layerId?: string, defaultFallbackId = 'layer_t') => {
+      const target = layers.find((l) => l.id === (layerId || defaultFallbackId));
+      return target ? target.opacity : 1;
+    },
+    [layers]
+  );
+
+  const handleSaveSnapshot = useCallback(
+    (customLabel?: string, overrideCallouts?: Callout[]) => {
+      const targetCallouts = overrideCallouts || mapData.callouts;
+      const serialized = JSON.stringify(targetCallouts);
+      setSnapshots((prev) => {
+        if (prev.length > 0 && JSON.stringify(prev[0].callouts) === serialized) {
+          return prev;
+        }
+        const areaCount = targetCallouts.filter((c) => Boolean(c.area)).length;
+        const newSnap: TacticSnapshot = {
+          id: `map_snap_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          timestamp: Date.now(),
+          label:
+            customLabel ||
+            `${mapData.name} ${isDe ? 'gesichert' : 'saved'} (${targetCallouts.length} / ${areaCount})`,
+          changedCount: targetCallouts.length,
+          callouts: JSON.parse(serialized),
+        };
+        return [newSnap, ...prev].slice(0, 3);
+      });
+    },
+    [mapData.callouts, mapData.name, isDe]
+  );
+
+  const handleRestoreSnapshot = useCallback(
+    (snap: TacticSnapshot) => {
+      const currentSerialized = JSON.stringify(mapData.callouts);
+      const targetSerialized = JSON.stringify(snap.callouts || []);
+      if (currentSerialized !== targetSerialized) {
+        const safetyBackup: TacticSnapshot = {
+          id: `map_snap_pre_restore_${Date.now()}`,
+          timestamp: Date.now(),
+          label: isDe ? 'Sicherung vor Wiederherstellung' : 'Backup before restore',
+          changedCount: mapData.callouts.length,
+          callouts: JSON.parse(currentSerialized),
+        };
+        setSnapshots((prev) => [safetyBackup, ...prev].slice(0, 3));
+      }
+
+      const restoredCallouts: Callout[] = JSON.parse(targetSerialized);
+      onUpdateMap({ ...mapData, callouts: restoredCallouts, updatedAt: Date.now() }, true);
+      setSelectedCallout(null);
+      setSelectedCalloutIds([]);
+      setHighlightedCalloutId(undefined);
+      setHasChangesInSession(true);
+    },
+    [mapData, onUpdateMap, isDe]
+  );
+
+  const handleSelectElement = useCallback(
+    (elementId: string, multiKey = false) => {
+      setSelectedCallout(null);
+      const foundGroup =
+        drawings.find((d) => d.id === elementId)?.groupId ||
+        utilities.find((u) => u.id === elementId)?.groupId ||
+        players.find((p) => p.id === elementId)?.groupId;
+
+      const groupElementIds = foundGroup
+        ? [
+            ...drawings.filter((d) => d.groupId === foundGroup).map((d) => d.id),
+            ...utilities.filter((u) => u.groupId === foundGroup).map((u) => u.id),
+            ...players.filter((p) => p.groupId === foundGroup).map((p) => p.id),
+          ]
+        : [elementId];
+      const groupCalloutPeers = foundGroup
+        ? mapData.callouts.filter((c) => c.groupId === foundGroup).map((c) => c.id)
+        : [];
+
+      if (!multiKey) {
+        setSelectedCalloutIds(groupCalloutPeers);
+      } else if (groupCalloutPeers.length > 0) {
+        setSelectedCalloutIds((prev) => Array.from(new Set([...prev, ...groupCalloutPeers])));
+      }
+
+      setSelectedElementIds((prev) => {
+        if (multiKey) {
+          const allAlready = groupElementIds.every((id) => prev.includes(id));
+          if (allAlready) {
+            return prev.filter((id) => !groupElementIds.includes(id));
+          }
+          return Array.from(new Set([...prev, ...groupElementIds]));
+        }
+        return groupElementIds;
+      });
+    },
+    [drawings, utilities, players, mapData.callouts]
+  );
+
+  const handleSelectCalloutMulti = useCallback(
+    (callout: Callout, multiKey = false, openInspector = true) => {
+      const groupCalloutIds = callout.groupId
+        ? mapData.callouts.filter((c) => c.groupId === callout.groupId).map((c) => c.id)
+        : [callout.id];
+      const groupElIds = callout.groupId
+        ? [
+            ...drawings.filter((d) => d.groupId === callout.groupId).map((d) => d.id),
+            ...utilities.filter((u) => u.groupId === callout.groupId).map((u) => u.id),
+            ...players.filter((p) => p.groupId === callout.groupId).map((p) => p.id),
+          ]
+        : [];
+
+      if (multiKey) {
+        setSelectedCalloutIds((prev) => {
+          const allSelected = groupCalloutIds.every((id) => prev.includes(id));
+          const next = allSelected
+            ? prev.filter((id) => !groupCalloutIds.includes(id))
+            : Array.from(new Set([...prev, ...groupCalloutIds]));
+          if (next.length === 1 && openInspector) {
+            const single = mapData.callouts.find((c) => c.id === next[0]) || null;
+            setSelectedCallout(single);
+            setHighlightedCalloutId(single?.id);
+          } else {
+            setSelectedCallout(null);
+            setHighlightedCalloutId(next.length === 1 ? next[0] : undefined);
+          }
+          return next;
+        });
+        if (groupElIds.length > 0) {
+          setSelectedElementIds((prev) => Array.from(new Set([...prev, ...groupElIds])));
+        }
+      } else {
+        setSelectedCalloutIds(groupCalloutIds);
+        setSelectedElementIds(groupElIds);
+        if (openInspector && groupCalloutIds.length <= 1 && groupElIds.length === 0) {
+          setSelectedCallout(callout);
+          setHighlightedCalloutId(callout.id);
+        } else {
+          setSelectedCallout(null);
+          setHighlightedCalloutId(callout.id);
+        }
+      }
+    },
+    [mapData.callouts, drawings, utilities, players]
+  );
+
+  const handleDuplicateSelected = useCallback(() => {
+    const hasElements = selectedElementIds.length > 0;
+    const hasCallouts = selectedCalloutIds.length > 0;
+    if (!hasElements && !hasCallouts) return;
+
+    const offset = 2.8;
+    const newElIds: string[] = [];
+
+    if (hasElements) {
+      const clonedDrawings: TacticalDrawingLine[] = drawings
+        .filter((d) => selectedElementIds.includes(d.id))
+        .map((d, i) => {
+          const nid = `draw_dup_${Date.now()}_${i}`;
+          newElIds.push(nid);
+          return {
+            ...d,
+            id: nid,
+            groupId: undefined,
+            locked: false,
+            points: d.points.map((p) => ({ x: p.x + offset, y: p.y + offset })),
+          };
+        });
+
+      const clonedUtilities: UtilityMarker[] = utilities
+        .filter((u) => selectedElementIds.includes(u.id))
+        .map((u, i) => {
+          const nid = `util_dup_${Date.now()}_${i}`;
+          newElIds.push(nid);
+          return {
+            ...u,
+            id: nid,
+            groupId: undefined,
+            locked: false,
+            x: u.x + offset,
+            y: u.y + offset,
+          };
+        });
+
+      const clonedPlayers: PlayerToken[] = players
+        .filter((p) => selectedElementIds.includes(p.id))
+        .map((p, i) => {
+          const nid = `player_dup_${Date.now()}_${i}`;
+          newElIds.push(nid);
+          return {
+            ...p,
+            id: nid,
+            groupId: undefined,
+            locked: false,
+            x: p.x + offset,
+            y: p.y + offset,
+          };
+        });
+
+      if (clonedDrawings.length > 0) setDrawings((prev) => [...prev, ...clonedDrawings]);
+      if (clonedUtilities.length > 0) setUtilities((prev) => [...prev, ...clonedUtilities]);
+      if (clonedPlayers.length > 0) setPlayers((prev) => [...prev, ...clonedPlayers]);
+      setSelectedElementIds(newElIds);
+    }
+
+    if (hasCallouts) {
+      const newCalloutIds: string[] = [];
+      const clonedCallouts: Callout[] = mapData.callouts
+        .filter((c) => selectedCalloutIds.includes(c.id))
+        .map((c, i) => {
+          const cid = `custom_dup_${Date.now()}_${i}`;
+          newCalloutIds.push(cid);
+          return {
+            ...c,
+            id: cid,
+            name: `${c.name} (${isDe ? 'Kopie' : 'Copy'})`,
+            x: Math.round(Math.min(48, c.x + offset) * 10) / 10,
+            y: Math.round(Math.min(48, c.y + offset) * 10) / 10,
+            groupId: undefined,
+            locked: false,
+            isCustom: true,
+            area: c.area
+              ? {
+                  ...c.area,
+                  x: Math.round((c.area.x + offset) * 10) / 10,
+                  y: Math.round((c.area.y + offset) * 10) / 10,
+                  points: c.area.points
+                    ? c.area.points.map((pt) => ({
+                        x: Math.round((pt.x + offset) * 10) / 10,
+                        y: Math.round((pt.y + offset) * 10) / 10,
+                      }))
+                    : undefined,
+                }
+              : undefined,
+          };
+        });
+      if (clonedCallouts.length > 0) {
+        onUpdateMap({ ...mapData, callouts: [...mapData.callouts, ...clonedCallouts] }, true);
+        setSelectedCalloutIds(newCalloutIds);
+      }
+    }
+
+    setContextMenu(null);
+    setHasChangesInSession(true);
+  }, [selectedElementIds, selectedCalloutIds, drawings, utilities, players, mapData, onUpdateMap, isDe]);
+
+  const handleGroupSelected = useCallback(() => {
+    const totalCount = selectedElementIds.length + selectedCalloutIds.length;
+    if (totalCount < 2) return;
+
+    const selectedGroups = new Set([
+      ...drawings.filter((d) => selectedElementIds.includes(d.id)).map((d) => d.groupId),
+      ...utilities.filter((u) => selectedElementIds.includes(u.id)).map((u) => u.groupId),
+      ...players.filter((p) => selectedElementIds.includes(p.id)).map((p) => p.groupId),
+      ...mapData.callouts.filter((c) => selectedCalloutIds.includes(c.id)).map((c) => c.groupId),
+    ]);
+    const shouldUngroup = selectedGroups.size === 1 && !selectedGroups.has(undefined);
+    const nextGroupId = shouldUngroup ? undefined : `grp_${Date.now()}`;
+
+    if (selectedElementIds.length > 0) {
+      setDrawings((prev) =>
+        prev.map((d) => (selectedElementIds.includes(d.id) ? { ...d, groupId: nextGroupId } : d))
+      );
+      setUtilities((prev) =>
+        prev.map((u) => (selectedElementIds.includes(u.id) ? { ...u, groupId: nextGroupId } : u))
+      );
+      setPlayers((prev) =>
+        prev.map((p) => (selectedElementIds.includes(p.id) ? { ...p, groupId: nextGroupId } : p))
+      );
+    }
+
+    if (selectedCalloutIds.length > 0) {
+      const updatedCallouts = mapData.callouts.map((c) =>
+        selectedCalloutIds.includes(c.id) ? { ...c, groupId: nextGroupId } : c
+      );
+      onUpdateMap({ ...mapData, callouts: updatedCallouts }, true);
+    }
+
+    setContextMenu(null);
+    setHasChangesInSession(true);
+  }, [selectedElementIds, selectedCalloutIds, drawings, utilities, players, mapData, onUpdateMap]);
+
+  const handleToggleLockSelected = useCallback(() => {
+    if (selectedElementIds.length === 0 && selectedCalloutIds.length === 0) return;
+
+    const anyUnlocked =
+      drawings.some((d) => selectedElementIds.includes(d.id) && !d.locked) ||
+      utilities.some((u) => selectedElementIds.includes(u.id) && !u.locked) ||
+      players.some((p) => selectedElementIds.includes(p.id) && !p.locked) ||
+      mapData.callouts.some((c) => selectedCalloutIds.includes(c.id) && !c.locked);
+    const nextLock = anyUnlocked;
+
+    if (selectedElementIds.length > 0) {
+      setDrawings((prev) =>
+        prev.map((d) => (selectedElementIds.includes(d.id) ? { ...d, locked: nextLock } : d))
+      );
+      setUtilities((prev) =>
+        prev.map((u) => (selectedElementIds.includes(u.id) ? { ...u, locked: nextLock } : u))
+      );
+      setPlayers((prev) =>
+        prev.map((p) => (selectedElementIds.includes(p.id) ? { ...p, locked: nextLock } : p))
+      );
+    }
+
+    if (selectedCalloutIds.length > 0) {
+      const updatedCallouts = mapData.callouts.map((c) =>
+        selectedCalloutIds.includes(c.id) ? { ...c, locked: nextLock } : c
+      );
+      onUpdateMap({ ...mapData, callouts: updatedCallouts }, true);
+    }
+
+    setContextMenu(null);
+    setHasChangesInSession(true);
+  }, [selectedElementIds, selectedCalloutIds, drawings, utilities, players, mapData, onUpdateMap]);
+
+  const handleDeleteSelectedElements = useCallback(() => {
+    if (selectedElementIds.length === 0 && selectedCalloutIds.length === 0) return;
+
+    if (selectedElementIds.length > 0) {
+      setDrawings((prev) =>
+        prev.filter((d) => !(selectedElementIds.includes(d.id) && !d.locked && !isLayerLocked(d.layerId)))
+      );
+      setUtilities((prev) =>
+        prev.filter((u) => !(selectedElementIds.includes(u.id) && !u.locked && !isLayerLocked(u.layerId || 'layer_util')))
+      );
+      setPlayers((prev) =>
+        prev.filter(
+          (p) =>
+            !(
+              selectedElementIds.includes(p.id) &&
+              !p.locked &&
+              !isLayerLocked(p.layerId || (p.side === 'ct' ? 'layer_ct' : 'layer_t'))
+            )
+        )
+      );
+      setSelectedElementIds([]);
+    }
+
+    if (selectedCalloutIds.length > 0) {
+      const remainingCallouts = mapData.callouts.filter(
+        (c) => !(selectedCalloutIds.includes(c.id) && !c.locked)
+      );
+      onUpdateMap({ ...mapData, callouts: remainingCallouts }, true);
+      setSelectedCalloutIds([]);
+      setSelectedCallout(null);
+      setHighlightedCalloutId(undefined);
+    }
+
+    setContextMenu(null);
+    setShowContextColorPicker(false);
+    setShowContextColorSubmenu(false);
+    setHasChangesInSession(true);
+  }, [selectedElementIds, selectedCalloutIds, isLayerLocked, mapData, onUpdateMap]);
+
+  const handleUpdateSelectedElementsProps = useCallback(
+    (patch: { color?: string; opacity?: number; locked?: boolean }) => {
+      if (selectedElementIds.length === 0 && selectedCalloutIds.length === 0) return;
+
+      if (selectedElementIds.length > 0) {
+        setDrawings((prev) =>
+          prev.map((d) =>
+            selectedElementIds.includes(d.id)
+              ? {
+                  ...d,
+                  ...(patch.color !== undefined ? { color: patch.color } : {}),
+                  ...(patch.opacity !== undefined ? { opacity: patch.opacity } : {}),
+                  ...(patch.locked !== undefined ? { locked: patch.locked } : {}),
+                }
+              : d
+          )
+        );
+        setUtilities((prev) =>
+          prev.map((u) =>
+            selectedElementIds.includes(u.id)
+              ? {
+                  ...u,
+                  ...(patch.opacity !== undefined ? { opacity: patch.opacity } : {}),
+                  ...(patch.locked !== undefined ? { locked: patch.locked } : {}),
+                }
+              : u
+          )
+        );
+        setPlayers((prev) =>
+          prev.map((p) =>
+            selectedElementIds.includes(p.id)
+              ? {
+                  ...p,
+                  ...(patch.opacity !== undefined ? { opacity: patch.opacity } : {}),
+                  ...(patch.locked !== undefined ? { locked: patch.locked } : {}),
+                }
+              : p
+          )
+        );
+      }
+
+      if (selectedCalloutIds.length > 0 && patch.color !== undefined) {
+        const updatedCallouts = mapData.callouts.map((c) => {
+          if (!selectedCalloutIds.includes(c.id)) return c;
+          if (c.area) {
+            return { ...c, area: { ...c.area, customColor: patch.color } };
+          }
+          const w = 10;
+          const h = 10;
+          return {
+            ...c,
+            area: {
+              x: Math.max(-50, Math.min(50 - w, Math.round((c.x - w / 2) * 10) / 10)),
+              y: Math.max(-50, Math.min(50 - h, Math.round((c.y - h / 2) * 10) / 10)),
+              width: w,
+              height: h,
+              shape: 'rect' as const,
+              customColor: patch.color,
+            },
+          };
+        });
+        onUpdateMap({ ...mapData, callouts: updatedCallouts }, true);
+      }
+
+      setHasChangesInSession(true);
+    },
+    [selectedElementIds, selectedCalloutIds, mapData, onUpdateMap]
+  );
+
+  // Keyboard shortcut listener (Undo: Ctrl+Z, Redo: Ctrl+Y / Ctrl+Shift+Z, Duplicate: Ctrl+D, Delete: Del/Backspace, Escape)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT');
+      if (isInput) return;
+
+      if (e.key === 'Escape') {
+        setContextMenu(null);
+        setShowContextColorSubmenu(false);
+        setShowContextColorPicker(false);
+        setMarqueeRect(null);
+        if (isFullscreen && !document.fullscreenElement) {
+          setIsFullscreen(false);
+        }
+        return;
+      }
+
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         if (e.shiftKey) {
@@ -546,33 +1121,53 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
         e.preventDefault();
         handleRedoDrawing();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+        if (selectedElementIds.length > 0 || selectedCalloutIds.length > 0) {
+          e.preventDefault();
+          handleDuplicateSelected();
+        }
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && (selectedElementIds.length > 0 || selectedCalloutIds.length > 0)) {
+        e.preventDefault();
+        handleDeleteSelectedElements();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [drawings, drawingsRedoStack]);
+  }, [drawings, drawingsRedoStack, selectedElementIds, selectedCalloutIds, handleDuplicateSelected, handleDeleteSelectedElements, isFullscreen]);
 
-  // Fullscreen listener - Auto-fit map automatically on enter (100%) / exit (75%)
+  // Fullscreen listener — synchronizes browser fullscreen & re-fits map on viewport resize
   useEffect(() => {
     const handleFsChange = () => {
       const isFs = !!document.fullscreenElement;
       setIsFullscreen(isFs);
+      requestAnimationFrame(() => {
+        setZoom(calculateFitZoom(isFs));
+        setPan({ x: 0, y: 0 });
+      });
+    };
+    const handleResize = () => {
       setZoom(calculateFitZoom());
       setPan({ x: 0, y: 0 });
     };
     document.addEventListener('fullscreenchange', handleFsChange);
-    window.addEventListener('resize', handleFsChange);
+    window.addEventListener('resize', handleResize);
     return () => {
       document.removeEventListener('fullscreenchange', handleFsChange);
-      window.removeEventListener('resize', handleFsChange);
+      window.removeEventListener('resize', handleResize);
     };
   }, []);
 
   const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      mainWrapperRef.current?.requestFullscreen().catch(() => {});
+    const nextFs = !isFullscreen;
+    setIsFullscreen(nextFs);
+    if (nextFs) {
+      if (!document.fullscreenElement) {
+        mainWrapperRef.current?.requestFullscreen?.().catch(() => {});
+      }
     } else {
-      document.exitFullscreen().catch(() => {});
+      if (document.fullscreenElement) {
+        document.exitFullscreen?.().catch(() => {});
+      }
     }
   };
 
@@ -665,18 +1260,24 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
     // Utility placement tool
     if (activeTool === 'utility') {
+      const targetLayerId = activeLayerId || 'layer_util';
+      if (isLayerLocked(targetLayerId)) return;
       const newMarker: UtilityMarker = {
         id: `util_${Date.now()}`,
         type: selectedUtility,
         x: coords.x,
         y: coords.y,
+        layerId: targetLayerId,
       };
       setUtilities((prev) => [...prev, newMarker]);
+      setHasChangesInSession(true);
       return;
     }
 
     // Player placement tool
     if (activeTool === 'player') {
+      const targetLayerId = activeLayerId || (selectedPlayerSide === 'ct' ? 'layer_ct' : 'layer_t');
+      if (isLayerLocked(targetLayerId)) return;
       const count = players.filter((p) => p.side === selectedPlayerSide).length;
       const newPlayer: PlayerToken = {
         id: `player_${Date.now()}`,
@@ -685,15 +1286,22 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         x: coords.x,
         y: coords.y,
         hasBomb: selectedPlayerSide === 't' && players.filter((p) => p.hasBomb).length === 0,
+        layerId: targetLayerId,
       };
       setPlayers((prev) => [...prev, newPlayer]);
+      setHasChangesInSession(true);
       return;
     }
 
-    // Select tool: clicking background closes inspector
+    // Select tool: clicking background clears inspector, callouts, elements & context menu
     if (activeTool === 'select') {
       setSelectedCallout(null);
       setHighlightedCalloutId(undefined);
+      setSelectedElementIds([]);
+      setSelectedCalloutIds([]);
+      setContextMenu(null);
+      setShowContextColorSubmenu(false);
+      setShowContextColorPicker(false);
     }
   };
 
@@ -701,8 +1309,10 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (draggingCalloutId || draggingAreaCalloutId || resizingAreaCalloutId) return;
     if ((e.target as HTMLElement).closest('[data-no-map-click]')) return;
+    setContextMenu(null);
+    setShowContextColorSubmenu(false);
 
-    // Right-click (e.button === 2) ALWAYS initiates panning, even while drawing lines or polygon areas!
+    // Right-click (e.button === 2) initiates panning if dragged >4px; if tapped without dragging, opens Context Menu
     if (e.button === 2) {
       e.preventDefault();
       setIsPanning(true);
@@ -714,8 +1324,22 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
     if (isDrawingPolygonArea) return;
 
+    // Marquee area selection box tool ('marquee')
+    if (activeTool === 'marquee' && e.button === 0) {
+      const coords = getCoordinatesFromEvent(e);
+      marqueeAdditiveRef.current = e.ctrlKey || e.metaKey || e.shiftKey;
+      setMarqueeRect({
+        startX: coords.x,
+        startY: coords.y,
+        currentX: coords.x,
+        currentY: coords.y,
+      });
+      return;
+    }
+
     if (activeTool === 'pen' || activeTool === 'arrow') {
       if (e.button === 0) {
+        if (isLayerLocked(activeLayerId)) return;
         const coords = getCoordinatesFromEvent(e);
         const newLine: TacticalDrawingLine = {
           id: `draw_${Date.now()}`,
@@ -723,6 +1347,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           color: penColor,
           width: 3,
           hasArrow: penWithArrow,
+          layerId: activeLayerId,
         };
         setCurrentDrawing(newLine);
         return;
@@ -755,7 +1380,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   }, [isPanning]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    // 0. Panning takes TOP PRIORITY whenever user is panning (e.g. right-click held during drawing or polygon placement)
+    // 0. Panning takes TOP PRIORITY whenever user is panning
     if (isPanning && mouseDownPos) {
       const dx = Math.abs(e.clientX - mouseDownPos.x);
       const dy = Math.abs(e.clientY - mouseDownPos.y);
@@ -769,23 +1394,32 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       return;
     }
 
+    // 0b. Marquee Selection Box resize while dragging
+    if (marqueeRect) {
+      const coords = getCoordinatesFromEvent(e);
+      setMarqueeRect((prev) => (prev ? { ...prev, currentX: coords.x, currentY: coords.y } : null));
+      return;
+    }
+
     if (isDrawingPolygonArea) {
       const coords = getCoordinatesFromEvent(e);
       setPolygonHoverCoord(coords);
       return;
     }
 
-    // 1. Eraser Tool Brush Scrubbing (Real-time erase when dragging)
+    // 1. Eraser Tool Brush Scrubbing (Real-time erase when dragging, respecting locks)
     if (activeTool === 'eraser' && mouseDownPos) {
       const coords = getCoordinatesFromEvent(e);
       setDrawings((prev) =>
         prev.filter((line) => {
+          if (line.locked || isLayerLocked(line.layerId)) return true;
           const isNear = line.points.some(
             (p) => Math.hypot(p.x - coords.x, p.y - coords.y) < 5
           );
           return !isNear;
         })
       );
+      setHasChangesInSession(true);
       return;
     }
 
@@ -922,6 +1556,79 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   };
 
   const handleMouseUp = () => {
+    if (marqueeRect) {
+      const minX = Math.min(marqueeRect.startX, marqueeRect.currentX);
+      const maxX = Math.max(marqueeRect.startX, marqueeRect.currentX);
+      const minY = Math.min(marqueeRect.startY, marqueeRect.currentY);
+      const maxY = Math.max(marqueeRect.startY, marqueeRect.currentY);
+      const draggedEnough = maxX - minX > 1.2 || maxY - minY > 1.2;
+
+      if (draggedEnough) {
+        const hitCalloutIds = mapData.callouts
+          .filter((c) => {
+            const centerHit = c.x >= minX && c.x <= maxX && c.y >= minY && c.y <= maxY;
+            let areaHit = false;
+            if (c.area) {
+              if (c.area.points && c.area.points.length > 0) {
+                areaHit = c.area.points.some((p) => p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY);
+              } else {
+                const ax1 = c.area.x;
+                const ax2 = c.area.x + c.area.width;
+                const ay1 = c.area.y;
+                const ay2 = c.area.y + c.area.height;
+                areaHit = ax1 <= maxX && ax2 >= minX && ay1 <= maxY && ay2 >= minY;
+              }
+            }
+            return centerHit || areaHit;
+          })
+          .map((c) => c.id);
+
+        const hitElIds = [
+          ...drawings
+            .filter(
+              (d) =>
+                isLayerVisible(d.layerId, 'layer_t') &&
+                d.points.some((p) => p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY)
+            )
+            .map((d) => d.id),
+          ...utilities
+            .filter(
+              (u) =>
+                isLayerVisible(u.layerId, 'layer_util') &&
+                u.x >= minX &&
+                u.x <= maxX &&
+                u.y >= minY &&
+                u.y <= maxY
+            )
+            .map((u) => u.id),
+          ...players
+            .filter(
+              (p) =>
+                isLayerVisible(p.layerId, p.side === 'ct' ? 'layer_ct' : 'layer_t') &&
+                p.x >= minX &&
+                p.x <= maxX &&
+                p.y >= minY &&
+                p.y <= maxY
+            )
+            .map((p) => p.id),
+        ];
+
+        const additive = marqueeAdditiveRef.current;
+        setSelectedCalloutIds((prev) =>
+          additive ? Array.from(new Set([...prev, ...hitCalloutIds])) : hitCalloutIds
+        );
+        setSelectedElementIds((prev) =>
+          additive ? Array.from(new Set([...prev, ...hitElIds])) : hitElIds
+        );
+        setSelectedCallout(null);
+      } else if (!marqueeAdditiveRef.current) {
+        setSelectedCalloutIds([]);
+        setSelectedElementIds([]);
+        setSelectedCallout(null);
+      }
+      setMarqueeRect(null);
+    }
+
     if (draggingCalloutId) {
       setDraggingCalloutId(null);
       setCalloutDragStart(null);
@@ -943,6 +1650,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       if (currentDrawing.points.length > 1) {
         setDrawings((prev) => [...prev, currentDrawing]);
         setDrawingsRedoStack([]); // reset redo stack on new stroke
+        setHasChangesInSession(true);
       }
       setCurrentDrawing(null);
     }
@@ -961,7 +1669,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       setIsPanning(false);
       setMouseDownPos(null);
     } else if (e.touches.length === 1) {
-      if ((activeTool === 'pen' || activeTool === 'arrow' || activeTool === 'eraser') && e.cancelable) {
+      if ((activeTool === 'pen' || activeTool === 'arrow' || activeTool === 'eraser' || activeTool === 'marquee') && e.cancelable) {
         e.preventDefault();
       }
       initialPinchDistRef.current = null;
@@ -987,7 +1695,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       const newZoom = Math.max(0.5, Math.min(2.5, initialPinchZoomRef.current * factor));
       setZoom(Math.round(newZoom * 100) / 100);
     } else if (e.touches.length === 1) {
-      if ((activeTool === 'pen' || activeTool === 'arrow' || activeTool === 'eraser' || currentDrawing) && e.cancelable) {
+      if ((activeTool === 'pen' || activeTool === 'arrow' || activeTool === 'eraser' || activeTool === 'marquee' || currentDrawing || marqueeRect) && e.cancelable) {
         e.preventDefault();
       }
       const touch = e.touches[0];
@@ -1043,15 +1751,23 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const handleDeleteSingleLine = (lineId: string) => {
     const target = drawings.find((d) => d.id === lineId);
     if (!target) return;
+    if (target.locked || isLayerLocked(target.layerId)) return;
     setDrawings((prev) => prev.filter((d) => d.id !== lineId));
     setDrawingsRedoStack((prev) => [...prev, target]);
+    setSelectedElementIds((prev) => prev.filter((id) => id !== lineId));
+    setHasChangesInSession(true);
   };
 
   const handleClearTactics = () => {
-    setDrawings([]);
+    setDrawings((prev) => prev.filter((d) => d.locked || isLayerLocked(d.layerId)));
     setDrawingsRedoStack([]);
-    setUtilities([]);
-    setPlayers([]);
+    setUtilities((prev) => prev.filter((u) => u.locked || isLayerLocked(u.layerId || 'layer_util')));
+    setPlayers((prev) =>
+      prev.filter((p) => p.locked || isLayerLocked(p.layerId || (p.side === 'ct' ? 'layer_ct' : 'layer_t')))
+    );
+    setSelectedElementIds([]);
+    setShowContextColorPicker(false);
+    setHasChangesInSession(true);
   };
 
   const getClientCoords = (e: React.MouseEvent | React.TouchEvent) => {
@@ -1080,7 +1796,14 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   // Callout Pin Drag Start
   const handleCalloutDragStart = (callout: Callout, e: React.MouseEvent | React.TouchEvent) => {
     if (!isEditMode) return;
+    if ('button' in e && e.button !== 0) return;
     e.stopPropagation();
+    setHasMovedDistance(false);
+    const isMulti = 'ctrlKey' in e && (e.ctrlKey || e.metaKey || e.shiftKey);
+    if (!isMulti && !selectedCalloutIds.includes(callout.id)) {
+      handleSelectCalloutMulti(callout, false);
+    }
+    if (callout.locked) return;
     const { clientX, clientY } = getClientCoords(e);
     setDraggingCalloutId(callout.id);
     setDraggedCoords({ x: callout.x, y: callout.y });
@@ -1094,7 +1817,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
   // Area Move Drag Start
   const handleAreaMoveStart = (callout: Callout, e: React.MouseEvent | React.TouchEvent) => {
-    if (!isEditMode || !callout.area) return;
+    if (!isEditMode || !callout.area || callout.locked) return;
+    if ('button' in e && e.button !== 0) return;
     e.stopPropagation();
     const { clientX, clientY } = getClientCoords(e);
     setDraggingAreaCalloutId(callout.id);
@@ -1111,7 +1835,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
   // Area Resize Drag Start
   const handleAreaResizeStart = (callout: Callout, e: React.MouseEvent | React.TouchEvent) => {
-    if (!isEditMode || !callout.area) return;
+    if (!isEditMode || !callout.area || callout.locked) return;
+    if ('button' in e && e.button !== 0) return;
     e.stopPropagation();
     const { clientX, clientY } = getClientCoords(e);
     setResizingAreaCalloutId(callout.id);
@@ -1490,8 +2215,9 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const handleConfirmSync = async (doSync: boolean, targetUser?: User | null) => {
     const userToUse = targetUser || currentUser;
     if (!doSync || !userToUse) {
-      // Save locally only
+      // Save locally only & capture map version snapshot
       const updated = { ...mapData, updatedAt: Date.now() };
+      handleSaveSnapshot(isDe ? 'Lokal gespeichert' : 'Saved locally', updated.callouts);
       onUpdateMap(updated, true);
       setHasChangesInSession(false);
       setShowSyncPrompt(false);
@@ -1525,8 +2251,9 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         return;
       }
 
-      // No conflict -> normal upload
+      // No conflict -> normal upload & capture map snapshot
       const updated = { ...mapData, updatedAt: Date.now() };
+      handleSaveSnapshot(isDe ? 'Gespeichert (Cloud)' : 'Saved (Cloud)', updated.callouts);
       onUpdateMap(updated, false);
       setHasChangesInSession(false);
       setShowSyncPrompt(false);
@@ -1537,6 +2264,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     } catch (err) {
       console.warn('Conflict check or cloud sync failed, saving locally:', err);
       const updated = { ...mapData, updatedAt: Date.now() };
+      handleSaveSnapshot(isDe ? 'Lokal gespeichert' : 'Saved locally', updated.callouts);
       onUpdateMap(updated, true);
       setHasChangesInSession(false);
       setShowSyncPrompt(false);
@@ -1558,6 +2286,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       merged.updatedAt = Date.now();
 
       // 3. Das kombinierte Ergebnis erhält einen neuen Zeitstempel (updatedAt = jetzt) und wird sofort hochgeladen
+      handleSaveSnapshot(isDe ? 'Cloud-Merge gespeichert' : 'Saved Cloud Merge', merged.callouts);
       onUpdateMap(merged, true);
       await syncUserMap(currentUser.uid, merged);
 
@@ -1585,6 +2314,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   // 3. Save locally only on this device
   const handleSaveLocallyOnly = () => {
     const updated = { ...mapData, updatedAt: Date.now() };
+    handleSaveSnapshot(isDe ? 'Lokal gespeichert' : 'Saved locally', updated.callouts);
     onUpdateMap(updated, true);
     setShowConflictModal(false);
     setHasChangesInSession(false);
@@ -1599,6 +2329,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
   // Delete Callout
   const handleDeleteCallout = (calloutId: string) => {
+    const target = mapData.callouts.find((c) => c.id === calloutId);
+    if (target?.locked) return;
     const updated = {
       ...mapData,
       callouts: mapData.callouts.filter((c) => c.id !== calloutId),
@@ -1843,6 +2575,29 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
               (e.target as HTMLImageElement).src = '/icon.svg';
             }}
           />
+          {/* Optional Tactical Coordinate Grid Overlay */}
+          {showGrid && (
+            <div className="absolute inset-0 pointer-events-none z-10">
+              <div
+                className="w-full h-full opacity-35"
+                style={{
+                  backgroundImage:
+                    'linear-gradient(to right, rgba(255,255,255,0.22) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.22) 1px, transparent 1px)',
+                  backgroundSize: '12.5% 12.5%',
+                }}
+              />
+              <div className="absolute top-1 left-0 right-0 flex justify-around px-2 text-[9px] font-mono font-bold text-white/50 tabular-nums">
+                {['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].map((col) => (
+                  <span key={col}>{col}</span>
+                ))}
+              </div>
+              <div className="absolute top-0 bottom-0 left-1 flex flex-col justify-around py-2 text-[9px] font-mono font-bold text-white/50 tabular-nums">
+                {['1', '2', '3', '4', '5', '6', '7', '8'].map((row) => (
+                  <span key={row}>{row}</span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Center Origin Indicator (0,0) */}
@@ -1867,6 +2622,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             if (movingAreaCalloutId && movingAreaCalloutId !== callout.id) return null;
             const isHovered = hoveredCallout?.id === callout.id;
             const isSelected = selectedCallout?.id === callout.id;
+            const isMultiSelected = selectedCalloutIds.includes(callout.id);
             const areaStyle = getAreaStyling(callout, colorMode);
 
             return (
@@ -1879,18 +2635,29 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                   height: `${callout.area.height}%`,
                   backgroundColor: areaStyle.background,
                   backgroundImage: areaStyle.backgroundImage,
-                  borderColor: areaStyle.borderColor,
+                  borderColor: isMultiSelected && !isEditMode ? '#38bdf8' : areaStyle.borderColor,
                   transform: `rotate(${callout.rotation || 0}deg)`,
                   transformOrigin: 'center center',
                 }}
                 onMouseEnter={() => !isEditMode && setHoveredCallout(callout)}
                 onMouseLeave={() => !isEditMode && setHoveredCallout(null)}
                 onClick={(e) => {
-                  if (!isEditMode && !hasMovedDistance) {
+                  if (!hasMovedDistance) {
                     e.stopPropagation();
-                    setSelectedCallout(callout);
-                    setHighlightedCalloutId(callout.id);
+                    handleSelectCalloutMulti(callout, e.ctrlKey || e.metaKey || e.shiftKey);
                   }
+                }}
+                onContextMenu={(e) => {
+                  if (isDrawingPolygonArea) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (!selectedCalloutIds.includes(callout.id)) {
+                    handleSelectCalloutMulti(callout, false, false);
+                  } else {
+                    setSelectedCallout(null);
+                  }
+                  setShowContextColorSubmenu(false);
+                  setContextMenu({ x: e.clientX, y: e.clientY });
                 }}
                 onDoubleClick={(e) => {
                   e.stopPropagation();
@@ -1901,6 +2668,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                     ? 'border-dashed border-2 cursor-move z-40'
                     : isEditMode
                     ? 'border-dashed border-2 z-10'
+                    : isMultiSelected
+                    ? 'border-dashed border-2 shadow-lg ring-2 ring-sky-400/40 z-25 cursor-pointer'
                     : isHovered || isSelected
                     ? 'border-2 shadow-lg ring-1 ring-white/50 z-20 cursor-pointer scale-[1.01]'
                     : 'border-1 border-opacity-70 z-10 cursor-pointer hover:border-opacity-100'
@@ -1916,7 +2685,23 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                   }
                 }}
               >
-                {isEditMode && (
+                {isMultiSelected && !isEditMode && (
+                  <>
+                    <span className="absolute -top-1 -left-1 w-2 h-2 bg-white border border-sky-500 rounded-[1px] pointer-events-none shadow-xs" />
+                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-white border border-sky-500 rounded-[1px] pointer-events-none shadow-xs" />
+                    <span className="absolute -bottom-1 -left-1 w-2 h-2 bg-white border border-sky-500 rounded-[1px] pointer-events-none shadow-xs" />
+                    <span className="absolute -bottom-1 -right-1 w-2 h-2 bg-white border border-sky-500 rounded-[1px] pointer-events-none shadow-xs" />
+                  </>
+                )}
+                {callout.locked && (
+                  <span
+                    className="absolute -top-2 -right-2 w-4 h-4 rounded bg-purple-950/95 border border-purple-400 flex items-center justify-center shadow-md pointer-events-none z-30"
+                    title={isDe ? 'Gesperrt' : 'Locked'}
+                  >
+                    <Lock className="w-2.5 h-2.5 text-purple-200" />
+                  </span>
+                )}
+                {isEditMode && (isSelected || isMultiSelected || singleEditCalloutId === callout.id) && (
                   <>
                     <div
                       onMouseDown={(e) => handleAreaResizeStart(callout, e)}
@@ -1941,13 +2726,13 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         {/* SVG OVERLAY FOR TACTICAL DRAWING & ERASER */}
         <svg
           className={`absolute inset-0 w-full h-full overflow-visible z-15 ${
-            activeTool === 'eraser' ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'
+            activeTool === 'eraser' || activeTool === 'select' ? 'pointer-events-auto' : 'pointer-events-none'
           }`}
           viewBox="-50 -50 100 100"
           preserveAspectRatio="none"
         >
           <defs>
-            {colors.map((c) => {
+            {Array.from(new Set([...colors, '#eab308', '#a855f7', '#38bdf8'])).map((c) => {
               const colorId = c.replace('#', '');
               return (
                 <marker
@@ -2000,6 +2785,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                 const ptsString = pts.map((p) => `${p.x},${p.y}`).join(' ');
                 const isHovered = hoveredCallout?.id === callout.id;
                 const isSelected = selectedCallout?.id === callout.id;
+                const isMultiSelected = selectedCalloutIds.includes(callout.id);
                 const isBombsite = callout.zone === 'a_site' || callout.zone === 'b_site';
                 const areaStyle = getAreaStyling(callout, colorMode);
 
@@ -2009,7 +2795,10 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                   ? `url(#area-stripes-red-${tileLevel})`
                   : areaStyle.background;
 
-                const strokeValue = area.customColor || areaStyle.borderColor || '#38bdf8';
+                const strokeValue =
+                  isMultiSelected && !isEditMode
+                    ? '#38bdf8'
+                    : area.customColor || areaStyle.borderColor || '#38bdf8';
 
                 return (
                   <g key={`poly_${tileLevel}_${callout.id}`}>
@@ -2017,8 +2806,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       points={ptsString}
                       fill={fillValue}
                       stroke={strokeValue}
-                      strokeWidth={isHovered || isSelected ? 1.0 : 0.5}
-                      strokeDasharray={isEditMode ? '1,1' : undefined}
+                      strokeWidth={isMultiSelected ? 1.15 : isHovered || isSelected ? 1.0 : 0.5}
+                      strokeDasharray={isEditMode ? '1,1' : isMultiSelected ? '1.5,1' : undefined}
                       className={`transition-all ${
                         movingAreaCalloutId === callout.id
                           ? 'cursor-move pointer-events-auto'
@@ -2037,11 +2826,22 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                         }
                       }}
                       onClick={(e) => {
-                        if (!isEditMode && !hasMovedDistance) {
+                        if (!hasMovedDistance) {
                           e.stopPropagation();
-                          setSelectedCallout(callout);
-                          setHighlightedCalloutId(callout.id);
+                          handleSelectCalloutMulti(callout, e.ctrlKey || e.metaKey || e.shiftKey);
                         }
+                      }}
+                      onContextMenu={(e) => {
+                        if (isDrawingPolygonArea) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!selectedCalloutIds.includes(callout.id)) {
+                          handleSelectCalloutMulti(callout, false, false);
+                        } else {
+                          setSelectedCallout(null);
+                        }
+                        setShowContextColorSubmenu(false);
+                        setContextMenu({ x: e.clientX, y: e.clientY });
                       }}
                       onMouseEnter={() => !isEditMode && setHoveredCallout(callout)}
                       onMouseLeave={() => !isEditMode && setHoveredCallout(null)}
@@ -2100,33 +2900,70 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
           {/* SAVED TACTICAL DRAWING LINES */}
           {!isDrawingPolygonArea &&
-            drawings.map((line) => {
-              const isEraserHovered = hoveredLineId === line.id && activeTool === 'eraser';
-              const arrowColorId = (line.color || '#ffffff').replace('#', '');
-              return (
-                <g key={line.id}>
-                  <polyline
-                    points={line.points.map((p) => `${p.x},${p.y}`).join(' ')}
-                    fill="none"
-                    stroke={isEraserHovered ? '#ef4444' : line.color}
-                    strokeWidth={line.width * 0.3}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeDasharray={isEraserHovered ? '2,2' : undefined}
-                    markerEnd={line.hasArrow ? `url(#arrow-${isEraserHovered ? 'ef4444' : arrowColorId}-${tileLevel})` : undefined}
-                    onMouseEnter={() => setHoveredLineId(line.id)}
-                    onMouseLeave={() => setHoveredLineId(null)}
-                    onClick={(e) => {
-                      if (activeTool === 'eraser') {
-                        e.stopPropagation();
-                        handleDeleteSingleLine(line.id);
+            drawings
+              .filter((line) => isLayerVisible(line.layerId, 'layer_t'))
+              .map((line) => {
+                const isEraserHovered = hoveredLineId === line.id && activeTool === 'eraser';
+                const isSelectedEl = selectedElementIds.includes(line.id);
+                const elOpacity = (line.opacity ?? 1) * getLayerOpacity(line.layerId, 'layer_t');
+                const arrowColorId = (line.color || '#ffffff').replace('#', '');
+                return (
+                  <g key={line.id} opacity={elOpacity}>
+                    {isSelectedEl && (
+                      <polyline
+                        points={line.points.map((p) => `${p.x},${p.y}`).join(' ')}
+                        fill="none"
+                        stroke="#38bdf8"
+                        strokeWidth={line.width * 0.3 + 1.2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeOpacity={0.6}
+                        className="pointer-events-none"
+                      />
+                    )}
+                    <polyline
+                      points={line.points.map((p) => `${p.x},${p.y}`).join(' ')}
+                      fill="none"
+                      stroke={isEraserHovered ? '#ef4444' : line.color}
+                      strokeWidth={line.width * 0.3}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeDasharray={isEraserHovered ? '2,2' : undefined}
+                      markerEnd={
+                        line.hasArrow
+                          ? `url(#arrow-${isEraserHovered ? 'eraser' : arrowColorId}-${tileLevel})`
+                          : undefined
                       }
-                    }}
-                    className={activeTool === 'eraser' ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'}
-                  />
-                </g>
-              );
-            })}
+                      onMouseEnter={() => setHoveredLineId(line.id)}
+                      onMouseLeave={() => setHoveredLineId(null)}
+                      onClick={(e) => {
+                        if (activeTool === 'eraser') {
+                          e.stopPropagation();
+                          handleDeleteSingleLine(line.id);
+                        } else if (activeTool === 'select' || activeTool === 'marquee') {
+                          e.stopPropagation();
+                          handleSelectElement(line.id, e.ctrlKey || e.metaKey || e.shiftKey);
+                        }
+                      }}
+                      onContextMenu={(e) => {
+                        if (isEditMode || isDrawingPolygonArea) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!selectedElementIds.includes(line.id)) {
+                          handleSelectElement(line.id, false);
+                        }
+                        setShowContextColorSubmenu(false);
+                        setContextMenu({ x: e.clientX, y: e.clientY });
+                      }}
+                      className={
+                        activeTool === 'eraser' || activeTool === 'select' || activeTool === 'marquee'
+                          ? 'pointer-events-auto cursor-pointer'
+                          : 'pointer-events-none'
+                      }
+                    />
+                  </g>
+                );
+              })}
 
           {/* Real-time stroke while drawing */}
           {currentDrawing && currentDrawing.points.length > 1 && (
@@ -2137,53 +2974,162 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
               strokeWidth={0.8}
               strokeLinecap="round"
               strokeLinejoin="round"
-              markerEnd={currentDrawing.hasArrow ? `url(#arrow-${(currentDrawing.color || '#ffffff').replace('#', '')}-${tileLevel})` : undefined}
+              markerEnd={
+                currentDrawing.hasArrow
+                  ? `url(#arrow-${(currentDrawing.color || '#ffffff').replace('#', '')}-${tileLevel})`
+                  : undefined
+              }
             />
           )}
         </svg>
 
-        {/* UTILITY MARKERS */}
+        {/* UTILITY MARKERS (Granaten-Symbole ohne Kreis, in Kreisgröße w-6 h-6 mit Originalfarben) */}
         {!isDrawingPolygonArea &&
-          utilities.map((util) => (
-            <div
-              key={util.id}
-              style={{ left: `calc(50% + ${util.x}%)`, top: `calc(50% + ${util.y}%)` }}
-              onClick={(e) => {
-                e.stopPropagation();
-                setUtilities((prev) => prev.filter((u) => u.id !== util.id));
-              }}
-              className="absolute -translate-x-1/2 -translate-y-1/2 z-25 px-1.5 py-0.5 rounded-full text-[9px] font-mono font-black uppercase shadow-lg border border-black/40 cursor-pointer hover:scale-125 transition-transform bg-zinc-200 text-zinc-950"
-              title={isDe ? 'Klicken zum Entfernen' : 'Click to remove'}
-            >
-              {util.type}
-            </div>
-          ))}
+          utilities
+            .filter((util) => isLayerVisible(util.layerId, 'layer_util'))
+            .map((util) => {
+              const isSelectedEl = selectedElementIds.includes(util.id);
+              const isLockedEl = Boolean(util.locked || isLayerLocked(util.layerId || 'layer_util'));
+              const elOpacity = (util.opacity ?? 1) * getLayerOpacity(util.layerId, 'layer_util');
+              const meta = UTILITY_META[util.type] || UTILITY_META.smoke;
+              return (
+                <div
+                  key={util.id}
+                  style={{
+                    left: `calc(50% + ${util.x}%)`,
+                    top: `calc(50% + ${util.y}%)`,
+                    opacity: elOpacity,
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (activeTool === 'eraser') {
+                      if (isLockedEl) return;
+                      setUtilities((prev) => prev.filter((u) => u.id !== util.id));
+                      setSelectedElementIds((prev) => prev.filter((id) => id !== util.id));
+                      setHasChangesInSession(true);
+                    } else {
+                      handleSelectElement(util.id, e.ctrlKey || e.metaKey || e.shiftKey);
+                    }
+                  }}
+                  onContextMenu={(e) => {
+                    if (isEditMode || isDrawingPolygonArea) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!selectedElementIds.includes(util.id)) {
+                      handleSelectElement(util.id, false);
+                    }
+                    setShowContextColorSubmenu(false);
+                    setContextMenu({ x: e.clientX, y: e.clientY });
+                  }}
+                  className={`absolute -translate-x-1/2 -translate-y-1/2 z-25 w-6 h-6 flex items-center justify-center cursor-pointer hover:scale-115 transition-all ${
+                    meta.textClass
+                  } drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)] ${
+                    isSelectedEl
+                      ? 'ring-2 ring-sky-400 ring-offset-2 ring-offset-zinc-950 rounded-md scale-115 bg-zinc-950/60'
+                      : ''
+                  }`}
+                  title={
+                    activeTool === 'eraser'
+                      ? isDe
+                        ? 'Klicken zum Entfernen'
+                        : 'Click to remove'
+                      : `${isDe ? meta.labelDe : meta.labelEn} — ${
+                          isDe ? 'Klicken zum Auswählen (Strg für Mehrfachauswahl)' : 'Click to select (Ctrl for multi-select)'
+                        }`
+                  }
+                >
+                  <UtilitySymbol type={util.type} size="md" />
+                  {isLockedEl && (
+                    <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-zinc-950 border border-amber-400 flex items-center justify-center">
+                      <Lock className="w-2 h-2 text-amber-400" />
+                    </span>
+                  )}
+                </div>
+              );
+            })}
 
         {/* PLAYER TOKENS */}
         {!isDrawingPolygonArea &&
-          players.map((player) => (
-            <div
-              key={player.id}
-              style={{ left: `calc(50% + ${player.x}%)`, top: `calc(50% + ${player.y}%)` }}
-              onClick={(e) => {
-                e.stopPropagation();
-                setPlayers((prev) => prev.filter((p) => p.id !== player.id));
-              }}
-              className={`absolute -translate-x-1/2 -translate-y-1/2 z-25 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-mono font-black shadow-lg border border-black/50 cursor-pointer hover:scale-125 transition-transform ${
-                player.side === 'ct'
-                  ? 'bg-blue-600 text-white ring-1 ring-white/60'
-                  : 'bg-amber-800 text-amber-100 ring-1 ring-white/60'
-              }`}
-              title={isDe ? 'Klicken zum Entfernen' : 'Click to remove'}
-            >
-              {player.hasBomb ? 'C4' : player.number}
-            </div>
-          ))}
+          players
+            .filter((player) =>
+              isLayerVisible(player.layerId, player.side === 'ct' ? 'layer_ct' : 'layer_t')
+            )
+            .map((player) => {
+              const isSelectedEl = selectedElementIds.includes(player.id);
+              const defaultLid = player.side === 'ct' ? 'layer_ct' : 'layer_t';
+              const isLockedEl = Boolean(player.locked || isLayerLocked(player.layerId || defaultLid));
+              const elOpacity = (player.opacity ?? 1) * getLayerOpacity(player.layerId, defaultLid);
+              return (
+                <div
+                  key={player.id}
+                  style={{
+                    left: `calc(50% + ${player.x}%)`,
+                    top: `calc(50% + ${player.y}%)`,
+                    opacity: elOpacity,
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (activeTool === 'eraser') {
+                      if (isLockedEl) return;
+                      setPlayers((prev) => prev.filter((p) => p.id !== player.id));
+                      setSelectedElementIds((prev) => prev.filter((id) => id !== player.id));
+                      setHasChangesInSession(true);
+                    } else {
+                      handleSelectElement(player.id, e.ctrlKey || e.metaKey || e.shiftKey);
+                    }
+                  }}
+                  onContextMenu={(e) => {
+                    if (isEditMode || isDrawingPolygonArea) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!selectedElementIds.includes(player.id)) {
+                      handleSelectElement(player.id, false);
+                    }
+                    setShowContextColorSubmenu(false);
+                    setContextMenu({ x: e.clientX, y: e.clientY });
+                  }}
+                  className={`absolute -translate-x-1/2 -translate-y-1/2 z-25 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-mono font-black tabular-nums shadow-lg border cursor-pointer hover:scale-115 transition-all ${
+                    player.side === 'ct'
+                      ? 'bg-blue-600/95 text-white border-blue-200/80'
+                      : 'bg-amber-700/95 text-amber-50 border-amber-200/80'
+                  } ${
+                    isSelectedEl
+                      ? 'ring-2 ring-sky-400 ring-offset-2 ring-offset-zinc-950 scale-115'
+                      : 'ring-1 ring-black/50'
+                  }`}
+                  title={
+                    activeTool === 'eraser'
+                      ? isDe
+                        ? 'Klicken zum Entfernen'
+                        : 'Click to remove'
+                      : `${player.side.toUpperCase()} #${player.number}${
+                          player.hasBomb ? ' (C4)' : ''
+                        } — ${isDe ? 'Klicken zum Auswählen (Strg für Mehrfachauswahl)' : 'Click to select'}`
+                  }
+                >
+                  <img
+                    src={resolveAssetPath(player.side === 'ct' ? 'ct.png' : 'T.png')}
+                    alt={player.side.toUpperCase()}
+                    className="w-3.5 h-3.5 object-contain opacity-30 pointer-events-none absolute inset-0 m-auto"
+                    draggable={false}
+                  />
+                  <span className="relative z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+                    {player.hasBomb ? 'C4' : player.number}
+                  </span>
+                  {isLockedEl && (
+                    <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-zinc-950 border border-amber-400 flex items-center justify-center">
+                      <Lock className="w-2 h-2 text-amber-400" />
+                    </span>
+                  )}
+                </div>
+              );
+            })}
 
         {/* INTERACTIVE CALLOUT PINS & ROTATABLE LABELS */}
         {!isDrawingPolygonArea &&
           tileCallouts.map((callout) => {
             const isSelected = selectedCallout?.id === callout.id;
+            const isMultiSelected = selectedCalloutIds.includes(callout.id);
             const isHighlighted = highlightedCalloutId === callout.id;
             const isBeingDragged = draggingCalloutId === callout.id;
             const pinBgColor = getPinColorClass(callout, colorMode);
@@ -2217,10 +3163,21 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                 onMouseLeave={() => setHoveredCallout(null)}
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (!isEditMode && !hasMovedDistance) {
-                    setSelectedCallout(callout);
-                    setHighlightedCalloutId(callout.id);
+                  if (!hasMovedDistance) {
+                    handleSelectCalloutMulti(callout, e.ctrlKey || e.metaKey || e.shiftKey);
                   }
+                }}
+                onContextMenu={(e) => {
+                  if (isDrawingPolygonArea) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (!selectedCalloutIds.includes(callout.id)) {
+                    handleSelectCalloutMulti(callout, false, false);
+                  } else {
+                    setSelectedCallout(null);
+                  }
+                  setShowContextColorSubmenu(false);
+                  setContextMenu({ x: e.clientX, y: e.clientY });
                 }}
                 onDoubleClick={(e) => {
                   e.stopPropagation();
@@ -2338,9 +3295,13 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       transform: `translate(${offX}px, ${offY}px) rotate(${callout.textRotation !== undefined ? callout.textRotation : (callout.rotation || 0)}deg)`,
                       transformOrigin: 'center center',
                     }}
-                    className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded font-bold tracking-tight whitespace-nowrap text-center leading-tight shadow-lg transition-transform shrink-0 z-30 ${
+                    className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded font-bold tracking-tight whitespace-nowrap text-center leading-tight shadow-lg transition-transform shrink-0 z-30 flex items-center gap-1 ${
                       isEditMode
-                        ? 'cursor-grab active:cursor-grabbing bg-zinc-950 border border-sky-400 text-sky-200 ring-1 ring-sky-400/50'
+                        ? isSelected || isMultiSelected || singleEditCalloutId === callout.id
+                          ? 'cursor-grab active:cursor-grabbing bg-zinc-950 border border-amber-400 text-amber-200 ring-2 ring-amber-400/70'
+                          : 'cursor-grab active:cursor-grabbing bg-zinc-950 border border-sky-400 text-sky-200 ring-1 ring-sky-400/50'
+                        : isMultiSelected
+                        ? 'bg-sky-500/95 text-zinc-950 scale-105 z-30 ring-2 ring-sky-300'
                         : isSelected || isHighlighted
                         ? 'bg-white text-zinc-950 scale-105 z-30 ring-1 ring-black'
                         : 'bg-zinc-950/85 text-zinc-200 border border-zinc-700/80 group-hover:bg-zinc-900 group-hover:text-white'
@@ -2355,12 +3316,17 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                     ) : (
                       <span className="whitespace-nowrap">{callout.name}</span>
                     )}
+                    {callout.locked && !callout.area && (
+                      <Lock className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+                    )}
                   </div>
                 )}
 
-                {/* EDIT MODE QUICK BAR */}
-                {isEditMode && (
+                {/* EDIT MODE QUICK BAR (erst nach Klick / Rechtsklick sichtbar) */}
+                {isEditMode && (isSelected || isMultiSelected || singleEditCalloutId === callout.id) && (
                   <div
+                    data-no-map-click="true"
+                    onMouseDown={(e) => e.stopPropagation()}
                     style={{
                       transform: `translate(calc(-50% + ${offX}px), calc(-50% + ${offY - Math.max(34, fontSize + 24)}px))`,
                     }}
@@ -2444,6 +3410,19 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
               </div>
             );
           })}
+
+        {/* LIVE MARQUEE AREA SELECTION BOX */}
+        {marqueeRect && (
+          <div
+            style={{
+              left: `calc(50% + ${Math.min(marqueeRect.startX, marqueeRect.currentX)}%)`,
+              top: `calc(50% + ${Math.min(marqueeRect.startY, marqueeRect.currentY)}%)`,
+              width: `${Math.abs(marqueeRect.currentX - marqueeRect.startX)}%`,
+              height: `${Math.abs(marqueeRect.currentY - marqueeRect.startY)}%`,
+            }}
+            className="absolute pointer-events-none z-50 border-2 border-dashed border-sky-400 bg-sky-400/15 rounded-xs shadow-[0_0_12px_rgba(56,189,248,0.35)]"
+          />
+        )}
       </div>
     );
   };
@@ -2489,67 +3468,66 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           </button>
         </div>
       )}
-      {/* 1. TOP HEADER BAR */}
-      <div className="h-14 border-b border-zinc-800 bg-zinc-950/95 px-2 sm:px-4 flex items-center justify-between gap-2 shrink-0 backdrop-blur-md overflow-x-auto no-scrollbar print:hidden">
-        {/* Left: Back & Title */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+      {/* 1. CLEAN STUDIO TOP HEADER BAR */}
+      <header className="h-13 sm:h-14 border-b border-zinc-800 bg-zinc-950/95 px-2 sm:px-4 flex items-center justify-between gap-2 shrink-0 backdrop-blur-md print:hidden z-40">
+        {/* Left: Back, Brand + Map Name, Floor Switcher */}
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0 min-w-0">
           <button
             onClick={handleTryBack}
-            className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs font-bold rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 transition-colors shadow-xs"
+            className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 text-xs font-bold rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 transition-colors cursor-pointer shrink-0"
             title={isDe ? 'Kartenübersicht' : 'Overview'}
           >
             <ArrowLeft className="w-4 h-4" />
             <span className="hidden lg:inline">{isDe ? 'Kartenübersicht' : 'Overview'}</span>
           </button>
 
-          <div className="flex flex-col sm:flex-row sm:items-center gap-0 sm:gap-2">
-            <h1 className="text-xs sm:text-base font-extrabold uppercase tracking-wider text-white truncate max-w-[80px] sm:max-w-none">
+          <div className="hidden sm:flex items-center gap-1.5 text-amber-400 font-black tracking-tight text-sm shrink-0">
+            <Crosshair className="w-4 h-4" />
+            <span className="hidden xl:inline text-white">CS2Freitag</span>
+          </div>
+
+          <div className="flex items-center gap-1.5 min-w-0">
+            <h1 className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-white truncate max-w-[90px] sm:max-w-[160px] md:max-w-none">
               {mapData.name}
             </h1>
-            <span className="text-[9px] sm:text-[11px] font-mono px-1 sm:px-2 py-0.5 rounded border border-zinc-800 text-zinc-500 hidden md:inline">
-              {mapData.category === 'active'
-                ? 'Active'
-                : mapData.category === 'reserve'
-                ? 'Reserve'
-                : mapData.category === 'wingman'
-                ? 'Wingman'
-                : 'Custom'}
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-zinc-800 text-zinc-400 hidden xl:inline uppercase">
+              {mapData.category}
             </span>
           </div>
 
-          {/* Floor Switcher */}
+          {/* Floor Switcher (Upper / Lower / Both) */}
           {mapData.lowerImage && (
-            <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-zinc-900 border border-zinc-800">
+            <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-zinc-900 border border-zinc-800 shrink-0">
               <button
                 onClick={() => setCurrentLevel('upper')}
-                className={`px-1.5 sm:px-2.5 py-1 text-[10px] sm:text-xs font-semibold rounded-md transition-colors ${
+                className={`px-1.5 sm:px-2 py-1 text-[10px] sm:text-xs font-semibold rounded-md transition-colors cursor-pointer ${
                   currentLevel === 'upper'
                     ? 'bg-zinc-100 text-zinc-950 font-bold shadow-xs'
                     : 'text-zinc-400 hover:text-white'
                 }`}
-                title={isDe ? 'Nur Obere Ebene (O)' : 'Upper floor only (O)'}
+                title={isDe ? 'Nur Obere Ebene (O)' : 'Upper floor only (U)'}
               >
                 {isDe ? 'O' : 'U'}
               </button>
               <button
                 onClick={() => setCurrentLevel('lower')}
-                className={`px-1.5 sm:px-2.5 py-1 text-[10px] sm:text-xs font-semibold rounded-md transition-colors ${
+                className={`px-1.5 sm:px-2 py-1 text-[10px] sm:text-xs font-semibold rounded-md transition-colors cursor-pointer ${
                   currentLevel === 'lower'
                     ? 'bg-purple-600 text-white font-bold shadow-xs'
                     : 'text-zinc-400 hover:text-white'
                 }`}
-                title={isDe ? 'Nur Untere Ebene (U)' : 'Lower floor only (U)'}
+                title={isDe ? 'Nur Untere Ebene (U)' : 'Lower floor only (L)'}
               >
                 {isDe ? 'U' : 'L'}
               </button>
               <button
                 onClick={() => setCurrentLevel('both')}
-                className={`hidden md:inline-flex px-1.5 sm:px-2.5 py-1 text-[10px] sm:text-xs font-semibold rounded-md transition-colors ${
+                className={`hidden md:inline-flex px-2 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
                   currentLevel === 'both'
                     ? 'bg-purple-600 text-white font-bold shadow-xs'
                     : 'text-zinc-400 hover:text-white'
                 }`}
-                title={isDe ? 'Beide Ebenen nebeneinander (O + U)' : 'Both floors side-by-side (Upper + Lower)'}
+                title={isDe ? 'Beide Ebenen nebeneinander (O + U)' : 'Both floors side-by-side'}
               >
                 {isDe ? 'O + U' : 'U + L'}
               </button>
@@ -2557,256 +3535,67 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           )}
         </div>
 
-        {/* Center: Zone Filter Buttons (Hidden on very small screens) */}
-        <div className="hidden xl:flex items-center gap-1 p-1 rounded-xl bg-zinc-900/90 border border-zinc-800 text-xs">
-          <button
-            onClick={() => setSelectedZoneFilter('all')}
-            className={`px-2.5 py-1 rounded-lg transition-colors font-medium ${
-              selectedZoneFilter === 'all'
-                ? 'bg-zinc-100 text-zinc-950 font-bold'
-                : 'text-zinc-400 hover:text-white'
-            }`}
-          >
-            {isDe ? 'Alle' : 'All'}
-          </button>
-          <button
-            onClick={() => setSelectedZoneFilter('a_site')}
-            className={`px-2.5 py-1 rounded-lg transition-colors font-medium ${
-              selectedZoneFilter === 'a_site'
-                ? 'bg-amber-400 text-zinc-950 font-bold'
-                : 'text-amber-400/80 hover:text-amber-300'
-            }`}
-          >
-            A
-          </button>
-          <button
-            onClick={() => setSelectedZoneFilter('b_site')}
-            className={`px-2.5 py-1 rounded-lg transition-colors font-medium ${
-              selectedZoneFilter === 'b_site'
-                ? 'bg-sky-400 text-zinc-950 font-bold'
-                : 'text-sky-400/80 hover:text-sky-300'
-            }`}
-          >
-            B
-          </button>
-        </div>
-
-        {/* Right Actions: Karte teilen & exportieren, Farbmodus, Farblegende, Bearbeiten, Fullscreen */}
-        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-          {/* VEREINHEITLICHTER TEILEN / EXPORT BUTTON */}
-          <button
-            onClick={handleShareTactics}
-            className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg border border-sky-500/40 bg-sky-950/60 hover:bg-sky-900/80 text-sky-300 hover:text-white transition-all shadow-xs cursor-pointer flex items-center gap-1.5 shrink-0"
-            title={isDe ? 'Taktik / Karte teilen & exportieren (Link, QR, JSON, ZIP)' : 'Share & export tactic (Link, QR, JSON, ZIP)'}
-          >
-            <Share2 className="w-4 h-4 text-sky-400" />
-            <span className="text-xs font-bold hidden md:inline">{isDe ? 'Teilen' : 'Share'}</span>
-          </button>
-
-          {/* COLOR MODE TOGGLE */}
-          <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs">
+        {/* Center: Zone Filter + Local Session Indicator */}
+        <div className="hidden xl:flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1 p-1 rounded-lg bg-zinc-900/90 border border-zinc-800 text-xs">
             <button
-              onClick={() => setColorMode('zone')}
-              className={`p-1.5 rounded-md transition-all ${
-                colorMode === 'zone'
-                  ? 'bg-amber-400 text-zinc-950 shadow-xs'
+              onClick={() => setSelectedZoneFilter('all')}
+              className={`px-2.5 py-1 rounded-md transition-colors font-medium cursor-pointer ${
+                selectedZoneFilter === 'all'
+                  ? 'bg-zinc-100 text-zinc-950 font-bold'
                   : 'text-zinc-400 hover:text-white'
               }`}
-              title={isDe ? 'Zonen-Farben' : 'Zone colors'}
             >
-              <Palette className="w-4 h-4" />
+              {isDe ? 'Alle' : 'All'}
             </button>
             <button
-              onClick={() => setColorMode('danger')}
-              className={`p-1.5 rounded-md transition-all ${
-                colorMode === 'danger'
-                  ? 'bg-red-500 text-white shadow-xs'
-                  : 'text-zinc-400 hover:text-white'
+              onClick={() => setSelectedZoneFilter('a_site')}
+              className={`px-2.5 py-1 rounded-md transition-colors font-medium cursor-pointer ${
+                selectedZoneFilter === 'a_site'
+                  ? 'bg-amber-400 text-zinc-950 font-bold'
+                  : 'text-amber-400/80 hover:text-amber-300'
               }`}
-              title={isDe ? 'Gefahren-Farben' : 'Danger levels'}
             >
-              <Shield className="w-4 h-4" />
+              A
+            </button>
+            <button
+              onClick={() => setSelectedZoneFilter('b_site')}
+              className={`px-2.5 py-1 rounded-md transition-colors font-medium cursor-pointer ${
+                selectedZoneFilter === 'b_site'
+                  ? 'bg-sky-400 text-zinc-950 font-bold'
+                  : 'text-sky-400/80 hover:text-sky-300'
+              }`}
+            >
+              B
             </button>
           </div>
 
-          {/* Meine Callout-Auswahl Button (Links neben ?) */}
-          <button
-            onClick={() => {
-              if (customSelectedCalloutIds.length === 0) {
-                handleOpenCustomSelectionModal();
-              } else {
-                setIsCustomSelectionActive(!isCustomSelectionActive);
-              }
-            }}
-            className={`relative p-1.5 sm:p-2 rounded-lg border transition-all cursor-pointer ${
-              isCustomSelectionActive
-                ? 'border-indigo-400 bg-indigo-500/25 text-indigo-300 ring-2 ring-indigo-400/40 shadow-sm'
-                : customSelectedCalloutIds.length > 0
-                ? 'border-zinc-800 bg-zinc-900 text-indigo-400 hover:text-white hover:border-zinc-700'
-                : 'border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800'
-            }`}
-            title={
-              customSelectedCalloutIds.length === 0
-                ? (isDe ? 'Meine Callout-Auswahl erstellen' : 'Create Custom Callout Selection')
-                : isCustomSelectionActive
-                ? (isDe ? `Meine Auswahl aktiv (${customSelectedCalloutIds.length}) – Klicken für alle Callouts` : `Custom Selection active (${customSelectedCalloutIds.length}) – Click for all`)
-                : (isDe ? `Nur Meine Auswahl anzeigen (${customSelectedCalloutIds.length} Callouts)` : `Show only my selection (${customSelectedCalloutIds.length})`)
-            }
-          >
-            <ListFilter className="w-4 h-4" />
-            {customSelectedCalloutIds.length > 0 && (
-              <span
-                className={`absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 text-[9px] font-bold rounded-full flex items-center justify-center leading-none ${
-                  isCustomSelectionActive
-                    ? 'bg-indigo-500 text-white shadow-xs'
-                    : 'bg-zinc-700 text-zinc-200'
-                }`}
-              >
-                {customSelectedCalloutIds.length}
-              </span>
-            )}
-          </button>
-
-          {/* Legend */}
-          <button
-            onClick={() => setShowLegend(!showLegend)}
-            className={`p-1.5 sm:p-2 rounded-lg border transition-all ${
-              showLegend
-                ? 'border-zinc-400 bg-zinc-200 text-zinc-950 shadow-sm'
-                : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-white'
-            }`}
-            title={isDe ? 'Farblegende' : 'Legend'}
-          >
-            <HelpCircle className="w-4 h-4 text-amber-400" />
-          </button>
-
-          {/* Fullscreen */}
-          <button
-            onClick={toggleFullscreen}
-            className="p-1.5 sm:p-2 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-white hidden sm:block cursor-pointer"
-            title={isDe ? 'Vollbild' : 'Fullscreen'}
-          >
-            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-          </button>
-        </div>
-      </div>
-
-      {/* 2. TACTICAL TOOLBAR: TOOLS, ERASER, UNDO/REDO, AREAS TOGGLE, TEXT SCALE, ZOOM */}
-      <div className="relative z-50 min-h-12 border-b border-zinc-800/80 bg-zinc-900/90 px-2 sm:px-4 flex items-center justify-between gap-1.5 sm:gap-3 shrink-0 text-xs print:hidden overflow-visible">
-        {/* Tactical tools */}
-        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 overflow-visible max-w-full">
-          <button
-            onClick={() => setActiveTool('select')}
-            className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
-              activeTool === 'select'
-                ? 'bg-zinc-100 text-zinc-950 shadow-xs'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
-            }`}
-            title={isDe ? 'Inspektor: Callouts & Infos auf der Karte anzeigen' : 'Inspect'}
-          >
-            <Crosshair className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-            <span className="hidden sm:inline">{isDe ? 'Inspektor' : 'Inspect'}</span>
-          </button>
-
-          <button
-            onClick={() => handleToolPress('pen', false)}
-            onMouseDown={startPressTimer}
-            onMouseUp={clearPressTimer}
-            onMouseLeave={clearPressTimer}
-            onTouchStart={startPressTimer}
-            onTouchEnd={clearPressTimer}
-            className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
-              activeTool === 'pen' && !penWithArrow
-                ? 'bg-zinc-100 text-zinc-950 shadow-xs'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
-            }`}
-            style={{ borderLeft: activeTool === 'pen' ? `4px solid ${penColor}` : undefined }}
-            title={isDe ? 'Freihand Linie zeichnen' : 'Line'}
-          >
-            <Pencil className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-            <span className="hidden sm:inline">{isDe ? 'Linie' : 'Line'}</span>
-          </button>
-
-          <button
-            onClick={() => handleToolPress('arrow', true)}
-            onMouseDown={startPressTimer}
-            onMouseUp={clearPressTimer}
-            onMouseLeave={clearPressTimer}
-            onTouchStart={startPressTimer}
-            onTouchEnd={clearPressTimer}
-            className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
-              activeTool === 'arrow'
-                ? 'bg-zinc-100 text-zinc-950 shadow-xs'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
-            }`}
-            style={{ borderLeft: activeTool === 'arrow' ? `4px solid ${penColor}` : undefined }}
-            title={isDe ? 'Pfeil (Rush) zeichnen' : 'Arrow'}
-          >
-            <Move className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-            <span className="hidden sm:inline">{isDe ? 'Pfeil (Rush)' : 'Arrow'}</span>
-          </button>
-
-          {/* RADIERER (LÖSCHEN EINZELNER LINIEN / PFEILE) */}
-          <button
-            onClick={() => setActiveTool('eraser')}
-            className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
-              activeTool === 'eraser'
-                ? 'bg-red-500 text-white shadow-xs font-bold'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
-            }`}
-            title={
-              isDe
-                ? 'Radierer: Klicke auf eine gezeichnete Linie oder einen Pfeil zum Löschen'
-                : 'Eraser: Click on a drawn line or arrow to delete it'
-            }
-          >
-            <Eraser className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-            <span className="hidden sm:inline">{isDe ? 'Radierer' : 'Eraser'}</span>
-          </button>
-
-          {/* FARBPICKER DROPDOWN */}
-          <div className="relative z-50">
-            <button
-              onClick={() => setShowColorPicker(!showColorPicker)}
-              className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-md font-semibold text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors border border-zinc-700/80 cursor-pointer"
-              title={isDe ? 'Farbe wählen (7 Farben)' : 'Choose color (7 colors)'}
-            >
-              <div className="w-4 h-4 sm:w-3.5 sm:h-3.5 rounded-full border border-white/40 shadow-xs" style={{ backgroundColor: penColor }} />
-              <span className="hidden sm:inline">{isDe ? 'Farbe' : 'Color'}</span>
-            </button>
-            {showColorPicker && (
-              <div
-                data-no-map-click="true"
-                className="fixed top-16 left-1/2 -translate-x-1/2 sm:absolute sm:top-full sm:left-0 sm:translate-x-0 mt-1.5 p-2 bg-zinc-900/98 rounded-2xl sm:rounded-xl border border-zinc-700 shadow-2xl z-[200] flex items-center justify-center gap-2 backdrop-blur-md animate-in fade-in zoom-in-95 duration-100 max-w-[92vw] min-w-[240px]"
-              >
-                {colors.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    className={`w-7 h-7 sm:w-6 sm:h-6 rounded-full border transition-transform hover:scale-115 active:scale-95 shrink-0 cursor-pointer ${
-                      penColor === c ? 'border-amber-400 ring-2 ring-amber-400/50 scale-110' : 'border-zinc-600'
-                    }`}
-                    style={{ backgroundColor: c }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPenColor(c);
-                      setShowColorPicker(false);
-                    }}
-                    title={c}
-                  />
-                ))}
-              </div>
-            )}
+          <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 px-2.5 py-1 rounded-lg bg-zinc-900/60 border border-zinc-800/80">
+            <CheckCircle2
+              className={`w-3.5 h-3.5 ${hasChangesInSession ? 'text-amber-400' : 'text-emerald-400'}`}
+            />
+            <span>
+              {hasChangesInSession
+                ? isDe
+                  ? 'Änderungen offen'
+                  : 'Unsaved edits'
+                : isDe
+                ? 'Bereit'
+                : 'Ready'}
+            </span>
           </div>
+        </div>
 
-          {/* UNDO & REDO CONTROLS */}
-          <div className="flex items-center gap-0.5 border-l border-zinc-800 pl-1 ml-0.5">
+        {/* Right: Undo/Redo/Clear, Share, Edit/Done, Filter, Color Mode, Legend, Tablet Drawer, Fullscreen */}
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          {/* Undo / Redo / Clear Board */}
+          <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-zinc-900 border border-zinc-800">
             <button
               onClick={handleUndoDrawing}
               disabled={drawings.length === 0}
-              className={`p-1.5 rounded transition-colors ${
+              className={`p-1.5 rounded-md transition-colors ${
                 drawings.length > 0
-                  ? 'text-zinc-300 hover:text-white hover:bg-zinc-800'
+                  ? 'text-zinc-200 hover:text-white hover:bg-zinc-800 cursor-pointer'
                   : 'text-zinc-600 cursor-not-allowed'
               }`}
               title={isDe ? 'Rückgängig (Strg+Z)' : 'Undo (Ctrl+Z)'}
@@ -2816,9 +3605,9 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             <button
               onClick={handleRedoDrawing}
               disabled={drawingsRedoStack.length === 0}
-              className={`p-1.5 rounded transition-colors ${
+              className={`p-1.5 rounded-md transition-colors ${
                 drawingsRedoStack.length > 0
-                  ? 'text-zinc-300 hover:text-white hover:bg-zinc-800'
+                  ? 'text-zinc-200 hover:text-white hover:bg-zinc-800 cursor-pointer'
                   : 'text-zinc-600 cursor-not-allowed'
               }`}
               title={isDe ? 'Wiederholen (Strg+Y)' : 'Redo (Ctrl+Y)'}
@@ -2828,118 +3617,603 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             {(drawings.length > 0 || utilities.length > 0 || players.length > 0) && (
               <button
                 onClick={handleClearTactics}
-                className="p-1.5 rounded text-zinc-400 hover:text-red-400 hover:bg-zinc-800"
-                title={isDe ? 'Gesamtes Board leeren' : 'Clear all board items'}
+                className="p-1.5 rounded-md text-zinc-400 hover:text-red-400 hover:bg-zinc-800 cursor-pointer"
+                title={isDe ? 'Board leeren (entsperrte Elemente)' : 'Clear unlocked items'}
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
-        </div>
 
-        {/* Right side of tactical toolbar: Bearbeiten / Fertig */}
-        <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+          {/* Share / Export */}
+          <button
+            onClick={handleShareTactics}
+            className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg border border-sky-500/40 bg-sky-950/60 hover:bg-sky-900/80 text-sky-300 hover:text-white transition-all cursor-pointer flex items-center gap-1.5"
+            title={isDe ? 'Taktik teilen & exportieren' : 'Share & export tactic'}
+          >
+            <Share2 className="w-4 h-4 text-sky-400" />
+            <span className="text-xs font-bold hidden md:inline">{isDe ? 'Teilen' : 'Share'}</span>
+          </button>
+
+          {/* Bearbeiten / Fertig */}
           <button
             onClick={() => {
               if (isEditMode || singleEditCalloutId) {
+                if (hasChangesInSession) {
+                  handleSaveSnapshot(
+                    isDe
+                      ? `Karte bearbeitet (${mapData.callouts.length} Callouts)`
+                      : `Map edited (${mapData.callouts.length} Callouts)`
+                  );
+                }
                 setIsEditMode(false);
                 setSingleEditCalloutId(null);
                 setSelectedCallout(null);
+                setSelectedCalloutIds([]);
                 setHighlightedCalloutId(undefined);
                 setMovingAreaCalloutId(null);
+                setContextMenu(null);
               } else {
                 setIsEditOptionsModalOpen(true);
               }
             }}
-            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-bold rounded-lg border transition-all cursor-pointer shadow-xs ${
+            className={`flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
               isEditMode || singleEditCalloutId
-                ? 'border-amber-400 bg-amber-400 text-zinc-950 shadow-md ring-2 ring-amber-400/30'
-                : 'border-zinc-700/80 bg-zinc-800 text-zinc-200 hover:text-white hover:bg-zinc-700'
+                ? 'border-amber-400 bg-amber-400 text-zinc-950 shadow-md'
+                : 'border-zinc-800 bg-zinc-900 text-zinc-200 hover:text-white hover:bg-zinc-800'
             }`}
-            title={isDe ? 'Bearbeiten-Optionen (+Neu, Einzel-Bearbeitung, Meine Auswahl)' : 'Edit Options'}
+            title={isDe ? 'Callouts bearbeiten' : 'Edit callouts'}
           >
             {isEditMode || singleEditCalloutId ? (
               <>
-                <Check className="w-3.5 h-3.5 text-zinc-950 stroke-[3]" />
-                <span>{isDe ? 'Fertig' : 'Done'}</span>
+                <Check className="w-4 h-4 stroke-[3]" />
+                <span className="hidden sm:inline">{isDe ? 'Fertig' : 'Done'}</span>
               </>
             ) : (
               <>
-                <Move className="w-3.5 h-3.5 text-amber-400" />
-                <span>{isDe ? 'Bearbeiten' : 'Edit'}</span>
+                <Edit3 className="w-4 h-4 text-amber-400" />
+                <span className="hidden sm:inline">{isDe ? 'Bearbeiten' : 'Edit'}</span>
               </>
             )}
           </button>
+
+          {/* Tablet-Only Layers Slide-Over Trigger */}
+          <button
+            onClick={() => setIsTabletLayersOpen((p) => !p)}
+            className={`hidden md:inline-flex lg:hidden items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-bold transition-colors cursor-pointer ${
+              isTabletLayersOpen
+                ? 'border-sky-500/60 bg-sky-500/20 text-sky-200'
+                : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-white'
+            }`}
+            title={isDe ? 'Ebenen & Eigenschaften' : 'Layers & Properties'}
+          >
+            <Layers className="w-4 h-4 text-sky-400" />
+            <span>{isDe ? 'Ebenen' : 'Layers'}</span>
+          </button>
+
+          {/* Meine Callout-Auswahl */}
+          <button
+            onClick={() => {
+              if (customSelectedCalloutIds.length === 0) {
+                handleOpenCustomSelectionModal();
+              } else {
+                setIsCustomSelectionActive(!isCustomSelectionActive);
+              }
+            }}
+            className={`relative p-1.5 rounded-lg border transition-all cursor-pointer hidden sm:inline-flex ${
+              isCustomSelectionActive
+                ? 'border-indigo-400 bg-indigo-500/25 text-indigo-300'
+                : 'border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white'
+            }`}
+            title={isDe ? 'Meine Callout-Auswahl' : 'My Callout Selection'}
+          >
+            <ListFilter className="w-4 h-4" />
+            {customSelectedCalloutIds.length > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-1 text-[9px] font-bold rounded-full flex items-center justify-center leading-none bg-indigo-500 text-white">
+                {customSelectedCalloutIds.length}
+              </span>
+            )}
+          </button>
+
+          {/* Color Mode Toggle */}
+          <div className="hidden sm:flex items-center gap-0.5 p-0.5 rounded-lg bg-zinc-900 border border-zinc-800">
+            <button
+              onClick={() => setColorMode('zone')}
+              className={`p-1.5 rounded-md transition-all cursor-pointer ${
+                colorMode === 'zone' ? 'bg-amber-400 text-zinc-950' : 'text-zinc-400 hover:text-white'
+              }`}
+              title={isDe ? 'Zonen-Farben' : 'Zone colors'}
+            >
+              <Palette className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setColorMode('danger')}
+              className={`p-1.5 rounded-md transition-all cursor-pointer ${
+                colorMode === 'danger' ? 'bg-red-500 text-white' : 'text-zinc-400 hover:text-white'
+              }`}
+              title={isDe ? 'Gefahren-Farben' : 'Danger levels'}
+            >
+              <Shield className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Quick Help & Color Legend */}
+          <button
+            onClick={() => setShowLegend(!showLegend)}
+            className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+              showLegend
+                ? 'border-zinc-400 bg-zinc-200 text-zinc-950'
+                : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-white'
+            }`}
+            title={isDe ? 'Kurzhilfe & Farblegende' : 'Quick Help & Color Legend'}
+          >
+            <HelpCircle className="w-4 h-4 text-amber-400" />
+          </button>
+
+          {/* Fullscreen (nur für die Karte — blendet Menüs links & rechts aus, oberes Menü bleibt sichtbar) */}
+          <button
+            onClick={toggleFullscreen}
+            className={`p-1.5 rounded-lg border inline-flex cursor-pointer transition-colors ${
+              isFullscreen
+                ? 'border-amber-400 bg-amber-400 text-zinc-950'
+                : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-white'
+            }`}
+            title={
+              isFullscreen
+                ? isDe
+                  ? 'Karten-Vollbild beenden'
+                  : 'Exit map fullscreen'
+                : isDe
+                ? 'Karten-Vollbild (Menüs links/rechts ausblenden)'
+                : 'Map fullscreen (hide sidebars)'
+            }
+          >
+            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+          </button>
         </div>
-      </div>
+      </header>
 
-      {/* 3. MAIN MAP STAGE */}
-      <div className="relative flex-1 flex overflow-hidden">
-        {/* POLYGON DRAWING MODE FLOATING BANNER */}
-        {isDrawingPolygonArea && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-50 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 px-3 sm:px-4 py-2 rounded-xl bg-zinc-950/95 border-2 border-sky-400 shadow-2xl backdrop-blur-md max-w-[92vw] sm:max-w-3xl pointer-events-auto text-xs text-white print:hidden">
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-sky-500"></span>
-              </span>
-              <span className="font-extrabold uppercase tracking-wider text-[11px] sm:text-xs">
-                {isDe ? 'Bereich zeichnen' : 'Draw Area'}
-              </span>
-              <span className="text-[10px] sm:text-[11px] font-mono text-sky-300 bg-sky-950/60 px-2 py-0.5 rounded border border-sky-800">
-                {calloutFormAreaPoints.length} {isDe ? 'Punkte' : 'Points'}
-              </span>
-            </div>
+      {/* 2. MOBILE-ONLY TOP DRAWING TOOLBAR (md:hidden — NEVER duplicated on Desktop/Tablet, toggleable, hidden in map fullscreen!) */}
+      {isToolbarVisible && !isFullscreen && (
+      <div className="md:hidden border-b border-zinc-800 bg-zinc-900/95 px-2 py-1.5 flex flex-col gap-1.5 shrink-0 print:hidden z-30">
+        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+          <button
+            type="button"
+            onClick={() => setIsToolbarVisible(false)}
+            className="p-2 min-h-[38px] rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 shrink-0 cursor-pointer transition-colors"
+            title={isDe ? 'Werkzeugleiste ausblenden' : 'Hide toolbar'}
+          >
+            <PanelLeftClose className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => setActiveTool('select')}
+            className={`flex items-center gap-1 px-2.5 min-h-[38px] rounded-lg text-xs font-semibold shrink-0 cursor-pointer transition-colors ${
+              activeTool === 'select'
+                ? 'bg-sky-500/20 text-sky-200 border border-sky-500/50'
+                : 'bg-zinc-950/60 text-zinc-300 border border-zinc-800'
+            }`}
+          >
+            <MousePointer2 className="w-3.5 h-3.5" />
+            <span>{isDe ? 'Auswahl' : 'Select'}</span>
+          </button>
 
-            <div className="text-[11px] text-zinc-300 hidden lg:block truncate max-w-xs">
-              {isDe
-                ? 'Klicke auf die Karte. Grünen Startpunkt oder "Verbinden" klicken.'
-                : 'Click map. Click green start point or "Connect".'}
-            </div>
+          <button
+            onClick={() => setActiveTool('marquee')}
+            className={`flex items-center gap-1 px-2.5 min-h-[38px] rounded-lg text-xs font-semibold shrink-0 cursor-pointer transition-colors ${
+              activeTool === 'marquee'
+                ? 'bg-sky-500/20 text-sky-200 border border-sky-500/50'
+                : 'bg-zinc-950/60 text-zinc-300 border border-zinc-800'
+            }`}
+          >
+            <BoxSelect className="w-3.5 h-3.5" />
+            <span>{isDe ? 'Bereich' : 'Area'}</span>
+          </button>
 
-            <div className="flex items-center gap-1.5 shrink-0 ml-auto">
-              {calloutFormAreaPoints.length > 0 && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setCalloutFormAreaPoints((prev) => prev.slice(0, -1));
-                  }}
-                  className="px-2 py-1 text-[11px] font-semibold rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors"
-                >
-                  ↶ {isDe ? 'Rückgängig' : 'Undo'}
-                </button>
-              )}
+          <button
+            onClick={() => handleToolPress('pen', false)}
+            className={`flex items-center gap-1 px-2.5 min-h-[38px] rounded-lg text-xs font-semibold shrink-0 cursor-pointer transition-colors ${
+              activeTool === 'pen' && !penWithArrow
+                ? 'bg-sky-500/20 text-sky-200 border border-sky-500/50'
+                : 'bg-zinc-950/60 text-zinc-300 border border-zinc-800'
+            }`}
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            <span>{isDe ? 'Linie' : 'Line'}</span>
+          </button>
 
-              {calloutFormAreaPoints.length >= 3 && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleFinishPolygonArea(calloutFormAreaPoints);
-                  }}
-                  className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 transition-colors shadow-md flex items-center gap-1"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  <span>{isDe ? 'Verbinden' : 'Connect'}</span>
-                </button>
-              )}
+          <button
+            onClick={() => handleToolPress('arrow', true)}
+            className={`flex items-center gap-1 px-2.5 min-h-[38px] rounded-lg text-xs font-semibold shrink-0 cursor-pointer transition-colors ${
+              activeTool === 'arrow'
+                ? 'bg-sky-500/20 text-sky-200 border border-sky-500/50'
+                : 'bg-zinc-950/60 text-zinc-300 border border-zinc-800'
+            }`}
+          >
+            <ArrowUp className="w-3.5 h-3.5 rotate-45" />
+            <span>{isDe ? 'Pfeil' : 'Arrow'}</span>
+          </button>
 
+          <button
+            onClick={() => setActiveTool('eraser')}
+            className={`flex items-center gap-1 px-2.5 min-h-[38px] rounded-lg text-xs font-semibold shrink-0 cursor-pointer transition-colors ${
+              activeTool === 'eraser'
+                ? 'bg-red-500/25 text-red-200 border border-red-500/60'
+                : 'bg-zinc-950/60 text-zinc-300 border border-zinc-800'
+            }`}
+          >
+            <Eraser className="w-3.5 h-3.5" />
+            <span>{isDe ? 'Radierer' : 'Eraser'}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTool('utility')}
+            className={`flex items-center gap-1 px-2.5 min-h-[38px] rounded-lg text-xs font-semibold shrink-0 cursor-pointer transition-colors ${
+              activeTool === 'utility'
+                ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-500/50'
+                : 'bg-zinc-950/60 text-zinc-300 border border-zinc-800'
+            }`}
+          >
+            <UtilitySymbol type={selectedUtility} size="xs" />
+            <span>Utility</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTool('player')}
+            className={`flex items-center gap-1 px-2.5 min-h-[38px] rounded-lg text-xs font-semibold shrink-0 cursor-pointer transition-colors ${
+              activeTool === 'player'
+                ? 'bg-amber-500/20 text-amber-200 border border-amber-500/50'
+                : 'bg-zinc-950/60 text-zinc-300 border border-zinc-800'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span>T / CT</span>
+          </button>
+
+          {/* Compact Color Picker Button */}
+          <button
+            onClick={() => setShowColorPicker(!showColorPicker)}
+            className="flex items-center gap-1 px-2.5 min-h-[38px] rounded-lg bg-zinc-950/60 border border-zinc-800 shrink-0 cursor-pointer"
+            title={isDe ? 'Farbe wählen' : 'Color'}
+          >
+            <span
+              className="w-4 h-4 rounded-full border border-white/50"
+              style={{ backgroundColor: penColor }}
+            />
+          </button>
+        </div>
+
+        {/* Mobile Secondary Sub-Row for Utility / Player / Color Swatches */}
+        {showColorPicker && (
+          <div className="flex items-center gap-2 px-1 py-1 bg-zinc-950/90 rounded-lg border border-zinc-800 overflow-x-auto no-scrollbar">
+            <span className="text-[11px] text-zinc-400 shrink-0">{isDe ? 'Farbe:' : 'Color:'}</span>
+            {colors.map((c) => (
               <button
+                key={c}
                 type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsDrawingPolygonArea(false);
-                  setIsAddingCallout(true);
+                onClick={() => {
+                  setPenColor(c);
+                  setShowColorPicker(false);
                 }}
-                className="px-2 py-1 text-[11px] font-semibold rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
-              >
-                {isDe ? 'Abbrechen' : 'Cancel'}
-              </button>
-            </div>
+                style={{ backgroundColor: c }}
+                className={`w-7 h-7 rounded-full border shrink-0 cursor-pointer ${
+                  penColor === c ? 'border-amber-400 ring-2 ring-amber-400/40 scale-105' : 'border-zinc-700'
+                }`}
+              />
+            ))}
           </div>
         )}
 
+        {activeTool === 'utility' && (
+          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+            {(['smoke', 'flash', 'molotov', 'he', 'decoy'] as UtilityType[]).map((u) => {
+              const meta = UTILITY_META[u];
+              return (
+                <button
+                  key={u}
+                  onClick={() => setSelectedUtility(u)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-bold uppercase shrink-0 cursor-pointer border ${
+                    selectedUtility === u
+                      ? `${meta.bgClass} ${meta.borderClass}`
+                      : 'bg-zinc-950 text-zinc-300 border-zinc-800'
+                  }`}
+                >
+                  <UtilitySymbol type={u} size="xs" />
+                  <span>{u === 'molotov' ? 'Molo' : u}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {activeTool === 'player' && (
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setSelectedPlayerSide('ct')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold cursor-pointer border ${
+                selectedPlayerSide === 'ct'
+                  ? 'bg-blue-600 text-white border-blue-400'
+                  : 'bg-zinc-950 text-zinc-300 border-zinc-800'
+              }`}
+            >
+              <img src={resolveAssetPath('ct.png')} alt="CT" className="w-4 h-4 object-contain" />
+              <span>CT-Spieler</span>
+            </button>
+            <button
+              onClick={() => setSelectedPlayerSide('t')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold cursor-pointer border ${
+                selectedPlayerSide === 't'
+                  ? 'bg-amber-600 text-zinc-950 border-amber-400'
+                  : 'bg-zinc-950 text-zinc-300 border-zinc-800'
+              }`}
+            >
+              <img src={resolveAssetPath('T.png')} alt="T" className="w-4 h-4 object-contain" />
+              <span>T-Spieler</span>
+            </button>
+          </div>
+        )}
+      </div>
+      )}
+
+      {/* 3. MAIN 3-COLUMN STUDIO STAGE */}
+      <div className="relative flex-1 flex overflow-hidden">
+        {/* LEFT VERTICAL TOOL RAIL (Desktop & Tablet ONLY — toggleable, hidden in map fullscreen!) */}
+        {isToolbarVisible && !isFullscreen && (
+        <aside className="hidden md:flex flex-col justify-between w-52 lg:w-56 border-r border-zinc-800 bg-zinc-950 p-2.5 overflow-y-auto shrink-0 print:hidden z-30">
+          <div className="space-y-3">
+            {/* Werkzeuge Section */}
+            <div>
+              <div className="flex items-center justify-between px-1.5 mb-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                  {isDe ? 'Werkzeuge' : 'Tools'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsToolbarVisible(false)}
+                  className="p-1 rounded text-zinc-500 hover:text-white hover:bg-zinc-900 cursor-pointer"
+                  title={isDe ? 'Werkzeugleiste ausblenden' : 'Hide toolbar'}
+                >
+                  <PanelLeftClose className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="space-y-1">
+                <button
+                  onClick={() => setActiveTool('select')}
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
+                    activeTool === 'select'
+                      ? 'bg-sky-500/15 border-sky-500/60 text-sky-200'
+                      : 'bg-zinc-900/50 border-zinc-800/80 text-zinc-300 hover:text-white hover:bg-zinc-900'
+                  }`}
+                >
+                  <MousePointer2 className="w-4 h-4 shrink-0" />
+                  <span>{isDe ? 'Auswählen' : 'Select'}</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTool('marquee')}
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
+                    activeTool === 'marquee'
+                      ? 'bg-sky-500/15 border-sky-500/60 text-sky-200'
+                      : 'bg-zinc-900/50 border-zinc-800/80 text-zinc-300 hover:text-white hover:bg-zinc-900'
+                  }`}
+                >
+                  <BoxSelect className="w-4 h-4 shrink-0" />
+                  <span>{isDe ? 'Bereich' : 'Area Box'}</span>
+                </button>
+
+                <button
+                  onClick={() => handleToolPress('pen', false)}
+                  className={`w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
+                    activeTool === 'pen' && !penWithArrow
+                      ? 'bg-sky-500/15 border-sky-500/60 text-sky-200'
+                      : 'bg-zinc-900/50 border-zinc-800/80 text-zinc-300 hover:text-white hover:bg-zinc-900'
+                  }`}
+                >
+                  <span className="flex items-center gap-2.5">
+                    <Pencil className="w-4 h-4 shrink-0" />
+                    <span>{isDe ? 'Linie' : 'Line'}</span>
+                  </span>
+                  <span
+                    className="w-2.5 h-2.5 rounded-full border border-white/40"
+                    style={{ backgroundColor: penColor }}
+                  />
+                </button>
+
+                <button
+                  onClick={() => handleToolPress('arrow', true)}
+                  className={`w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
+                    activeTool === 'arrow'
+                      ? 'bg-sky-500/15 border-sky-500/60 text-sky-200'
+                      : 'bg-zinc-900/50 border-zinc-800/80 text-zinc-300 hover:text-white hover:bg-zinc-900'
+                  }`}
+                >
+                  <span className="flex items-center gap-2.5">
+                    <ArrowUp className="w-4 h-4 rotate-45 shrink-0" />
+                    <span>{isDe ? 'Pfeil (Rush)' : 'Arrow'}</span>
+                  </span>
+                  <span
+                    className="w-2.5 h-2.5 rounded-full border border-white/40"
+                    style={{ backgroundColor: penColor }}
+                  />
+                </button>
+
+                <button
+                  onClick={() => setActiveTool('eraser')}
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
+                    activeTool === 'eraser'
+                      ? 'bg-red-500/20 border-red-500/60 text-red-200'
+                      : 'bg-zinc-900/50 border-zinc-800/80 text-zinc-300 hover:text-white hover:bg-zinc-900'
+                  }`}
+                >
+                  <Eraser className="w-4 h-4 shrink-0" />
+                  <span>{isDe ? 'Radierer' : 'Eraser'}</span>
+                </button>
+
+                {/* Utility Tool + Symbol Sub-Selector (matching T/CT symbol style) */}
+                <div className="space-y-1">
+                  <button
+                    onClick={() => setActiveTool('utility')}
+                    className={`w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
+                      activeTool === 'utility'
+                        ? 'bg-emerald-500/15 border-emerald-500/60 text-emerald-200'
+                        : 'bg-zinc-900/50 border-zinc-800/80 text-zinc-300 hover:text-white hover:bg-zinc-900'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <UtilitySymbol type={selectedUtility} size="sm" />
+                      <span>Utility</span>
+                    </span>
+                    <span className="text-[10px] font-mono uppercase text-zinc-400">
+                      {selectedUtility === 'molotov' ? 'Molo' : selectedUtility}
+                    </span>
+                  </button>
+                  {activeTool === 'utility' && (
+                    <div className="grid grid-cols-3 gap-1 p-1.5 rounded-lg bg-zinc-900 border border-zinc-800">
+                      {(['smoke', 'flash', 'molotov', 'he', 'decoy'] as UtilityType[]).map((u) => {
+                        const meta = UTILITY_META[u];
+                        return (
+                          <button
+                            key={u}
+                            onClick={() => setSelectedUtility(u)}
+                            className={`flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 rounded text-[10px] font-bold uppercase cursor-pointer border transition-colors ${
+                              selectedUtility === u
+                                ? `${meta.bgClass} ${meta.borderClass} shadow-xs`
+                                : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-white'
+                            }`}
+                            title={isDe ? meta.labelDe : meta.labelEn}
+                          >
+                            <UtilitySymbol type={u} size="sm" />
+                            <span className="leading-none text-[9px]">{u === 'molotov' ? 'Molo' : u}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Player Tokens (T / CT) + Inline Side Selector */}
+                <div className="space-y-1">
+                  <button
+                    onClick={() => setActiveTool('player')}
+                    className={`w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
+                      activeTool === 'player'
+                        ? 'bg-amber-500/15 border-amber-500/60 text-amber-200'
+                        : 'bg-zinc-900/50 border-zinc-800/80 text-zinc-300 hover:text-white hover:bg-zinc-900'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <Users className="w-4 h-4 shrink-0" />
+                      <span>T / CT</span>
+                    </span>
+                    <span className="text-[10px] font-mono uppercase text-zinc-400">
+                      {selectedPlayerSide.toUpperCase()}
+                    </span>
+                  </button>
+                  {activeTool === 'player' && (
+                    <div className="grid grid-cols-2 gap-1 p-1.5 rounded-lg bg-zinc-900 border border-zinc-800">
+                      <button
+                        onClick={() => setSelectedPlayerSide('ct')}
+                        className={`flex items-center justify-center gap-1 py-1.5 rounded text-[11px] font-bold cursor-pointer border ${
+                          selectedPlayerSide === 'ct'
+                            ? 'bg-blue-600 text-white border-blue-400'
+                            : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-white'
+                        }`}
+                      >
+                        <img src={resolveAssetPath('ct.png')} alt="CT" className="w-3.5 h-3.5 object-contain" />
+                        <span>CT</span>
+                      </button>
+                      <button
+                        onClick={() => setSelectedPlayerSide('t')}
+                        className={`flex items-center justify-center gap-1 py-1.5 rounded text-[11px] font-bold cursor-pointer border ${
+                          selectedPlayerSide === 't'
+                            ? 'bg-amber-600 text-zinc-950 border-amber-400'
+                            : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-white'
+                        }`}
+                      >
+                        <img src={resolveAssetPath('T.png')} alt="T" className="w-3.5 h-3.5 object-contain" />
+                        <span>T</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Zeichenfarbe Swatches */}
+            <div className="pt-2 border-t border-zinc-800/80">
+              <div className="flex items-center justify-between px-1.5 mb-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                  {isDe ? 'Farbe' : 'Color'}
+                </span>
+                <span className="text-[10px] font-mono text-zinc-500">{penColor}</span>
+              </div>
+              <div className="flex items-center justify-between gap-1 px-1">
+                {colors.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setPenColor(c)}
+                    style={{ backgroundColor: c }}
+                    className={`w-5 h-5 rounded-full border transition-transform hover:scale-110 cursor-pointer ${
+                      penColor === c
+                        ? 'border-amber-400 ring-2 ring-amber-400/50 scale-110'
+                        : 'border-zinc-700'
+                    }`}
+                    title={c}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Shortcut Hint Footer */}
+          <div className="pt-3 mt-3 border-t border-zinc-800/80 px-1 text-[10px] text-zinc-500 leading-relaxed space-y-1">
+            <div>
+              <span className="text-zinc-300 font-semibold">Strg+Klick</span>:{' '}
+              {isDe ? 'Mehrfachauswahl' : 'Multi-select'}
+            </div>
+            <div>
+              <span className="text-zinc-300 font-semibold">Rechtsklick</span>:{' '}
+              {isDe ? 'Kontextmenü' : 'Context menu'}
+            </div>
+          </div>
+        </aside>
+        )}
+
+        {/* MINIMALIST LEFT-SIDE REOPEN BUTTON (an Werkzeuge-Position wenn ausgeblendet) */}
+        {!isToolbarVisible && !isFullscreen && (
+          <button
+            type="button"
+            data-no-map-click="true"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsToolbarVisible(true);
+            }}
+            className="absolute top-3 left-3 z-40 p-1.5 rounded-lg bg-zinc-950/90 border border-zinc-800/90 text-zinc-400 hover:text-white hover:bg-zinc-900 shadow-lg backdrop-blur-xs transition-colors cursor-pointer print:hidden"
+            title={isDe ? 'Werkzeuge einblenden' : 'Show tools'}
+          >
+            <PanelLeftOpen className="w-3.5 h-3.5" />
+          </button>
+        )}
+
+        {/* MINIMALIST RIGHT-SIDE REOPEN BUTTON (PC wenn rechtes Menü ausgeblendet) */}
+        {!isRightPanelVisible && !isFullscreen && (
+          <button
+            type="button"
+            data-no-map-click="true"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsRightPanelVisible(true);
+            }}
+            className="hidden lg:flex absolute top-3 right-3 z-40 p-1.5 rounded-lg bg-zinc-950/90 border border-zinc-800/90 text-zinc-400 hover:text-white hover:bg-zinc-900 shadow-lg backdrop-blur-xs transition-colors cursor-pointer print:hidden"
+            title={isDe ? 'Rechtes Menü einblenden' : 'Show right panel'}
+          >
+            <PanelRightOpen className="w-3.5 h-3.5" />
+          </button>
+        )}
+
+        {/* CENTER MAP CANVAS STAGE */}
         <div
           style={{ touchAction: 'none' }}
           className={`relative flex-1 bg-zinc-950 flex items-center justify-center overflow-hidden ${
@@ -2947,16 +4221,22 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
               ? 'cursor-grabbing'
               : activeTool === 'eraser'
               ? 'cursor-pointer'
-              : activeTool === 'pen' || activeTool === 'arrow'
+              : activeTool === 'pen' || activeTool === 'arrow' || activeTool === 'marquee'
               ? 'cursor-crosshair'
-              : isEditMode
-              ? 'cursor-grab'
               : 'cursor-grab'
           }`}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
-          onContextMenu={(e) => e.preventDefault()}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            if (!hasMovedDistance && !isDrawingPolygonArea) {
+              if (selectedElementIds.length > 0 || selectedCalloutIds.length > 0) {
+                setShowContextColorSubmenu(false);
+                setContextMenu({ x: e.clientX, y: e.clientY });
+              }
+            }
+          }}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
@@ -2964,7 +4244,471 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           onDoubleClick={handleMapDoubleClick}
           onWheel={handleWheel}
         >
-          {/* Zoomable & Pannable Container */}
+          {/* POLYGON DRAWING MODE FLOATING BANNER */}
+          {isDrawingPolygonArea && (
+            <div
+              data-no-map-click="true"
+              className="absolute top-3 left-1/2 -translate-x-1/2 z-50 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 px-3 sm:px-4 py-2 rounded-xl bg-zinc-950/95 border-2 border-sky-400 shadow-2xl backdrop-blur-md max-w-[92vw] sm:max-w-3xl pointer-events-auto text-xs text-white print:hidden"
+            >
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-sky-500"></span>
+                </span>
+                <span className="font-extrabold uppercase tracking-wider text-[11px] sm:text-xs">
+                  {isDe ? 'Bereich zeichnen' : 'Draw Area'}
+                </span>
+                <span className="text-[10px] sm:text-[11px] font-mono text-sky-300 bg-sky-950/60 px-2 py-0.5 rounded border border-sky-800">
+                  {calloutFormAreaPoints.length} {isDe ? 'Punkte' : 'Points'}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                {calloutFormAreaPoints.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCalloutFormAreaPoints((prev) => prev.slice(0, -1));
+                    }}
+                    className="px-2 py-1 text-[11px] font-semibold rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors"
+                  >
+                    ↶ {isDe ? 'Rückgängig' : 'Undo'}
+                  </button>
+                )}
+
+                {calloutFormAreaPoints.length >= 3 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleFinishPolygonArea(calloutFormAreaPoints);
+                    }}
+                    className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 transition-colors shadow-md flex items-center gap-1"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>{isDe ? 'Verbinden' : 'Connect'}</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsDrawingPolygonArea(false);
+                    setIsAddingCallout(true);
+                  }}
+                  className="px-2 py-1 text-[11px] font-semibold rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
+                >
+                  {isDe ? 'Abbrechen' : 'Cancel'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* FLOATING ELEMENT & CALLOUT SELECTION CONTEXT BAR */}
+          {!isDrawingPolygonArea &&
+            !isEditMode &&
+            !contextMenu &&
+            (selectedElementIds.length > 0 || selectedCalloutIds.length > 0) && (() => {
+              const totalCount = selectedElementIds.length + selectedCalloutIds.length;
+              const selectedGroupSet = new Set([
+                ...drawings.filter((d) => selectedElementIds.includes(d.id) && d.groupId).map((d) => d.groupId),
+                ...utilities.filter((u) => selectedElementIds.includes(u.id) && u.groupId).map((u) => u.groupId),
+                ...players.filter((p) => selectedElementIds.includes(p.id) && p.groupId).map((p) => p.groupId),
+                ...mapData.callouts.filter((c) => selectedCalloutIds.includes(c.id) && c.groupId).map((c) => c.groupId),
+              ]);
+              const isGrouped = selectedGroupSet.size > 0;
+              const allLocked =
+                drawings.filter((d) => selectedElementIds.includes(d.id)).every((d) => d.locked) &&
+                utilities.filter((u) => selectedElementIds.includes(u.id)).every((u) => u.locked) &&
+                players.filter((p) => selectedElementIds.includes(p.id)).every((p) => p.locked) &&
+                mapData.callouts.filter((c) => selectedCalloutIds.includes(c.id)).every((c) => c.locked);
+
+              return (
+                <div
+                  data-no-map-click="true"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute top-3 left-1/2 -translate-x-1/2 z-40 flex flex-wrap items-center justify-center gap-1 px-2 py-1 rounded-xl bg-zinc-950/95 border border-zinc-700 shadow-2xl backdrop-blur-md text-xs text-zinc-100 w-max max-w-[calc(100%-72px)] print:hidden"
+                >
+                  <span className="px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono font-bold tabular-nums shrink-0">
+                    {totalCount} {isDe ? 'gewählt' : 'selected'}
+                  </span>
+                  {isGrouped && (
+                    <span className="px-1.5 py-0.5 rounded border border-sky-500/50 bg-sky-500/10 text-sky-300 text-[10px] font-bold shrink-0">
+                      {isDe ? 'Gruppe' : 'Group'}
+                    </span>
+                  )}
+
+                  {(totalCount >= 2 || isGrouped) && (
+                    <button
+                      type="button"
+                      onClick={handleGroupSelected}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-zinc-800 text-zinc-200 hover:text-white transition-colors shrink-0 cursor-pointer"
+                      title={isDe ? 'Elemente gruppieren / Gruppe auflösen' : 'Group / Ungroup'}
+                    >
+                      <Users className="w-3.5 h-3.5 text-sky-400" />
+                      <span className="hidden sm:inline">
+                        {isGrouped ? (isDe ? 'Lösen' : 'Ungroup') : isDe ? 'Gruppieren' : 'Group'}
+                      </span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleDuplicateSelected}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-zinc-800 text-zinc-200 hover:text-white transition-colors shrink-0 cursor-pointer"
+                    title={isDe ? 'Duplizieren (Strg+D)' : 'Duplicate (Ctrl+D)'}
+                  >
+                    <Copy className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="hidden sm:inline">{isDe ? 'Duplizieren' : 'Duplicate'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleToggleLockSelected}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-zinc-800 text-zinc-200 hover:text-white transition-colors shrink-0 cursor-pointer"
+                    title={isDe ? 'Auswahl sperren / entsperren' : 'Lock / Unlock'}
+                  >
+                    {allLocked ? (
+                      <Unlock className="w-3.5 h-3.5 text-amber-400" />
+                    ) : (
+                      <Lock className="w-3.5 h-3.5 text-amber-400" />
+                    )}
+                    <span className="hidden sm:inline">
+                      {allLocked ? (isDe ? 'Entsperren' : 'Unlock') : isDe ? 'Sperren' : 'Lock'}
+                    </span>
+                  </button>
+
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowContextColorPicker((p) => !p)}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-zinc-800 text-zinc-200 hover:text-white transition-colors shrink-0 cursor-pointer"
+                      title={isDe ? 'Farbe ändern' : 'Change color'}
+                    >
+                      <Palette className="w-3.5 h-3.5 text-purple-400" />
+                      <span className="hidden sm:inline">{isDe ? 'Farbe' : 'Color'}</span>
+                    </button>
+                    {showContextColorPicker && (
+                      <div className="fixed top-24 left-1/2 -translate-x-1/2 p-2 rounded-xl bg-zinc-900 border border-zinc-700 shadow-2xl flex items-center gap-1.5 z-50">
+                        {colors.map((c) => (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => {
+                              handleUpdateSelectedElementsProps({ color: c });
+                              setShowContextColorPicker(false);
+                            }}
+                            style={{ backgroundColor: c }}
+                            className="w-6 h-6 rounded-full border border-zinc-600 hover:scale-115 transition-transform cursor-pointer"
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleDeleteSelectedElements}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors shrink-0 cursor-pointer"
+                    title={isDe ? 'Auswahl löschen (Entf)' : 'Delete selected (Del)'}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">{isDe ? 'Löschen' : 'Delete'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedElementIds([]);
+                      setSelectedCalloutIds([]);
+                      setSelectedCallout(null);
+                      setShowContextColorPicker(false);
+                    }}
+                    className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 cursor-pointer shrink-0"
+                    title={isDe ? 'Auswahl aufheben' : 'Deselect'}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              );
+            })()}
+
+          {/* RIGHT-CLICK CONTEXT MENU POPOVER */}
+          {contextMenu && !isDrawingPolygonArea && (() => {
+            const totalCount = selectedElementIds.length + selectedCalloutIds.length;
+            const singleCtxCallout =
+              selectedCalloutIds.length === 1 && selectedElementIds.length === 0
+                ? mapData.callouts.find((c) => c.id === selectedCalloutIds[0]) || null
+                : null;
+            const selectedGroupSet = new Set([
+              ...drawings.filter((d) => selectedElementIds.includes(d.id) && d.groupId).map((d) => d.groupId),
+              ...utilities.filter((u) => selectedElementIds.includes(u.id) && u.groupId).map((u) => u.groupId),
+              ...players.filter((p) => selectedElementIds.includes(p.id) && p.groupId).map((p) => p.groupId),
+              ...mapData.callouts.filter((c) => selectedCalloutIds.includes(c.id) && c.groupId).map((c) => c.groupId),
+            ]);
+            const isGrouped = selectedGroupSet.size > 0;
+            const allLocked =
+              totalCount > 0 &&
+              drawings.filter((d) => selectedElementIds.includes(d.id)).every((d) => d.locked) &&
+              utilities.filter((u) => selectedElementIds.includes(u.id)).every((u) => u.locked) &&
+              players.filter((p) => selectedElementIds.includes(p.id)).every((p) => p.locked) &&
+              mapData.callouts.filter((c) => selectedCalloutIds.includes(c.id)).every((c) => c.locked);
+
+            const menuLeft =
+              typeof window !== 'undefined' ? Math.min(contextMenu.x, window.innerWidth - 260) : contextMenu.x;
+            const menuTop =
+              typeof window !== 'undefined'
+                ? Math.min(contextMenu.y, window.innerHeight - (singleCtxCallout ? 430 : 300))
+                : contextMenu.y;
+
+            return (
+              <div
+                data-no-map-click="true"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                style={{ left: `${Math.max(12, menuLeft)}px`, top: `${Math.max(12, menuTop)}px` }}
+                className="fixed z-[110] w-60 rounded-xl bg-zinc-900/95 border border-zinc-700/90 shadow-2xl backdrop-blur-md text-xs text-zinc-100 overflow-hidden print:hidden"
+              >
+                {/* Header */}
+                <div className="px-3.5 py-2.5 border-b border-zinc-800 flex items-center justify-between gap-2 bg-zinc-950/60">
+                  <span className="font-semibold text-zinc-100 truncate">
+                    {singleCtxCallout
+                      ? singleCtxCallout.name.replace(/\n/g, ' ')
+                      : totalCount === 1
+                      ? isDe
+                        ? '1 Element ausgewählt'
+                        : '1 element selected'
+                      : isDe
+                      ? `${totalCount} Elemente ausgewählt`
+                      : `${totalCount} elements selected`}
+                  </span>
+                  <span
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold border shrink-0 ${
+                      isGrouped
+                        ? 'border-sky-400/70 bg-sky-500/20 text-sky-300'
+                        : 'border-sky-500/40 bg-sky-500/10 text-sky-300/80'
+                    }`}
+                  >
+                    {isDe ? 'Gruppe' : 'Group'}
+                  </span>
+                </div>
+
+                {/* Action Rows */}
+                <div className="p-1.5 space-y-0.5">
+                  {singleCtxCallout && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          handleOpenCalloutEditor(singleCtxCallout, e);
+                          setContextMenu(null);
+                        }}
+                        className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-zinc-800 text-zinc-100 transition-colors cursor-pointer"
+                      >
+                        <span className="flex items-center gap-2.5">
+                          <Edit3 className="w-4 h-4 text-amber-400" />
+                          <span className="font-medium">
+                            {isDe ? 'Callout bearbeiten' : 'Edit callout'}
+                          </span>
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const currentTextRot =
+                            singleCtxCallout.textRotation !== undefined
+                              ? singleCtxCallout.textRotation
+                              : singleCtxCallout.rotation || 0;
+                          let nextRot = currentTextRot + 45;
+                          if (nextRot > 180) nextRot = -135;
+                          const updated = mapData.callouts.map((c) =>
+                            c.id === singleCtxCallout.id ? { ...c, textRotation: nextRot } : c
+                          );
+                          handleMapUpdate({ ...mapData, callouts: updated });
+                        }}
+                        className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-zinc-800 text-zinc-100 transition-colors cursor-pointer"
+                      >
+                        <span className="flex items-center gap-2.5">
+                          <RotateCw className="w-4 h-4 text-sky-400" />
+                          <span className="font-medium">
+                            {isDe ? 'Text drehen (+45°)' : 'Rotate text (+45°)'}
+                          </span>
+                        </span>
+                        <span className="text-[11px] font-mono text-zinc-500">
+                          {singleCtxCallout.textRotation !== undefined
+                            ? singleCtxCallout.textRotation
+                            : singleCtxCallout.rotation || 0}
+                          °
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (movingAreaCalloutId === singleCtxCallout.id) {
+                            setMovingAreaCalloutId(null);
+                          } else {
+                            if (!singleCtxCallout.area) {
+                              const width = 10;
+                              const height = 10;
+                              const areaX = Math.max(
+                                -50,
+                                Math.min(50 - width, Math.round((singleCtxCallout.x - width / 2) * 10) / 10)
+                              );
+                              const areaY = Math.max(
+                                -50,
+                                Math.min(50 - height, Math.round((singleCtxCallout.y - height / 2) * 10) / 10)
+                              );
+                              const updatedCallouts = mapData.callouts.map((c) =>
+                                c.id === singleCtxCallout.id
+                                  ? {
+                                      ...c,
+                                      area: { x: areaX, y: areaY, width, height, shape: 'rect' as const },
+                                    }
+                                  : c
+                              );
+                              handleMapUpdate({ ...mapData, callouts: updatedCallouts });
+                            }
+                            setIsEditMode(true);
+                            setMovingAreaCalloutId(singleCtxCallout.id);
+                          }
+                          setContextMenu(null);
+                        }}
+                        className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-zinc-800 text-zinc-100 transition-colors cursor-pointer"
+                      >
+                        <span className="flex items-center gap-2.5">
+                          <Move className="w-4 h-4 text-amber-400" />
+                          <span className="font-medium">
+                            {movingAreaCalloutId === singleCtxCallout.id
+                              ? isDe
+                                ? 'Bereich-Verschieben beenden'
+                                : 'Stop moving area'
+                              : isDe
+                              ? 'Bereich verschieben'
+                              : 'Move area'}
+                          </span>
+                        </span>
+                      </button>
+
+                      <div className="my-1 border-t border-zinc-800" />
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    disabled={totalCount < 2 && !isGrouped}
+                    onClick={handleGroupSelected}
+                    className={`w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left transition-colors ${
+                      totalCount >= 2 || isGrouped
+                        ? 'hover:bg-zinc-800 text-zinc-100 cursor-pointer'
+                        : 'text-zinc-600 cursor-not-allowed'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <Users className="w-4 h-4 text-zinc-300" />
+                      <span className="font-medium">
+                        {isGrouped
+                          ? isDe
+                            ? 'Gruppe aufheben'
+                            : 'Ungroup'
+                          : isDe
+                          ? 'Gruppieren'
+                          : 'Group'}
+                      </span>
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleDuplicateSelected}
+                    className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-zinc-800 text-zinc-100 transition-colors cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <Copy className="w-4 h-4 text-zinc-300" />
+                      <span className="font-medium">{isDe ? 'Duplizieren' : 'Duplicate'}</span>
+                    </span>
+                    <span className="text-[11px] font-mono text-zinc-500">Ctrl+D</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleToggleLockSelected}
+                    className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-zinc-800 text-zinc-100 transition-colors cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2.5">
+                      {allLocked ? (
+                        <Unlock className="w-4 h-4 text-amber-400" />
+                      ) : (
+                        <Lock className="w-4 h-4 text-zinc-300" />
+                      )}
+                      <span className="font-medium">
+                        {allLocked ? (isDe ? 'Entsperren' : 'Unlock') : isDe ? 'Sperren' : 'Lock'}
+                      </span>
+                    </span>
+                  </button>
+
+                  {/* Farbe ändern > */}
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setShowContextColorSubmenu((p) => !p)}
+                      className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-zinc-800 text-zinc-100 transition-colors cursor-pointer"
+                    >
+                      <span className="flex items-center gap-2.5">
+                        <Palette className="w-4 h-4 text-zinc-300" />
+                        <span className="font-medium">{isDe ? 'Farbe ändern' : 'Change color'}</span>
+                      </span>
+                      <ChevronRight
+                        className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${
+                          showContextColorSubmenu ? 'rotate-90' : ''
+                        }`}
+                      />
+                    </button>
+                    {showContextColorSubmenu && (
+                      <div className="px-2.5 py-2 mt-0.5 rounded-lg bg-zinc-950/90 border border-zinc-800 flex items-center justify-between gap-1.5">
+                        {colors.map((c) => (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => {
+                              handleUpdateSelectedElementsProps({ color: c });
+                              setShowContextColorSubmenu(false);
+                              setContextMenu(null);
+                            }}
+                            style={{ backgroundColor: c }}
+                            className="w-5 h-5 rounded-full border border-zinc-600 hover:scale-120 transition-transform cursor-pointer"
+                            title={c}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="my-1 border-t border-zinc-800" />
+
+                  <button
+                    type="button"
+                    onClick={handleDeleteSelectedElements}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span className="font-medium">{isDe ? 'Löschen' : 'Delete'}</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Zoomable & Pannable Radar Map Container */}
           <div
             ref={mapContainerRef}
             style={{
@@ -3004,7 +4748,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                 e.preventDefault();
                 setShowEditBanner(false);
               }}
-              className="absolute top-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2.5 px-4 py-2 rounded-xl bg-amber-500/20 border border-amber-500/60 text-amber-200 text-xs font-semibold backdrop-blur-md shadow-2xl cursor-pointer hover:bg-amber-500/30 transition-all animate-in fade-in slide-in-from-top-2 duration-200 print:hidden"
+              className="absolute top-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2.5 px-4 py-2 rounded-xl bg-amber-500/20 border border-amber-500/60 text-amber-200 text-xs font-semibold backdrop-blur-md shadow-2xl cursor-pointer hover:bg-amber-500/30 transition-all print:hidden"
               title={isDe ? 'Klicken zum Ausblenden' : 'Click to dismiss'}
             >
               <Move className="w-4 h-4 text-amber-400 animate-pulse shrink-0 pointer-events-none" />
@@ -3016,25 +4760,21 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             </div>
           )}
 
-
-
-          {/* FLOATING HOVER CARD */}
+          {/* FLOATING HOVER CARD (Desktop Hover Preview) */}
           {!isDrawingPolygonArea && hoveredCallout && !selectedCallout && !isEditMode && (
-            <div className="absolute bottom-5 left-5 z-40 max-w-sm rounded-xl border border-zinc-700 bg-zinc-950/95 p-4 shadow-2xl backdrop-blur-md text-zinc-100 pointer-events-none animate-in fade-in-50 duration-150 print:hidden">
-              <div className="flex items-center justify-between gap-2 mb-1.5">
-                <span className="font-extrabold text-sm text-white">
-                  {hoveredCallout.name}
-                </span>
+            <div className="hidden md:block absolute bottom-16 left-3 z-30 max-w-sm rounded-xl border border-zinc-700 bg-zinc-950/95 p-3.5 shadow-2xl backdrop-blur-md text-zinc-100 pointer-events-none print:hidden">
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <span className="font-extrabold text-sm text-white">{hoveredCallout.name}</span>
                 <div className="flex items-center gap-1.5">
                   <span
-                    className={`text-[10px] font-mono px-2 py-0.5 rounded border uppercase ${getZoneBadgeColor(
+                    className={`text-[10px] font-mono px-1.5 py-0.5 rounded border uppercase ${getZoneBadgeColor(
                       hoveredCallout.zone
                     )}`}
                   >
                     {hoveredCallout.zone.replace('_', ' ')}
                   </span>
                   <span
-                    className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                    className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
                       getDangerBadge(hoveredCallout.danger).classes
                     }`}
                   >
@@ -3042,363 +4782,1073 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                   </span>
                 </div>
               </div>
-              <p className="text-xs text-zinc-300 mb-2">
+              <p className="text-xs text-zinc-300 line-clamp-2">
                 {isDe ? hoveredCallout.descriptionDe : hoveredCallout.descriptionEn}
               </p>
-              <div className="flex items-center gap-2 text-[11px] text-zinc-400">
-                <span className="text-amber-400 font-semibold">{isDe ? 'Tipp:' : 'Tip:'}</span>
-                <span className="line-clamp-1">
-                  {isDe ? hoveredCallout.tacticalTipDe : hoveredCallout.tacticalTipEn}
-                </span>
-              </div>
             </div>
           )}
+
+          {/* PC-ONLY INTERACTIVE LIVE RADAR MINIMAP (hidden lg:block) */}
+          {!isDrawingPolygonArea &&
+            (() => {
+              const baseTileSize = mapContainerRef.current?.clientWidth || 720;
+              const stageEl = mapContainerRef.current?.parentElement;
+              const stageW = stageEl?.clientWidth || 900;
+              const stageH = stageEl?.clientHeight || 700;
+              const scaledW = Math.max(1, baseTileSize * zoom);
+              const scaledH = Math.max(1, baseTileSize * zoom);
+              const viewWFrac = Math.min(1, stageW / scaledW);
+              const viewHFrac = Math.min(1, stageH / scaledH);
+              const centerXFrac = 0.5 - pan.x / scaledW;
+              const centerYFrac = 0.5 - pan.y / scaledH;
+              const boxLeft = Math.max(0, Math.min(1 - viewWFrac, centerXFrac - viewWFrac / 2));
+              const boxTop = Math.max(0, Math.min(1 - viewHFrac, centerYFrac - viewHFrac / 2));
+
+              const panToMinimapEvent = (clientX: number, clientY: number) => {
+                if (!minimapRef.current) return;
+                const r = minimapRef.current.getBoundingClientRect();
+                const nx = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+                const ny = Math.max(0, Math.min(1, (clientY - r.top) / r.height));
+                setPan({
+                  x: Math.round((0.5 - nx) * scaledW),
+                  y: Math.round((0.5 - ny) * scaledH),
+                });
+              };
+
+              if (!showMinimap) {
+                return (
+                  <button
+                    type="button"
+                    data-no-map-click="true"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowMinimap(true);
+                    }}
+                    className="hidden lg:flex items-center gap-1.5 absolute bottom-3 right-3 z-30 px-2.5 py-1.5 rounded-xl bg-zinc-950/90 border border-zinc-800 hover:border-sky-500/50 text-xs font-bold text-zinc-200 hover:text-white shadow-2xl backdrop-blur-md cursor-pointer print:hidden"
+                    title={isDe ? 'Minikarte anzeigen' : 'Show minimap'}
+                  >
+                    <MapIcon className="w-3.5 h-3.5 text-sky-400" />
+                    <span>Minikarte</span>
+                  </button>
+                );
+              }
+
+              return (
+                <div
+                  data-no-map-click="true"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+                  className="hidden lg:flex flex-col absolute bottom-3 right-3 z-30 w-[156px] rounded-xl bg-zinc-950/95 border border-zinc-700/90 shadow-2xl backdrop-blur-md p-1.5 gap-1 print:hidden"
+                >
+                  <div className="flex items-center justify-between px-1">
+                    <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-zinc-300">
+                      <MapIcon className="w-3 h-3 text-sky-400" />
+                      <span>Minikarte</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowMinimap(false)}
+                      className="p-0.5 rounded text-zinc-500 hover:text-white hover:bg-zinc-800 cursor-pointer"
+                      title={isDe ? 'Minikarte ausblenden' : 'Hide minimap'}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+
+                  <div
+                    ref={minimapRef}
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      setIsDraggingMinimap(true);
+                      panToMinimapEvent(e.clientX, e.clientY);
+                    }}
+                    onMouseMove={(e) => {
+                      if (!isDraggingMinimap) return;
+                      e.stopPropagation();
+                      panToMinimapEvent(e.clientX, e.clientY);
+                    }}
+                    onMouseUp={() => setIsDraggingMinimap(false)}
+                    onMouseLeave={() => setIsDraggingMinimap(false)}
+                    className="relative w-full aspect-square rounded-lg overflow-hidden border border-zinc-800 bg-zinc-900 cursor-crosshair select-none"
+                    title={isDe ? 'Klicken oder ziehen zum Navigieren' : 'Click or drag to pan'}
+                  >
+                    <img
+                      src={resolveAssetPath(activeImage)}
+                      alt="Minimap"
+                      className="w-full h-full object-cover opacity-80 pointer-events-none"
+                      draggable={false}
+                    />
+                    <svg
+                      className="absolute inset-0 w-full h-full pointer-events-none"
+                      viewBox="-50 -50 100 100"
+                      preserveAspectRatio="none"
+                    >
+                      {drawings
+                        .filter((d) => isLayerVisible(d.layerId, 'layer_t'))
+                        .map((d) => (
+                          <polyline
+                            key={`mini_${d.id}`}
+                            points={d.points.map((p) => `${p.x},${p.y}`).join(' ')}
+                            fill="none"
+                            stroke={d.color || '#ffffff'}
+                            strokeWidth={1.6}
+                            strokeLinecap="round"
+                          />
+                        ))}
+                      {utilities
+                        .filter((u) => isLayerVisible(u.layerId, 'layer_util'))
+                        .map((u) => (
+                          <circle
+                            key={`mini_${u.id}`}
+                            cx={u.x}
+                            cy={u.y}
+                            r={2.5}
+                            fill={UTILITY_META[u.type]?.colorHex || '#38bdf8'}
+                          />
+                        ))}
+                      {players
+                        .filter((p) => isLayerVisible(p.layerId, p.side === 'ct' ? 'layer_ct' : 'layer_t'))
+                        .map((p) => (
+                          <circle
+                            key={`mini_${p.id}`}
+                            cx={p.x}
+                            cy={p.y}
+                            r={2.5}
+                            fill={p.side === 'ct' ? '#2563eb' : '#d97706'}
+                          />
+                        ))}
+                    </svg>
+
+                    {/* Live Viewport Frame */}
+                    <div
+                      style={{
+                        left: `${boxLeft * 100}%`,
+                        top: `${boxTop * 100}%`,
+                        width: `${viewWFrac * 100}%`,
+                        height: `${viewHFrac * 100}%`,
+                      }}
+                      className="absolute border-[1.5px] border-sky-400 bg-sky-400/15 rounded-[2px] shadow-[0_0_8px_rgba(56,189,248,0.65)] pointer-events-none"
+                    />
+                  </div>
+                </div>
+              );
+            })()}
+
         </div>
 
-        {/* 4. PINNED TACTICAL INSPECTOR SIDEBAR */}
-        {!isDrawingPolygonArea && selectedCallout && !isEditMode && (
-          <aside className="w-80 sm:w-96 border-l border-zinc-800 bg-zinc-900/95 p-5 flex flex-col justify-between overflow-y-auto z-40 backdrop-blur-md shrink-0 shadow-2xl animate-in slide-in-from-right-10 duration-200 print:hidden">
-            <div>
-              <div className="flex items-start justify-between pb-3 border-b border-zinc-800 mb-4">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span
-                      className={`text-[10px] font-mono px-2 py-0.5 rounded border uppercase ${getZoneBadgeColor(
-                        selectedCallout.zone
-                      )}`}
-                    >
-                      {selectedCallout.zone.replace('_', ' ')}
-                    </span>
-                    <span
-                      className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
-                        getDangerBadge(selectedCallout.danger).classes
-                      }`}
-                    >
-                      {getDangerBadge(selectedCallout.danger).label}
-                    </span>
-                  </div>
-                  <h2 className="text-xl font-black text-white leading-tight">
-                    {selectedCallout.name.includes('\n') ? (
-                      selectedCallout.name.split('\n').slice(0, 2).map((l, i) => (
-                        <div key={i} className="whitespace-nowrap">{l}</div>
-                      ))
-                    ) : (
-                      <span className="whitespace-nowrap">{selectedCallout.name}</span>
-                    )}
-                  </h2>
-                </div>
-                <div className="flex flex-col items-end gap-1.5 shrink-0 ml-2">
-                  <button
-                    onClick={() => setSelectedCallout(null)}
-                    className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer"
-                    title={isDe ? 'Schließen' : 'Close'}
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => playTTS(selectedCallout.name)}
-                    className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-bold rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 transition-all cursor-pointer shadow-xs active:scale-95"
-                    title={isDe ? 'Callout-Name per Sprachausgabe (TTS) vorlesen' : 'Read callout name aloud (TTS)'}
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                    <span>{isDe ? 'Vorlesen' : 'Listen'}</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="mb-4">
-                <span className="block text-xs font-mono uppercase text-zinc-500 mb-1">
-                  {isDe ? 'Positionsbeschreibung' : 'Position Overview'}
-                </span>
-                <p className="text-sm text-zinc-200 leading-relaxed">
-                  {isDe ? selectedCallout.descriptionDe : selectedCallout.descriptionEn}
-                </p>
-              </div>
-
-              <div className="mb-4 p-3 rounded-xl bg-zinc-950/80 border border-zinc-800">
-                <div className="flex items-center gap-1.5 text-amber-400 text-xs font-bold uppercase tracking-wider mb-1.5">
-                  <Flame className="w-3.5 h-3.5" />
-                  <span>{isDe ? 'Taktische Empfehlungen' : 'Tactical Briefing'}</span>
-                </div>
-                <p className="text-xs text-zinc-300 leading-relaxed">
-                  {isDe ? selectedCallout.tacticalTipDe : selectedCallout.tacticalTipEn}
-                </p>
-              </div>
-
-              <div className="mb-4">
-                <span className="block text-xs font-mono uppercase text-zinc-500 mb-1">
-                  {isDe ? 'Typische Blickwinkel & Gefahrenzonen' : 'Common Angles & Crossfires'}
-                </span>
-                <p className="text-xs font-mono text-zinc-300 bg-zinc-950/60 p-2.5 rounded-lg border border-zinc-800">
-                  {isDe ? selectedCallout.commonAnglesDe : selectedCallout.commonAnglesEn}
-                </p>
-              </div>
-
-              {selectedCallout.area && (
-                <div className="mb-4 p-2.5 rounded-xl bg-zinc-950/60 border border-zinc-800 text-xs">
-                  <span className="block font-mono uppercase text-zinc-400 font-bold mb-1">
-                    {isDe ? 'Zonenbereich (TotalCSGO-Stil)' : 'Zone Area Boundary'}
-                  </span>
-                  <div className="text-zinc-400 text-[11px]">
-                    {isDe
-                      ? `Rechteck: ${selectedCallout.area.width}% × ${selectedCallout.area.height}% auf der Karte (Callout zentriert)`
-                      : `Rectangle: ${selectedCallout.area.width}% × ${selectedCallout.area.height}% on radar (Callout centered)`}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="pt-4 border-t border-zinc-800 flex items-center justify-between">
-              <span className="text-[11px] font-mono text-zinc-500">
-                Koord: {selectedCallout.x}% / {selectedCallout.y}%
-                {selectedCallout.rotation ? ` • ${selectedCallout.rotation}°` : ''}
-              </span>
-              <button
-                onClick={() => setSelectedCallout(null)}
-                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white transition-colors"
-              >
-                {isDe ? 'Schließen' : 'Close'}
-              </button>
-            </div>
-          </aside>
-        )}
-        {/* BOTTOM FLOATING CONTROL BAR (Areas, Text Scale, Zoom) */}
+        {/* MOBILE FLOATING BOTTOM BAR (Karten-Zoom & Schrift-Zoom mit je einem Schieberegler, Bereiche, Raster & Ebenen-Button — md:hidden) */}
         {!isDrawingPolygonArea && (
-        <div className="absolute bottom-2 left-2 right-2 sm:bottom-4 sm:left-4 sm:right-auto z-30 flex flex-wrap sm:flex-nowrap items-center gap-2 p-2 rounded-xl bg-zinc-950/95 border border-zinc-800 shadow-2xl backdrop-blur-md text-xs print:hidden">
-          {/* TotalCSGO-Style Area Toggle */}
-          <button
-            onClick={() => setShowAreas(!showAreas)}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-              showAreas
-                ? 'bg-zinc-800 text-zinc-100 font-bold border border-zinc-700'
-                : 'text-zinc-500 hover:text-zinc-300'
-            }`}
-            title={isDe ? 'TotalCSGO Zonenbereiche ein- oder ausblenden' : 'Toggle TotalCSGO areas'}
+          <div
+            data-no-map-click="true"
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+            className="md:hidden absolute bottom-2 left-2 right-2 z-30 flex items-end justify-between gap-1.5 pointer-events-none print:hidden"
           >
-            <Square className={`w-3.5 h-3.5 ${showAreas ? 'text-amber-400' : 'text-zinc-500'}`} />
-            <span>{isDe ? 'Bereiche' : 'Areas'}</span>
-          </button>
+            <div className="pointer-events-auto flex flex-col gap-1 p-1.5 rounded-xl bg-zinc-950/95 border border-zinc-800 shadow-2xl backdrop-blur-md max-w-[calc(100%-46px)]">
+              {/* Zeile 1: Karten-Zoom (Schieberegler) + Fit + Bereiche + Raster */}
+              <div className="flex flex-wrap items-center gap-1" style={{ touchAction: 'pan-x' }}>
+                <button
+                  type="button"
+                  onClick={handleZoomOut}
+                  className="w-6 h-7 flex items-center justify-center rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 cursor-pointer shrink-0"
+                  title="Zoom -"
+                >
+                  <ZoomOut className="w-3.5 h-3.5" />
+                </button>
+                <input
+                  type="range"
+                  min="50"
+                  max="250"
+                  step="1"
+                  value={Math.round(zoom * 100)}
+                  onChange={(e) => handleZoomChange(Number(e.target.value) / 100)}
+                  onInput={(e) => handleZoomChange(Number((e.target as HTMLInputElement).value) / 100)}
+                  style={{ touchAction: 'pan-x' }}
+                  className="w-[74px] accent-sky-400 cursor-pointer h-2 bg-zinc-800 rounded-lg shrink-0"
+                  title={isDe ? 'Karten-Zoom anpassen' : 'Adjust map zoom'}
+                />
+                <span className="text-[10px] font-mono font-bold tabular-nums text-zinc-100 min-w-[30px] text-center shrink-0">
+                  {Math.round(zoom * 100)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={handleZoomIn}
+                  className="w-6 h-7 flex items-center justify-center rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 cursor-pointer shrink-0"
+                  title="Zoom +"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setZoom(calculateFitZoom());
+                    setPan({ x: 0, y: 0 });
+                  }}
+                  className="px-1.5 h-7 rounded-lg text-[10px] font-mono font-bold bg-zinc-900 hover:bg-zinc-800 text-amber-300 border border-zinc-800 cursor-pointer shrink-0"
+                  title={isDe ? 'Karte einpassen' : 'Fit map'}
+                >
+                  Fit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAreas((a) => !a)}
+                  className={`w-6 h-7 flex items-center justify-center rounded-lg border transition-colors cursor-pointer shrink-0 ${
+                    showAreas
+                      ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
+                      : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800'
+                  }`}
+                  title={isDe ? 'Bereiche' : 'Areas'}
+                >
+                  <Square className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowGrid((g) => !g)}
+                  className={`w-6 h-7 flex items-center justify-center rounded-lg border transition-colors cursor-pointer shrink-0 ${
+                    showGrid
+                      ? 'bg-sky-500/20 border-sky-500/50 text-sky-300'
+                      : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800'
+                  }`}
+                  title={isDe ? 'Raster' : 'Grid'}
+                >
+                  <Grid3X3 className="w-3.5 h-3.5" />
+                </button>
+              </div>
 
-          {/* CALLOUT LABEL SIZE SCALE CONTROL */}
-          <div className="flex items-center gap-1.5 px-2 py-0.5 bg-zinc-900 rounded-lg border border-zinc-800">
-            <Type className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+              {/* Zeile 2: Schriftgröße (Schieberegler) + Fit */}
+              <div className="flex flex-wrap items-center gap-1" style={{ touchAction: 'pan-x' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowCalloutLabels((p) => !p)}
+                  className={`w-6 h-7 flex items-center justify-center rounded-lg border transition-colors cursor-pointer shrink-0 ${
+                    showCalloutLabels
+                      ? 'border-zinc-700 bg-zinc-900 text-zinc-200'
+                      : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:bg-zinc-800'
+                  }`}
+                  title={isDe ? 'Callout-Namen ein-/ausblenden' : 'Toggle labels'}
+                >
+                  {showCalloutLabels ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCalloutScale((prev) => Math.max(0.4, Math.round((prev - 0.05) * 100) / 100))
+                  }
+                  className="px-1.5 h-7 rounded-lg text-[10px] font-bold bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 cursor-pointer shrink-0"
+                  title={isDe ? 'Schrift kleiner' : 'Smaller text'}
+                >
+                  A-
+                </button>
+                <input
+                  type="range"
+                  min="40"
+                  max="200"
+                  step="1"
+                  value={Math.round(calloutScale * 100)}
+                  onChange={(e) => setCalloutScale(Number(e.target.value) / 100)}
+                  onInput={(e) => setCalloutScale(Number((e.target as HTMLInputElement).value) / 100)}
+                  style={{ touchAction: 'pan-x' }}
+                  className="w-[82px] accent-amber-400 cursor-pointer h-2 bg-zinc-800 rounded-lg shrink-0"
+                  title={isDe ? 'Schriftgröße anpassen' : 'Adjust font size'}
+                />
+                <span className="text-[10px] font-mono font-bold tabular-nums text-zinc-200 min-w-[30px] text-center shrink-0">
+                  {Math.round(calloutScale * 100)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCalloutScale((prev) => Math.min(2.0, Math.round((prev + 0.05) * 100) / 100))
+                  }
+                  className="px-1.5 h-7 rounded-lg text-[10px] font-bold bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 cursor-pointer shrink-0"
+                  title={isDe ? 'Schrift größer' : 'Larger text'}
+                >
+                  A+
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCalloutScale(0.6)}
+                  className="px-1.5 h-7 rounded-lg text-[10px] font-mono font-bold bg-zinc-900 hover:bg-zinc-800 text-amber-300 border border-zinc-800 cursor-pointer shrink-0"
+                  title={isDe ? 'Schriftgröße zurücksetzen (60%)' : 'Reset font size (60%)'}
+                >
+                  Fit
+                </button>
+              </div>
+            </div>
+
             <button
-              onClick={() => setCalloutScale((prev) => Math.max(0.5, Math.round((prev - 0.05) * 100) / 100))}
-              className="px-1 py-0.5 rounded text-[10px] font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
-              title={isDe ? 'Beschriftung verkleinern (-5%)' : 'Decrease text size (-5%)'}
-            >
-              A-
-            </button>
-            <input
-              type="range"
-              min="50"
-              max={isMobileView ? "150" : "200"}
-              step="1"
-              value={Math.round(calloutScale * 100)}
-              onChange={(e) => {
-                const maxVal = isMobileView ? 1.5 : 2.0;
-                setCalloutScale(Math.max(0.5, Math.min(maxVal, Number(e.target.value) / 100)));
-              }}
-              className="w-20 accent-zinc-100 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
-              title={`${Math.round(calloutScale * 100)}%`}
-            />
-            <button
+              type="button"
               onClick={() => {
-                const maxVal = isMobileView ? 1.5 : 2.0;
-                setCalloutScale((prev) => Math.min(maxVal, Math.round((prev + 0.05) * 100) / 100));
+                setMobileSheetTab('layers');
+                setIsMobileSheetOpen(true);
               }}
-              className="px-1 py-0.5 rounded text-[10px] font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
-              title={isDe ? 'Beschriftung vergrößern (+5%)' : 'Increase text size (+5%)'}
+              className="pointer-events-auto w-10 h-10 flex items-center justify-center rounded-xl bg-sky-500 hover:bg-sky-400 text-zinc-950 shadow-2xl cursor-pointer transition-colors shrink-0"
+              title={isDe ? 'Ebenen & Verlauf' : 'Layers & History'}
+              aria-label={isDe ? 'Ebenen & Verlauf' : 'Layers & History'}
             >
-              A+
-            </button>
-            <span className="text-[11px] font-mono font-bold text-zinc-100 min-w-[36px] text-right">
-              {Math.round(calloutScale * 100)}%
-            </span>
-            <button
-              onClick={() => {
-                const defaultScale = typeof window !== 'undefined' && window.innerWidth < 768 ? 0.6 : 1.0;
-                setCalloutScale(defaultScale);
-              }}
-              className="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded bg-zinc-800 hover:bg-zinc-700 text-amber-300 ml-0.5 border border-zinc-700"
-              title={isDe ? 'Schriftgröße auf Standard zurücksetzen' : 'Reset font size to default'}
-            >
-              {isDe ? 'Std' : 'Def'}
-            </button>
-            <button
-              onClick={() => setShowCalloutLabels(!showCalloutLabels)}
-              className="p-1 rounded text-zinc-400 hover:text-white border-l border-zinc-800 pl-1.5 ml-0.5"
-              title={showCalloutLabels ? (isDe ? 'Beschriftung ausblenden' : 'Hide labels') : (isDe ? 'Beschriftung einblenden' : 'Show labels')}
-            >
-              {showCalloutLabels ? <Eye className="w-3.5 h-3.5 text-emerald-400" /> : <EyeOff className="w-3.5 h-3.5 text-zinc-500" />}
+              <Layers className="w-4 h-4" />
             </button>
           </div>
+        )}
 
-          {/* CONTINUOUS ZOOM BAR */}
-          <div className="flex items-center gap-1.5 px-2 py-0.5 bg-zinc-900 rounded-lg border border-zinc-800">
-            <button
-              onClick={handleZoomOut}
-              className="p-1 rounded text-zinc-400 hover:text-white"
-              title="Zoom -5%"
-            >
-              <ZoomOut className="w-3.5 h-3.5" />
-            </button>
-            <input
-              type="range"
-              min="50"
-              max="250"
-              step="1"
-              value={Math.round(zoom * 100)}
-              onChange={(e) => handleZoomChange(Number(e.target.value) / 100)}
-              className="w-20 accent-zinc-100 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
-              title={`${Math.round(zoom * 100)}%`}
-            />
-            <button
-              onClick={handleZoomIn}
-              className="p-1 rounded text-zinc-400 hover:text-white"
-              title="Zoom +5%"
-            >
-              <ZoomIn className="w-3.5 h-3.5" />
-            </button>
-            <span className="text-[11px] font-mono font-bold text-zinc-100 min-w-[36px] text-right">
-              {Math.round(zoom * 100)}%
-            </span>
-            <button
+        {/* DESKTOP PINNED RIGHT INSPECTOR SIDEBAR (lg+ — kürzer durch volle untere Leiste, anfangs eingeblendet) */}
+        {!isFullscreen && isRightPanelVisible && (
+        <aside className="hidden lg:flex w-72 xl:w-80 border-l border-zinc-800 bg-zinc-950 shrink-0 overflow-hidden print:hidden z-30">
+          <TacticalLayersPanel
+            lang={lang}
+            layers={layers}
+            activeLayerId={activeLayerId}
+            onSelectLayer={setActiveLayerId}
+            onToggleLayerVisibility={(id) =>
+              setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, visible: !l.visible } : l)))
+            }
+            onToggleLayerLock={(id) =>
+              setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, locked: !l.locked } : l)))
+            }
+            onToggleLayerExpand={(id) =>
+              setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, isExpanded: !l.isExpanded } : l)))
+            }
+            onAddLayer={(name, color) => {
+              const nid = `layer_${Date.now()}`;
+              setLayers((prev) => [
+                ...prev,
+                { id: nid, name, color, visible: true, locked: false, opacity: 1, isExpanded: true },
+              ]);
+              setActiveLayerId(nid);
+              setHasChangesInSession(true);
+            }}
+            onDeleteLayer={(id) => {
+              if (layers.length <= 1) return;
+              setLayers((prev) => prev.filter((l) => l.id !== id));
+              if (activeLayerId === id) {
+                const fallback = layers.find((l) => l.id !== id);
+                if (fallback) setActiveLayerId(fallback.id);
+              }
+              setHasChangesInSession(true);
+            }}
+            onUpdateLayerProps={(id, patch) => {
+              setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+              if (patch.color !== undefined) {
+                setDrawings((prev) =>
+                  prev.map((d) => (d.layerId === id ? { ...d, color: patch.color! } : d))
+                );
+              }
+              setHasChangesInSession(true);
+            }}
+            drawings={drawings}
+            utilities={utilities}
+            players={players}
+            selectedElementIds={selectedElementIds}
+            onSelectElements={(ids) => {
+              setSelectedCallout(null);
+              setSelectedElementIds(ids);
+            }}
+            onUpdateSelectedElementsProps={handleUpdateSelectedElementsProps}
+            onDeleteElement={(id) => {
+              setDrawings((prev) =>
+                prev.filter((d) => !(d.id === id && !d.locked && !isLayerLocked(d.layerId)))
+              );
+              setUtilities((prev) =>
+                prev.filter(
+                  (u) => !(u.id === id && !u.locked && !isLayerLocked(u.layerId || 'layer_util'))
+                )
+              );
+              setPlayers((prev) =>
+                prev.filter(
+                  (p) =>
+                    !(
+                      p.id === id &&
+                      !p.locked &&
+                      !isLayerLocked(p.layerId || (p.side === 'ct' ? 'layer_ct' : 'layer_t'))
+                    )
+                )
+              );
+              setSelectedElementIds((prev) => prev.filter((sid) => sid !== id));
+              setHasChangesInSession(true);
+            }}
+            showAreas={showAreas}
+            onToggleShowAreas={() => setShowAreas((p) => !p)}
+            showCalloutLabels={showCalloutLabels}
+            onToggleShowCalloutLabels={() => setShowCalloutLabels((p) => !p)}
+            selectedCallout={selectedCallout}
+            onCloseCallout={() => setSelectedCallout(null)}
+            colorMode={colorMode}
+            getZoneBadgeColor={getZoneBadgeColor}
+            getDangerBadge={getDangerBadge}
+            onCollapsePanel={() => setIsRightPanelVisible(false)}
+          />
+        </aside>
+        )}
+
+        {/* TABLET SLIDE-OVER RIGHT DRAWER (md to <lg — hidden in map fullscreen) */}
+        {!isFullscreen && (isTabletLayersOpen || (Boolean(selectedCallout) && !isEditMode && !contextMenu)) && !isDrawingPolygonArea && (
+          <div
+            data-no-map-click="true"
+            className="hidden md:flex lg:hidden fixed inset-y-0 right-0 z-50 print:hidden"
+          >
+            <div
               onClick={() => {
-                setZoom(calculateFitZoom());
-                setPan({ x: 0, y: 0 });
-                const defaultScale = typeof window !== 'undefined' && window.innerWidth < 768 ? 0.6 : 1.0;
-                setCalloutScale(defaultScale);
+                setIsTabletLayersOpen(false);
+                setSelectedCallout(null);
               }}
-              className="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded bg-zinc-800 hover:bg-zinc-700 text-amber-300 ml-1 border border-zinc-700"
-              title={isDe ? 'Zoom & Schriftgröße auf Standard zurücksetzen' : 'Reset zoom and font to fit'}
-            >
-              Fit
-            </button>
+              className="fixed inset-0 bg-black/50 backdrop-blur-[1px]"
+            />
+            <aside className="relative w-80 h-full bg-zinc-950 border-l border-zinc-800 shadow-2xl z-10 flex flex-col">
+              <TacticalLayersPanel
+                lang={lang}
+                layers={layers}
+                activeLayerId={activeLayerId}
+                onSelectLayer={setActiveLayerId}
+                onToggleLayerVisibility={(id) =>
+                  setLayers((prev) =>
+                    prev.map((l) => (l.id === id ? { ...l, visible: !l.visible } : l))
+                  )
+                }
+                onToggleLayerLock={(id) =>
+                  setLayers((prev) =>
+                    prev.map((l) => (l.id === id ? { ...l, locked: !l.locked } : l))
+                  )
+                }
+                onToggleLayerExpand={(id) =>
+                  setLayers((prev) =>
+                    prev.map((l) => (l.id === id ? { ...l, isExpanded: !l.isExpanded } : l))
+                  )
+                }
+                onAddLayer={(name, color) => {
+                  const nid = `layer_${Date.now()}`;
+                  setLayers((prev) => [
+                    ...prev,
+                    {
+                      id: nid,
+                      name,
+                      color,
+                      visible: true,
+                      locked: false,
+                      opacity: 1,
+                      isExpanded: true,
+                    },
+                  ]);
+                  setActiveLayerId(nid);
+                  setHasChangesInSession(true);
+                }}
+                onDeleteLayer={(id) => {
+                  if (layers.length <= 1) return;
+                  setLayers((prev) => prev.filter((l) => l.id !== id));
+                  if (activeLayerId === id) {
+                    const fallback = layers.find((l) => l.id !== id);
+                    if (fallback) setActiveLayerId(fallback.id);
+                  }
+                  setHasChangesInSession(true);
+                }}
+                onUpdateLayerProps={(id, patch) => {
+                  setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+                  if (patch.color !== undefined) {
+                    setDrawings((prev) =>
+                      prev.map((d) => (d.layerId === id ? { ...d, color: patch.color! } : d))
+                    );
+                  }
+                  setHasChangesInSession(true);
+                }}
+                drawings={drawings}
+                utilities={utilities}
+                players={players}
+                selectedElementIds={selectedElementIds}
+                onSelectElements={(ids) => {
+                  setSelectedCallout(null);
+                  setSelectedElementIds(ids);
+                }}
+                onUpdateSelectedElementsProps={handleUpdateSelectedElementsProps}
+                onDeleteElement={(id) => {
+                  setDrawings((prev) =>
+                    prev.filter((d) => !(d.id === id && !d.locked && !isLayerLocked(d.layerId)))
+                  );
+                  setUtilities((prev) =>
+                    prev.filter(
+                      (u) => !(u.id === id && !u.locked && !isLayerLocked(u.layerId || 'layer_util'))
+                    )
+                  );
+                  setPlayers((prev) =>
+                    prev.filter(
+                      (p) =>
+                        !(
+                          p.id === id &&
+                          !p.locked &&
+                          !isLayerLocked(p.layerId || (p.side === 'ct' ? 'layer_ct' : 'layer_t'))
+                        )
+                    )
+                  );
+                  setSelectedElementIds((prev) => prev.filter((sid) => sid !== id));
+                  setHasChangesInSession(true);
+                }}
+                showAreas={showAreas}
+                onToggleShowAreas={() => setShowAreas((p) => !p)}
+                showCalloutLabels={showCalloutLabels}
+                onToggleShowCalloutLabels={() => setShowCalloutLabels((p) => !p)}
+                selectedCallout={selectedCallout}
+                onCloseCallout={() => setSelectedCallout(null)}
+                colorMode={colorMode}
+                getZoneBadgeColor={getZoneBadgeColor}
+                getDangerBadge={getDangerBadge}
+                onCloseDrawer={() => {
+                  setIsTabletLayersOpen(false);
+                  setSelectedCallout(null);
+                }}
+              />
+            </aside>
           </div>
-        </div>
         )}
       </div>
 
-      {/* 5. COLOR EXPLANATION / LEGENDE MODAL (ZONEN & GEFAHRENSTUFEN) */}
+      {/* FULL-WIDTH DESKTOP & TABLET BOTTOM CONTROL BAR (nutzt den kompletten unteren Bereich über dem Verlauf, rechtes Fenster bleibt darüber) */}
+      {!isDrawingPolygonArea && (
+        <div
+          data-no-map-click="true"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          className="hidden md:flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 border-t border-zinc-800 bg-zinc-950/95 text-xs text-zinc-200 shrink-0 print:hidden z-30"
+        >
+          {/* Linke Steuerung: Bereiche, Raster & Schriftgröße */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setShowAreas((a) => !a)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-semibold transition-colors cursor-pointer shrink-0 ${
+                showAreas
+                  ? 'bg-amber-500/15 border-amber-500/40 text-amber-200'
+                  : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
+              }`}
+              title={isDe ? 'Callout-Bereiche ein-/ausblenden' : 'Toggle areas'}
+            >
+              <Square className="w-3.5 h-3.5" />
+              <span>{isDe ? 'Bereiche' : 'Areas'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowGrid((g) => !g)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-semibold transition-colors cursor-pointer shrink-0 ${
+                showGrid
+                  ? 'bg-sky-500/20 border-sky-500/50 text-sky-200'
+                  : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
+              }`}
+              title={isDe ? 'Koordinaten-Raster ein-/ausblenden' : 'Toggle grid'}
+            >
+              <Grid3X3 className="w-3.5 h-3.5" />
+              <span>{isDe ? 'Raster' : 'Grid'}</span>
+            </button>
+
+            <div className="h-4 w-px bg-zinc-800 shrink-0" />
+
+            {/* Schriftgröße (Callout Scale) */}
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowCalloutLabels((p) => !p)}
+                className={`p-1 rounded-md border cursor-pointer transition-colors ${
+                  showCalloutLabels
+                    ? 'bg-zinc-900 border-zinc-700 text-zinc-200 hover:text-white'
+                    : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-white'
+                }`}
+                title={isDe ? 'Callout-Namen ein-/ausblenden' : 'Toggle labels'}
+              >
+                {showCalloutLabels ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setCalloutScale((prev) => Math.max(0.4, Math.round((prev - 0.05) * 100) / 100))
+                }
+                className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 cursor-pointer"
+                title={isDe ? 'Schrift kleiner' : 'Smaller text'}
+              >
+                A-
+              </button>
+              <input
+                type="range"
+                min="40"
+                max="200"
+                step="1"
+                value={Math.round(calloutScale * 100)}
+                onChange={(e) => setCalloutScale(Number(e.target.value) / 100)}
+                onInput={(e) => setCalloutScale(Number((e.target as HTMLInputElement).value) / 100)}
+                style={{ touchAction: 'pan-x' }}
+                className="w-16 lg:w-24 accent-amber-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
+                title={isDe ? 'Schriftgröße anpassen' : 'Adjust font size'}
+              />
+              <span className="font-mono font-bold tabular-nums text-[11px] text-zinc-300 w-9 text-center">
+                {Math.round(calloutScale * 100)}%
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  setCalloutScale((prev) => Math.min(2.0, Math.round((prev + 0.05) * 100) / 100))
+                }
+                className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 cursor-pointer"
+                title={isDe ? 'Schrift größer' : 'Larger text'}
+              >
+                A+
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const defaultScale =
+                    typeof window !== 'undefined' && window.innerWidth < 768 ? 0.6 : 1.0;
+                  setCalloutScale(defaultScale);
+                }}
+                className="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-zinc-900 hover:bg-zinc-800 text-amber-300 border border-zinc-800 cursor-pointer"
+                title={isDe ? 'Schriftgröße zurücksetzen (100%)' : 'Reset font size'}
+              >
+                Fit
+              </button>
+            </div>
+          </div>
+
+          {/* Rechte Steuerung: Zoom, Fit & Versionsverlauf */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={handleZoomOut}
+                className="p-1 rounded-md bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 cursor-pointer"
+                title="Zoom -"
+              >
+                <ZoomOut className="w-3.5 h-3.5" />
+              </button>
+              <input
+                type="range"
+                min="50"
+                max="250"
+                step="1"
+                value={Math.round(zoom * 100)}
+                onChange={(e) => handleZoomChange(Number(e.target.value) / 100)}
+                onInput={(e) => handleZoomChange(Number((e.target as HTMLInputElement).value) / 100)}
+                style={{ touchAction: 'pan-x' }}
+                className="w-20 lg:w-28 accent-sky-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
+              />
+              <span className="font-mono font-bold tabular-nums text-[11px] text-zinc-100 w-10 text-center">
+                {Math.round(zoom * 100)}%
+              </span>
+              <button
+                type="button"
+                onClick={handleZoomIn}
+                className="p-1 rounded-md bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 cursor-pointer"
+                title="Zoom +"
+              >
+                <ZoomIn className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setZoom(calculateFitZoom());
+                  setPan({ x: 0, y: 0 });
+                  const defaultScale =
+                    typeof window !== 'undefined' && window.innerWidth < 768 ? 0.6 : 1.0;
+                  setCalloutScale(defaultScale);
+                }}
+                className="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-zinc-900 hover:bg-zinc-800 text-amber-300 border border-zinc-800 cursor-pointer"
+                title={isDe ? 'Auf Bildschirm einpassen' : 'Fit to screen'}
+              >
+                Fit
+              </button>
+            </div>
+
+            <div className="h-4 w-px bg-zinc-800 shrink-0" />
+
+            {/* Compact Versionsverlauf Button */}
+            <button
+              type="button"
+              onClick={() => setIsHistoryExpanded((p) => !p)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-bold transition-colors cursor-pointer shrink-0 ${
+                isHistoryExpanded
+                  ? 'bg-amber-500 text-zinc-950 border-amber-400'
+                  : 'bg-zinc-900 border-zinc-700 text-zinc-200 hover:bg-zinc-800 hover:text-white'
+              }`}
+              title={
+                isDe
+                  ? 'Versionsverlauf öffnen/schließen (max. 3 Versionen mit Vorschau)'
+                  : 'Toggle version history'
+              }
+            >
+              <History className="w-3.5 h-3.5" />
+              <span>{isDe ? 'Verlauf' : 'History'}</span>
+              <span
+                className={`px-1 rounded text-[10px] font-mono tabular-nums ${
+                  isHistoryExpanded ? 'bg-zinc-950/20 text-zinc-950' : 'bg-zinc-800 text-amber-300'
+                }`}
+              >
+                {Math.min(3, snapshots.length)}
+              </span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* DESKTOP & TABLET COLLAPSIBLE BOTTOM VERSION HISTORY BAR */}
+      <TacticalHistoryPanel
+        lang={lang}
+        snapshots={snapshots}
+        isExpanded={isHistoryExpanded}
+        onToggleExpand={() => setIsHistoryExpanded((p) => !p)}
+        onSaveSnapshot={handleSaveSnapshot}
+        onRestoreSnapshot={handleRestoreSnapshot}
+        mapImage={activeImage}
+      />
+
+      {/* MOBILE BOTTOM SHEET DRAWER (Ebenen, Eigenschaften, Callout-Info & Verlauf — md:hidden) */}
+      {(isMobileSheetOpen || (Boolean(selectedCallout) && !isEditMode && !contextMenu)) && !isDrawingPolygonArea && (
+        <div
+          data-no-map-click="true"
+          className="md:hidden fixed inset-0 z-50 flex flex-col justify-end print:hidden"
+        >
+          <div
+            onClick={() => {
+              setIsMobileSheetOpen(false);
+              setSelectedCallout(null);
+            }}
+            className="absolute inset-0 bg-black/65 backdrop-blur-[1px]"
+          />
+          <div className="relative z-10 w-full max-h-[78vh] rounded-t-2xl border-t border-zinc-700 bg-zinc-950 shadow-2xl flex flex-col overflow-hidden">
+            {/* Sheet Drag Handle & Tab Switcher */}
+            <div className="px-3 pt-2 pb-2 border-b border-zinc-800 flex flex-col gap-2 shrink-0 bg-zinc-900/90">
+              <div className="w-10 h-1 rounded-full bg-zinc-700 mx-auto" />
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800">
+                  <button
+                    type="button"
+                    onClick={() => setMobileSheetTab('layers')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold cursor-pointer transition-colors ${
+                      mobileSheetTab === 'layers'
+                        ? 'bg-sky-500/20 text-sky-200 border border-sky-500/40'
+                        : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>{isDe ? 'Ebenen & Info' : 'Layers & Info'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMobileSheetTab('history')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold cursor-pointer transition-colors ${
+                      mobileSheetTab === 'history'
+                        ? 'bg-amber-500/20 text-amber-200 border border-amber-500/40'
+                        : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    <History className="w-3.5 h-3.5" />
+                    <span>{isDe ? 'Verlauf' : 'History'}</span>
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMobileSheetOpen(false);
+                    setSelectedCallout(null);
+                  }}
+                  className="w-10 h-10 flex items-center justify-center rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 cursor-pointer"
+                  title={isDe ? 'Schließen' : 'Close'}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {mobileSheetTab === 'layers' ? (
+                <TacticalLayersPanel
+                  lang={lang}
+                  layers={layers}
+                  activeLayerId={activeLayerId}
+                  onSelectLayer={setActiveLayerId}
+                  onToggleLayerVisibility={(id) =>
+                    setLayers((prev) =>
+                      prev.map((l) => (l.id === id ? { ...l, visible: !l.visible } : l))
+                    )
+                  }
+                  onToggleLayerLock={(id) =>
+                    setLayers((prev) =>
+                      prev.map((l) => (l.id === id ? { ...l, locked: !l.locked } : l))
+                    )
+                  }
+                  onToggleLayerExpand={(id) =>
+                    setLayers((prev) =>
+                      prev.map((l) => (l.id === id ? { ...l, isExpanded: !l.isExpanded } : l))
+                    )
+                  }
+                  onAddLayer={(name, color) => {
+                    const nid = `layer_${Date.now()}`;
+                    setLayers((prev) => [
+                      ...prev,
+                      {
+                        id: nid,
+                        name,
+                        color,
+                        visible: true,
+                        locked: false,
+                        opacity: 1,
+                        isExpanded: true,
+                      },
+                    ]);
+                    setActiveLayerId(nid);
+                    setHasChangesInSession(true);
+                  }}
+                  onDeleteLayer={(id) => {
+                    if (layers.length <= 1) return;
+                    setLayers((prev) => prev.filter((l) => l.id !== id));
+                    if (activeLayerId === id) {
+                      const fallback = layers.find((l) => l.id !== id);
+                      if (fallback) setActiveLayerId(fallback.id);
+                    }
+                    setHasChangesInSession(true);
+                  }}
+                  onUpdateLayerProps={(id, patch) => {
+                    setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+                    if (patch.color !== undefined) {
+                      setDrawings((prev) =>
+                        prev.map((d) => (d.layerId === id ? { ...d, color: patch.color! } : d))
+                      );
+                    }
+                    setHasChangesInSession(true);
+                  }}
+                  drawings={drawings}
+                  utilities={utilities}
+                  players={players}
+                  selectedElementIds={selectedElementIds}
+                  onSelectElements={(ids) => {
+                    setSelectedCallout(null);
+                    setSelectedElementIds(ids);
+                  }}
+                  onUpdateSelectedElementsProps={handleUpdateSelectedElementsProps}
+                  onDeleteElement={(id) => {
+                    setDrawings((prev) =>
+                      prev.filter((d) => !(d.id === id && !d.locked && !isLayerLocked(d.layerId)))
+                    );
+                    setUtilities((prev) =>
+                      prev.filter(
+                        (u) => !(u.id === id && !u.locked && !isLayerLocked(u.layerId || 'layer_util'))
+                      )
+                    );
+                    setPlayers((prev) =>
+                      prev.filter(
+                        (p) =>
+                          !(
+                            p.id === id &&
+                            !p.locked &&
+                            !isLayerLocked(p.layerId || (p.side === 'ct' ? 'layer_ct' : 'layer_t'))
+                          )
+                      )
+                    );
+                    setSelectedElementIds((prev) => prev.filter((sid) => sid !== id));
+                    setHasChangesInSession(true);
+                  }}
+                  showAreas={showAreas}
+                  onToggleShowAreas={() => setShowAreas((p) => !p)}
+                  showCalloutLabels={showCalloutLabels}
+                  onToggleShowCalloutLabels={() => setShowCalloutLabels((p) => !p)}
+                  selectedCallout={selectedCallout}
+                  onCloseCallout={() => setSelectedCallout(null)}
+                  colorMode={colorMode}
+                  getZoneBadgeColor={getZoneBadgeColor}
+                  getDangerBadge={getDangerBadge}
+                />
+              ) : (
+                <TacticalHistoryPanel
+                  lang={lang}
+                  snapshots={snapshots}
+                  isExpanded={true}
+                  onToggleExpand={() => {}}
+                  onSaveSnapshot={handleSaveSnapshot}
+                  onRestoreSnapshot={handleRestoreSnapshot}
+                  mapImage={activeImage}
+                  isEmbeddedMobile={true}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. KURZHILFE & FARBLEGENDE MODAL */}
       {showLegend && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 print:hidden">
-          <div className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl text-zinc-100 animate-in fade-in-50 zoom-in-95 duration-150">
+        <div
+          onClick={() => setShowLegend(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 print:hidden"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-2xl max-h-[88vh] overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-900 p-5 sm:p-6 shadow-2xl text-zinc-100"
+          >
             <div className="flex items-center justify-between pb-3 border-b border-zinc-800 mb-4">
               <div className="flex items-center gap-2">
                 <HelpCircle className="w-5 h-5 text-amber-400" />
                 <h3 className="text-base font-bold text-white">
-                  {isDe ? 'Taktische Farbwahl & Farblegende' : 'Tactical Color System Legend'}
+                  {isDe ? 'Kurzhilfe & Farblegende' : 'Quick Help & Color Legend'}
                 </h3>
               </div>
               <button
                 onClick={() => setShowLegend(false)}
-                className="text-zinc-400 hover:text-white"
+                className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-4 text-xs">
-              <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800">
-                <div className="font-bold text-zinc-200 mb-1">
-                  {isDe ? 'Aktueller Farbmodus:' : 'Active Color Mode:'}{' '}
-                  <span className="text-amber-400 uppercase font-mono">
-                    {colorMode === 'zone'
-                      ? isDe
-                        ? 'Zonen-Farben (A/B/Mid/Spawns)'
-                        : 'Zone Colors'
-                      : isDe
-                      ? 'Gefahrenstufen (Hoch/Mittel/Gering)'
-                      : 'Danger Levels'}
-                  </span>
-                </div>
-                <p className="text-zinc-400 text-[11px]">
-                  {isDe
-                    ? 'In der oberen Leiste kannst du jederzeit zwischen Zonen und Gefahrenstufen wechseln.'
-                    : 'Switch between Zone and Danger view in the top bar anytime.'}
-                </p>
-              </div>
-
-              {/* 1. ZONEN-FARBEN */}
+            <div className="space-y-5 text-xs">
+              {/* TEIL 1: KURZHILFE ZU DEN FUNKTIONEN */}
               <div>
-                <h4 className="font-mono uppercase font-bold text-zinc-400 mb-2">
-                  {isDe ? '1. Zonen & Bombenplätze (Zonen-Modus)' : '1. Map Zones (Zone Mode)'}
+                <h4 className="font-mono uppercase font-bold text-sky-400 mb-2">
+                  {isDe ? 'Funktionen kurz erklärt' : 'Features Overview'}
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div className="flex items-center gap-2.5 p-2 rounded-lg bg-zinc-950/70 border border-zinc-800 col-span-1 sm:col-span-2">
-                    <span
-                      className="w-5 h-5 rounded-sm border border-red-500 shrink-0 shadow-xs"
-                      style={{
-                        background: 'rgba(239, 68, 68, 0.25)',
-                        backgroundImage:
-                          'repeating-linear-gradient(45deg, rgba(239, 68, 68, 0.6) 0px, rgba(239, 68, 68, 0.6) 4px, transparent 4px, transparent 8px)',
-                      }}
-                    />
-                    <div>
-                      <div className="font-bold text-red-300">Bombenplätze (A-Site & B-Site)</div>
-                      <div className="text-zinc-400 text-[10px]">Rote quere Streifen (Spot-Areal für C4)</div>
+                  <div className="p-2.5 rounded-xl bg-zinc-950/75 border border-zinc-800 space-y-1">
+                    <div className="font-bold text-zinc-100">
+                      {isDe ? 'Werkzeuge & Seitenleisten' : 'Tools & Sidebars'}
                     </div>
+                    <p className="text-[11px] text-zinc-400 leading-relaxed">
+                      {isDe
+                        ? 'Auswählen, Bereich (Rahmen ziehen), Linie, Pfeil, Radierer, Utility (Granaten) und T/CT-Spieler. Leisten lassen sich links & rechts über das Panel-Symbol ein-/ausblenden.'
+                        : 'Select, Area Box, Line, Arrow, Eraser, Utility grenades and T/CT tokens. Sidebars toggle via the panel icons.'}
+                    </p>
                   </div>
 
-                  <div className="flex items-center gap-2.5 p-2 rounded-lg bg-zinc-950/70 border border-zinc-800">
-                    <span className="w-3.5 h-3.5 rounded-full bg-emerald-400 border border-black shrink-0" />
-                    <div>
-                      <div className="font-bold text-emerald-300">Middle (Grün)</div>
-                      <div className="text-zinc-400 text-[10px]">Mitte & Rotationskorridore</div>
+                  <div className="p-2.5 rounded-xl bg-zinc-950/75 border border-zinc-800 space-y-1">
+                    <div className="font-bold text-zinc-100">
+                      {isDe ? 'Mehrfachauswahl & Rechtsklick' : 'Multi-Select & Right-Click'}
                     </div>
+                    <p className="text-[11px] text-zinc-400 leading-relaxed">
+                      {isDe
+                        ? 'Mehrere Callouts/Elemente per Strg+Klick oder Bereich-Werkzeug markieren. Rechtsklick öffnet Gruppieren, Duplizieren (Strg+D), Sperren, Umfärben & Löschen.'
+                        : 'Select multiple items with Ctrl+Click or Area Box. Right-click opens Group, Duplicate (Ctrl+D), Lock, Color & Delete.'}
+                    </p>
                   </div>
 
-                  {/* T-SPAWN: BRAUN */}
-                  <div className="flex items-center gap-2.5 p-2 rounded-lg bg-zinc-950/70 border border-zinc-800">
-                    <span className="w-3.5 h-3.5 rounded-full bg-amber-800 border border-black shrink-0" />
-                    <div>
-                      <div className="font-bold text-amber-300">T-Spawn (Braun)</div>
-                      <div className="text-zinc-400 text-[10px]">Terroristen-Startbasis</div>
+                  <div className="p-2.5 rounded-xl bg-zinc-950/75 border border-zinc-800 space-y-1">
+                    <div className="font-bold text-zinc-100">
+                      {isDe ? 'Callouts bearbeiten (Stift)' : 'Edit Callouts (Pencil)'}
                     </div>
+                    <p className="text-[11px] text-zinc-400 leading-relaxed">
+                      {isDe
+                        ? 'In „Alle bearbeiten“ bleibt die Leiste versteckt, bis du ein Callout anklickst oder per Rechtsklick drehst, verschiebst, bearbeitest oder löschst.'
+                        : 'In Edit All mode, the action bar stays hidden until you click or right-click a callout.'}
+                    </p>
                   </div>
 
-                  {/* CT-SPAWN: BLAU */}
-                  <div className="flex items-center gap-2.5 p-2 rounded-lg bg-zinc-950/70 border border-zinc-800">
-                    <span className="w-3.5 h-3.5 rounded-full bg-blue-600 border border-black shrink-0" />
-                    <div>
-                      <div className="font-bold text-blue-300">CT-Spawn (Blau)</div>
-                      <div className="text-zinc-400 text-[10px]">Antiterror-Startbasis</div>
+                  <div className="p-2.5 rounded-xl bg-zinc-950/75 border border-zinc-800 space-y-1">
+                    <div className="font-bold text-zinc-100">
+                      {isDe ? 'Ebenen, Verlauf & Vollbild' : 'Layers, History & Fullscreen'}
                     </div>
-                  </div>
-
-                  <div className="flex items-center gap-2.5 p-2 rounded-lg bg-zinc-950/70 border border-zinc-800">
-                    <span className="w-3.5 h-3.5 rounded-full bg-zinc-200 border border-black shrink-0" />
-                    <div>
-                      <div className="font-bold text-zinc-300">Sonstige (Grau/Weiß)</div>
-                      <div className="text-zinc-400 text-[10px]">Flanken & Außenbereiche</div>
-                    </div>
+                    <p className="text-[11px] text-zinc-400 leading-relaxed">
+                      {isDe
+                        ? 'Rechts Ebenen & Infos verwalten, unten Bereiche, Raster, Zoom, Fit & den Karten-Verlauf (max. 3 Stände mit Vorschau) steuern. Vollbild maximiert nur die Karte.'
+                        : 'Manage layers on the right; control Areas, Grid, Zoom, Fit & Map History (last 3 snapshots) at the bottom. Fullscreen maximizes the map only.'}
+                    </p>
                   </div>
                 </div>
               </div>
 
-              {/* 2. GEFAHRENSTUFEN */}
-              <div>
-                <h4 className="font-mono uppercase font-bold text-zinc-400 mb-2">
-                  {isDe ? '2. Gefahrenstufen (Gefahren-Modus)' : '2. Danger Levels (Danger Mode)'}
-                </h4>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="p-2.5 rounded-lg bg-red-950/40 border border-red-800/60 text-center">
-                    <span className="inline-block w-2.5 h-2.5 rounded-full bg-red-500 mb-1" />
-                    <div className="font-bold text-red-300 text-[11px]">{isDe ? 'Hoch (Rot)' : 'High (Red)'}</div>
-                    <div className="text-[10px] text-zinc-400">{isDe ? 'Duell-Hotspot' : 'Hotspot duel'}</div>
+              {/* TEIL 2: FARBLEGENDE */}
+              <div className="pt-3 border-t border-zinc-800 space-y-3">
+                <div className="p-2.5 rounded-xl bg-zinc-950/70 border border-zinc-800 flex flex-wrap items-center justify-between gap-2">
+                  <div className="font-bold text-zinc-200">
+                    {isDe ? 'Aktiver Farbmodus:' : 'Active Color Mode:'}{' '}
+                    <span className="text-amber-400 uppercase font-mono">
+                      {colorMode === 'zone'
+                        ? isDe
+                          ? 'Zonen-Farben (A/B/Mid/Spawns)'
+                          : 'Zone Colors'
+                        : isDe
+                        ? 'Gefahrenstufen (Hoch/Mittel/Gering)'
+                        : 'Danger Levels'}
+                    </span>
                   </div>
+                  <span className="text-zinc-400 text-[11px]">
+                    {isDe
+                      ? 'Umschaltbar über Palette / Schild oben.'
+                      : 'Switch via Palette / Shield in top bar.'}
+                  </span>
+                </div>
 
-                  <div className="p-2.5 rounded-lg bg-amber-950/40 border border-amber-800/60 text-center">
-                    <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-500 mb-1" />
-                    <div className="font-bold text-amber-300 text-[11px]">{isDe ? 'Mittel (Gelb)' : 'Medium'}</div>
-                    <div className="text-[10px] text-zinc-400">{isDe ? 'Flankenroute' : 'Flank lane'}</div>
+                {/* 1. ZONEN-FARBEN */}
+                <div>
+                  <h4 className="font-mono uppercase font-bold text-zinc-400 mb-2">
+                    {isDe ? '1. Zonen & Bombenplätze (Zonen-Modus)' : '1. Map Zones (Zone Mode)'}
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="flex items-center gap-2.5 p-2 rounded-lg bg-zinc-950/70 border border-zinc-800 col-span-1 sm:col-span-2">
+                      <span
+                        className="w-5 h-5 rounded-sm border border-red-500 shrink-0 shadow-xs"
+                        style={{
+                          background: 'rgba(239, 68, 68, 0.25)',
+                          backgroundImage:
+                            'repeating-linear-gradient(45deg, rgba(239, 68, 68, 0.6) 0px, rgba(239, 68, 68, 0.6) 4px, transparent 4px, transparent 8px)',
+                        }}
+                      />
+                      <div>
+                        <div className="font-bold text-red-300">Bombenplätze (A-Site & B-Site)</div>
+                        <div className="text-zinc-400 text-[10px]">Rote quere Streifen (Spot-Areal für C4)</div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 p-2 rounded-lg bg-zinc-950/70 border border-zinc-800">
+                      <span className="w-3.5 h-3.5 rounded-full bg-emerald-400 border border-black shrink-0" />
+                      <div>
+                        <div className="font-bold text-emerald-300">Middle (Grün)</div>
+                        <div className="text-zinc-400 text-[10px]">Mitte & Rotationskorridore</div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 p-2 rounded-lg bg-zinc-950/70 border border-zinc-800">
+                      <span className="w-3.5 h-3.5 rounded-full bg-amber-800 border border-black shrink-0" />
+                      <div>
+                        <div className="font-bold text-amber-300">T-Spawn (Braun)</div>
+                        <div className="text-zinc-400 text-[10px]">Terroristen-Startbasis</div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 p-2 rounded-lg bg-zinc-950/70 border border-zinc-800">
+                      <span className="w-3.5 h-3.5 rounded-full bg-blue-600 border border-black shrink-0" />
+                      <div>
+                        <div className="font-bold text-blue-300">CT-Spawn (Blau)</div>
+                        <div className="text-zinc-400 text-[10px]">Antiterror-Startbasis</div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 p-2 rounded-lg bg-zinc-950/70 border border-zinc-800">
+                      <span className="w-3.5 h-3.5 rounded-full bg-zinc-200 border border-black shrink-0" />
+                      <div>
+                        <div className="font-bold text-zinc-300">Sonstige (Grau/Weiß)</div>
+                        <div className="text-zinc-400 text-[10px]">Flanken & Außenbereiche</div>
+                      </div>
+                    </div>
                   </div>
+                </div>
 
-                  <div className="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-800/60 text-center">
-                    <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 mb-1" />
-                    <div className="font-bold text-emerald-300 text-[11px]">{isDe ? 'Gering (Grün)' : 'Low'}</div>
-                    <div className="text-[10px] text-zinc-400">{isDe ? 'Sichere Zone' : 'Safe hold'}</div>
+                {/* 2. GEFAHRENSTUFEN */}
+                <div>
+                  <h4 className="font-mono uppercase font-bold text-zinc-400 mb-2">
+                    {isDe ? '2. Gefahrenstufen (Gefahren-Modus)' : '2. Danger Levels (Danger Mode)'}
+                  </h4>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="p-2.5 rounded-lg bg-red-950/40 border border-red-800/60 text-center">
+                      <span className="inline-block w-2.5 h-2.5 rounded-full bg-red-500 mb-1" />
+                      <div className="font-bold text-red-300 text-[11px]">{isDe ? 'Hoch (Rot)' : 'High (Red)'}</div>
+                      <div className="text-[10px] text-zinc-400">{isDe ? 'Duell-Hotspot' : 'Hotspot duel'}</div>
+                    </div>
+
+                    <div className="p-2.5 rounded-lg bg-amber-950/40 border border-amber-800/60 text-center">
+                      <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-500 mb-1" />
+                      <div className="font-bold text-amber-300 text-[11px]">{isDe ? 'Mittel (Gelb)' : 'Medium'}</div>
+                      <div className="text-[10px] text-zinc-400">{isDe ? 'Flankenroute' : 'Flank lane'}</div>
+                    </div>
+
+                    <div className="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-800/60 text-center">
+                      <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 mb-1" />
+                      <div className="font-bold text-emerald-300 text-[11px]">{isDe ? 'Gering (Grün)' : 'Low'}</div>
+                      <div className="text-[10px] text-zinc-400">{isDe ? 'Sichere Zone' : 'Safe hold'}</div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -3406,7 +5856,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
             <button
               onClick={() => setShowLegend(false)}
-              className="mt-5 w-full py-2 text-xs font-bold rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white transition-colors"
+              className="mt-5 w-full py-2 text-xs font-bold rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white transition-colors cursor-pointer"
             >
               {isDe ? 'Schließen' : 'Close'}
             </button>
@@ -4642,23 +7092,40 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         shareUrl={currentShareUrl}
         defaultTitle={`${mapData.name} - Taktik`}
         tacticState={{
-          drawings,
-          utilities,
-          players,
+          drawings: drawings.filter((d) => isLayerVisible(d.layerId, 'layer_t')),
+          utilities: utilities.filter((u) => isLayerVisible(u.layerId, 'layer_util')),
+          players: players.filter((p) =>
+            isLayerVisible(p.layerId, p.side === 'ct' ? 'layer_ct' : 'layer_t')
+          ),
         }}
         onSaveAsMyTactic={(title) => {
           if (onSaveAsMyTactic) {
-            onSaveAsMyTactic(mapData, title, {
+            (onSaveAsMyTactic as (
+              baseMap: MapData,
+              tacticTitle: string,
+              tacticState: {
+                drawings: TacticalDrawingLine[];
+                utilities: UtilityMarker[];
+                players: PlayerToken[];
+                layers?: TacticLayer[];
+              }
+            ) => void)(mapData, title, {
               drawings,
               utilities,
               players,
+              layers,
             });
           }
         }}
-        onLoadTacticState={(loadedState, title) => {
+        onLoadTacticState={(loadedState) => {
           setDrawings(loadedState.drawings || []);
           setUtilities(loadedState.utilities || []);
           setPlayers(loadedState.players || []);
+          const stateWithLayers = loadedState as { layers?: TacticLayer[] };
+          if (stateWithLayers.layers && stateWithLayers.layers.length > 0) {
+            setLayers(stateWithLayers.layers);
+          }
+          setSelectedElementIds([]);
           setDrawingsRedoStack([]);
           setHasChangesInSession(true);
         }}
@@ -4705,6 +7172,10 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                 type="button"
                 onClick={() => {
                   setSingleEditCalloutId(null);
+                  setSelectedCallout(null);
+                  setSelectedCalloutIds([]);
+                  setHighlightedCalloutId(undefined);
+                  setContextMenu(null);
                   setIsEditMode(true);
                   setIsEditOptionsModalOpen(false);
                 }}
