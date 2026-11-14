@@ -1,16 +1,17 @@
 import LZString from 'lz-string';
-import { TacticalDrawingLine, UtilityMarker, PlayerToken } from '../types';
+import { TacticalDrawingLine, UtilityMarker, PlayerToken, UtilityThrowType } from '../types';
 
 export interface CompactTacticPayload {
   m: string; // Map ID
   n?: string; // Map or tactic name
   d: any[]; // Compact drawings: [colorIdxOrHex, hasArrow, [x,y,x,y...]]
-  u: any[]; // Compact utilities: [typeIdx, x, y, label]
+  u: any[]; // Compact utilities: [typeIdx, x, y, label, fx?, fy?, bend?, throwTypeIdx?]
   p: any[]; // Compact players: [sideIdx, number, x, y, hasBomb]
 }
 
 const COLOR_MAP = ['#ffffff', '#000000', '#3b82f6', '#92400e', '#ef4444', '#22c55e', '#f97316'];
 const UTIL_TYPES = ['smoke', 'flash', 'molotov', 'he', 'decoy'];
+const THROW_TYPES: UtilityThrowType[] = ['left', 'right', 'both', 'jump', 'run_jump'];
 
 /**
  * Compresses tactical drawing and markers into a ultra-compact JSON representation
@@ -34,15 +35,23 @@ export function encodeCompactTactic(
     return [colorVal, line.hasArrow ? 1 : 0, flatPoints];
   });
 
-  // 2. Minify utilities
+  // 2. Minify utilities (keep 4-item tuple for spot-only, append throw metadata only when used)
   const minUtils = utilities.map((u) => {
     const uIdx = UTIL_TYPES.indexOf(u.type);
-    return [
+    const base: any[] = [
       uIdx >= 0 ? uIdx : u.type,
       Math.round(u.x * 10) / 10,
       Math.round(u.y * 10) / 10,
       u.label || '',
     ];
+    if (u.throwFrom || u.throwType) {
+      const fx = u.throwFrom ? Math.round(u.throwFrom.x * 10) / 10 : null;
+      const fy = u.throwFrom ? Math.round(u.throwFrom.y * 10) / 10 : null;
+      const bend = u.curveBend !== undefined ? Math.round(u.curveBend * 10) / 10 : null;
+      const ttIdx = u.throwType ? THROW_TYPES.indexOf(u.throwType) : -1;
+      base.push(fx, fy, bend, ttIdx >= 0 ? ttIdx : null);
+    }
+    return base;
   });
 
   // 3. Minify players
@@ -141,12 +150,19 @@ export function decodeCompactTactic(rawString: string): {
   const utilities: UtilityMarker[] = rawUtils.map((item: any, idx: number) => {
     if (Array.isArray(item)) {
       const uType = typeof item[0] === 'number' && UTIL_TYPES[item[0]] ? UTIL_TYPES[item[0]] : String(item[0]);
+      const hasThrow = typeof item[4] === 'number' && typeof item[5] === 'number';
+      const bendVal = typeof item[6] === 'number' ? item[6] : undefined;
+      const throwTypeVal =
+        typeof item[7] === 'number' && THROW_TYPES[item[7]] ? THROW_TYPES[item[7]] : undefined;
       return {
         id: `util_${Date.now()}_${idx}`,
         type: uType as any,
         x: item[1],
         y: item[2],
         label: item[3] || undefined,
+        ...(hasThrow ? { throwFrom: { x: item[4], y: item[5] } } : {}),
+        ...(bendVal !== undefined ? { curveBend: bendVal } : {}),
+        ...(throwTypeVal ? { throwType: throwTypeVal } : {}),
       };
     }
     return {
@@ -154,6 +170,9 @@ export function decodeCompactTactic(rawString: string): {
       type: item.type || 'smoke',
       x: item.x,
       y: item.y,
+      throwFrom: item.throwFrom,
+      curveBend: item.curveBend,
+      throwType: item.throwType,
       label: item.label,
     };
   });

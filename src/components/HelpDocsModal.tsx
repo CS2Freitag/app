@@ -10,12 +10,15 @@ import {
   Palette,
   Sparkles,
   Maximize2,
-  MapPin,
-  CheckCircle2,
-  ExternalLink,
+  Bookmark,
+  Spline,
+  Smartphone,
+  Share2,
+  Undo2,
 } from 'lucide-react';
 import { Language } from '../types';
 import { resolveAssetPath } from '../utils/assets';
+import { CURRENT_BUILD_VERSION } from '../services/versionService';
 
 interface HelpDocsModalProps {
   isOpen: boolean;
@@ -94,8 +97,11 @@ export const HelpDocsModal: React.FC<HelpDocsModalProps> = ({ isOpen, onClose, l
             <div className="flex items-center gap-2.5">
               <HelpCircle className="w-6 h-6 text-amber-400 shrink-0" />
               <div>
-                <h2 className="text-lg font-black text-white">
-                  {isDe ? 'Hilfe & App-Übersicht' : 'Help & App Overview'}
+                <h2 className="text-lg font-black text-white flex items-center gap-2">
+                  <span>{isDe ? 'Hilfe & App-Übersicht' : 'Help & App Overview'}</span>
+                  <span className="px-2 py-0.5 rounded-full bg-zinc-800 border border-zinc-700 text-amber-300 font-mono text-[10px] font-bold">
+                    v{CURRENT_BUILD_VERSION}
+                  </span>
                 </h2>
                 <p className="text-xs text-zinc-400">
                   {isDe
@@ -113,12 +119,12 @@ export const HelpDocsModal: React.FC<HelpDocsModalProps> = ({ isOpen, onClose, l
           </div>
 
           <div className="space-y-4 text-xs">
-            {/* EINLEITUNG: CS2FREIFAG + UMFASSENDE BILD-GALERIE */}
+            {/* EINLEITUNG: CS2FREITAG + UMFASSENDE BILD-GALERIE */}
             <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-zinc-950 via-zinc-950 to-zinc-900 border border-amber-500/40 space-y-4 shadow-xl">
               <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5">
                 <div className="flex items-center gap-2 font-black text-amber-400 text-base sm:text-lg tracking-wide">
                   <Sparkles className="w-5 h-5 shrink-0 text-amber-400" />
-                  <span>CS2FREIFAG</span>
+                  <span>CS2FREITAG</span>
                 </div>
                 <span className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 font-mono text-[10px] font-bold">
                   {isDe ? 'Taktik-Board & Callout-Atlas' : 'Tactics & Atlas'}
@@ -319,6 +325,158 @@ export const HelpDocsModal: React.FC<HelpDocsModalProps> = ({ isOpen, onClose, l
                 <div className="flex items-center gap-2 p-1.5 rounded bg-zinc-900 border border-zinc-800">
                   <span className="w-3 h-3 rounded-full bg-amber-500 shrink-0" />
                   <span className="text-zinc-200 font-semibold">{isDe ? 'Gefahr: Mittel' : 'Danger: Med'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 7. Utilitys & 2-Punkt-Wurflinien (L, R, L+R, JT, R+JT) */}
+            <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-emerald-500/30 space-y-3">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 font-bold text-emerald-400 text-sm">
+                  <Spline className="w-4 h-4 shrink-0" />
+                  <span>{isDe ? '7. Utilitys, 2-Punkt-Wurflinien & Wurfarten' : '7. Utilities, 2-Point Throw Arcs & Throw Types'}</span>
+                </div>
+                <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 font-mono text-[10px] font-bold">
+                  Smoke · Flash · Molo · HE · Decoy
+                </span>
+              </div>
+
+              <div className="space-y-1.5 text-zinc-300 leading-relaxed">
+                <p>
+                  {isDe
+                    ? 'Unter „Utility“ kannst du zwischen „Nur Spot“ (1 Klick: nur Landeplatz markieren) und „2-Punkt Wurf“ / „Wurflinie“ (1. Tipp/Klick = Abwurf-Position, 2. Tipp/Klick = Landeplatz mit gebogener Flugkurve & Richtungspfeil) wählen.'
+                    : 'Under "Utility" choose between "Spot Only" (1 click for landing location) and "2-Point Throw Arc" (1st click = throw origin, 2nd click = landing spot with curved trajectory & directional arrow).'}
+                </p>
+                <p className="text-zinc-400 text-[11px]">
+                  {isDe
+                    ? 'Tipp zum Anpassen: Wähle eine gesetzte Utility mit „Auswahl“ an. Danach kannst du den Abwurfpunkt, den blauen Kurvenbogen-Griff (z. B. für Bandenwürfe/Bounces) und den Landeplatz einzeln verschieben sowie eine Lineup-Notiz hinterlegen.'
+                    : 'Editing tip: Select a placed utility to drag its throw origin, the blue curve-bend handle (for bank/bounce throws), or the landing icon individually, and add a custom lineup note.'}
+                </p>
+              </div>
+
+              <div className="space-y-1.5 pt-1">
+                <div className="text-[11px] font-bold text-sky-300">
+                  {isDe ? 'Bedeutung der Wurfart-Kürzel (L, R, L+R, JT, R+JT):' : 'Throw Type Abbreviations (L, R, L+R, JT, R+JT):'}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 text-[11px]">
+                  <div className="flex items-center gap-2 p-2 rounded-lg bg-zinc-900 border border-zinc-800">
+                    <span className="px-1.5 py-0.5 rounded bg-sky-500/20 border border-sky-400/50 text-sky-200 font-mono font-bold shrink-0">
+                      L
+                    </span>
+                    <span className="text-zinc-200">
+                      {isDe ? 'Linksklick (normaler weiter Wurf, Standard)' : 'Left Click (standard full throw)'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 p-2 rounded-lg bg-zinc-900 border border-zinc-800">
+                    <span className="px-1.5 py-0.5 rounded bg-sky-500/20 border border-sky-400/50 text-sky-200 font-mono font-bold shrink-0">
+                      R
+                    </span>
+                    <span className="text-zinc-200">
+                      {isDe ? 'Rechtsklick (kurzer Unterhand-Wurf / Pop-Flash)' : 'Right Click (short underhand / pop-flash)'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 p-2 rounded-lg bg-zinc-900 border border-zinc-800">
+                    <span className="px-1.5 py-0.5 rounded bg-sky-500/20 border border-sky-400/50 text-sky-200 font-mono font-bold shrink-0">
+                      L+R
+                    </span>
+                    <span className="text-zinc-200">
+                      {isDe ? 'Links + Rechtsklick (mittlere Wurfweite)' : 'Left + Right Click (medium throw distance)'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 p-2 rounded-lg bg-zinc-900 border border-zinc-800">
+                    <span className="px-1.5 py-0.5 rounded bg-sky-500/20 border border-sky-400/50 text-sky-200 font-mono font-bold shrink-0">
+                      JT
+                    </span>
+                    <span className="text-zinc-200">
+                      {isDe ? 'Jumpthrow (Wurf im Sprung)' : 'Jumpthrow (throw while jumping)'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 p-2 rounded-lg bg-zinc-900 border border-zinc-800 sm:col-span-2 lg:col-span-2">
+                    <span className="px-1.5 py-0.5 rounded bg-sky-500/20 border border-sky-400/50 text-sky-200 font-mono font-bold shrink-0">
+                      R+JT
+                    </span>
+                    <span className="text-zinc-200">
+                      {isDe ? 'Run + Jumpthrow (Anlauf + Sprungwurf für maximale Distanz)' : 'Run + Jumpthrow (running jumpthrow for max range)'}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-[10px] text-zinc-400 pt-0.5">
+                  {isDe
+                    ? 'Hinweis: Bei „L“ bleibt der Abwurfpunkt sauber ohne Text. Bei R, L+R, JT und R+JT erscheint das Kürzel direkt am Abwurf sowie im PNG-Export.'
+                    : 'Note: "L" keeps the origin clean without text. R, L+R, JT and R+JT show a badge at the origin and on PNG exports.'}
+                </p>
+              </div>
+            </div>
+
+            {/* 8. Smartphone-Gesten & Mobile Bedienung */}
+            <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800 space-y-2">
+              <div className="flex items-center gap-2 font-bold text-sky-400 text-sm">
+                <Smartphone className="w-4 h-4 shrink-0" />
+                <span>{isDe ? '8. Smartphone- & Touch-Bedienung' : '8. Mobile & Touch Controls'}</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-zinc-300 leading-relaxed">
+                <div className="p-2.5 rounded-lg bg-zinc-900/70 border border-zinc-800/80 space-y-1">
+                  <div className="font-bold text-zinc-100 text-[11px]">
+                    {isDe ? 'Halten (0,5s Long-Press) & Mehrfach' : 'Hold (0.5s Long-Press) & Multi-Select'}
+                  </div>
+                  <p className="text-[11px] text-zinc-400">
+                    {isDe
+                      ? 'Halte ein Element oder Callout 0,5 Sekunden gedrückt (blauer Fortschrittsring), um das Kontextmenü zu öffnen. Aktiviere „Mehrfach“ oben in der Leiste, um mehrere Objekte nacheinander auszuwählen.'
+                      : 'Press and hold any item or callout for 0.5s (blue progress ring) to open the context menu. Toggle "Multi" in the mobile toolbar to tap-select multiple items.'}
+                  </p>
+                </div>
+                <div className="p-2.5 rounded-lg bg-zinc-900/70 border border-zinc-800/80 space-y-1">
+                  <div className="font-bold text-zinc-100 text-[11px]">
+                    {isDe ? 'Callout-Info, Ebenen & Zoom-Leiste' : 'Callout Info, Layers & Bottom Controls'}
+                  </div>
+                  <p className="text-[11px] text-zinc-400">
+                    {isDe
+                      ? 'Sobald ein Callout gewählt ist, erscheint unten rechts das gelbe Info-Symbol für Beschreibung & Vorlesefunktion. Über das blaue Ebenen-Symbol öffnest du Ebenen, Eigenschaften und den Verlauf.'
+                      : 'Once a callout is selected, tap the amber Info button at the bottom right for details & voice playback. Tap the blue Layers icon for layers, properties, and history.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* 9. Taktik-Vorlagen (Presets), Undo/Redo & Teilen */}
+            <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800 space-y-2">
+              <div className="flex items-center gap-2 font-bold text-amber-400 text-sm">
+                <Bookmark className="w-4 h-4 shrink-0" />
+                <span>{isDe ? '9. Taktik-Vorlagen, Undo/Redo & Teilen' : '9. Tactic Presets, Undo/Redo & Sharing'}</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+                <div className="p-2.5 rounded-lg bg-zinc-900/70 border border-zinc-800/80 space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-300">
+                    <Bookmark className="w-3.5 h-3.5" />
+                    <span>{isDe ? 'Vorlagen (pro Map)' : 'Presets (per map)'}</span>
+                  </div>
+                  <p className="text-zinc-400 leading-relaxed">
+                    {isDe
+                      ? 'Speichere fertige Taktiken dauerhaft pro Map mit Namen & Notiz (inkl. Mini-Vorschau, Überschreiben & Cloud-Sync).'
+                      : 'Permanently save full tactics per map with names & notes (includes previews, overwrite & cloud sync).'}
+                  </p>
+                </div>
+                <div className="p-2.5 rounded-lg bg-zinc-900/70 border border-zinc-800/80 space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-sky-300">
+                    <Undo2 className="w-3.5 h-3.5" />
+                    <span>{isDe ? 'Einheitliches Undo/Redo' : 'Unified Undo/Redo'}</span>
+                  </div>
+                  <p className="text-zinc-400 leading-relaxed">
+                    {isDe
+                      ? 'Strg+Z / Strg+Y bzw. die Pfeile oben machen Änderungen an Linien, Utilitys, Spielern, Ebenen und Callouts rückgängig.'
+                      : 'Ctrl+Z / Ctrl+Y or the undo/redo buttons revert changes across drawings, utilities, players, layers, and callouts.'}
+                  </p>
+                </div>
+                <div className="p-2.5 rounded-lg bg-zinc-900/70 border border-zinc-800/80 space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-emerald-300">
+                    <Share2 className="w-3.5 h-3.5" />
+                    <span>{isDe ? 'Link, QR & PNG-Blatt' : 'Link, QR & PNG Sheet'}</span>
+                  </div>
+                  <p className="text-zinc-400 leading-relaxed">
+                    {isDe
+                      ? 'Teile jede Taktik als kurzen Link, scanbaren QR-Code oder exportiere sie direkt als hochauflösendes Taktik-PNG.'
+                      : 'Share any tactic via compact link, scannable QR code, or export a high-resolution tactical PNG sheet.'}
+                  </p>
                 </div>
               </div>
             </div>

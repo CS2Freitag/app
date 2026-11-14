@@ -1,17 +1,12 @@
 {
-  "version": "3.94",
+  "version": "3.98",
   "major": 3,
-  "patch": 94,
-  "releaseDate": "2026-11-13",
-  "title": "Update v3.94: Werkzeuge-Aktionen, Auswahl-Menü & Verlauf-Verbesserungen",
-  "description": "Erweiterung der Auswahl-Leiste (Bearbeiten & Bereich verschieben), Rückgängig/Vorwärts/Löschen auf PC unter Werkzeuge, Verlauf mit Einzellöschung & Leeren, Minikarte ohne Blaufilter, vergrößerte Shortcuts und mobile Einblendung.",
+  "patch": 98,
+  "releaseDate": "2026-11-14",
+  "title": "Update v3.98: Live-Klartext-Wurfarten & Hook-Modularisierung",
+  "description": "Direkte Klartext-Anzeige der gewählten Wurfart (L, R, L+R, JT, R+JT) in allen Leisten, Menüs und in der 2-Punkt-Wurf-Führung sowie ausgelagerte Taktik-Hooks.",
   "changes": [
-    "PC-Version: Rückgängig, Vorwärts & Löschen direkt in der Werkzeugleiste unter 'Eigene Farbe' platziert (Mobil/Tablet bleibt in der oberen Leiste)",
-    "Auswahl-Menü: Buttons für 'Bearbeiten' und 'Bereich verschieben' hinzugefügt; auf Mobilgeräten wird kompakt nur die Zahl angezeigt",
-    "Minikarte: Blauer Schleier/Filter entfernt, der blaue Rahmen bleibt für Orientierung erhalten",
-    "Kartenverlauf: Einzelne Stände löschbar, kompletter Verlauf leerbar (aktuellster Stand & permanente Ausgangsversion bleiben erhalten)",
-    "Verlaufsbegrenzung: Ältester Nutzerstand wird bei Überschreiten von 5 Ständen überschrieben, Ausgangsversion bleibt dauerhaft",
-    "Mobile Ansicht: Automatisches Aufklappen des Ebenen-Menüs beim Anklicken von Callouts unterbunden",
-    "Shortcuts (Strg+Klick / Rechtsklick): Deutlich vergrößert auf PC; auf dem Handy als 10-Sekunden-Einblendung beim Kartenstart"
+    "Klartext-Wurfarten live sichtbar: Aktive Wurfart (z. B. L · Linksklick, JT · Jumpthrow) erscheint direkt in Sidebar, Mobil-Leiste, Ebenen-Inspektor, Auswahlleiste, Kontextmenü und 2-Punkt-Hinweis",
+    "Code-Modularisierung fortgesetzt: Presets, einheitliches Undo/Redo inkl. Versions-Snapshots sowie Auswahl-/Gruppenaktionen sauber in eigene Custom Hooks ausgelagert"
   ]
 }

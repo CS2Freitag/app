@@ -182,6 +182,30 @@ export const smartMergeMap = (localMap: MapData, cloudMap: MapData): MapData => 
   }
 
   merged.callouts = mergedCallouts;
+
+  // 3. Merge tacticData presets without losing local or cloud presets
+  if (localMap.tacticData || cloudMap.tacticData) {
+    const localPresets = localMap.tacticData?.presets || [];
+    const cloudPresets = cloudMap.tacticData?.presets || [];
+    const presetMap = new Map<string, any>();
+    for (const p of cloudPresets) {
+      if (p?.id) presetMap.set(p.id, p);
+    }
+    for (const p of localPresets) {
+      if (p?.id) {
+        const existing = presetMap.get(p.id);
+        if (!existing || (p.updatedAt || 0) >= (existing.updatedAt || 0)) {
+          presetMap.set(p.id, p);
+        }
+      }
+    }
+    const baseTactic = localMap.tacticData || cloudMap.tacticData!;
+    merged.tacticData = {
+      ...baseTactic,
+      presets: Array.from(presetMap.values()),
+    };
+  }
+
   merged.updatedAt = Date.now();
   return merged;
 };

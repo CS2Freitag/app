@@ -1,70 +1,62 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import LZString from 'lz-string';
 import { User } from 'firebase/auth';
-import { getCloudMap, smartMergeMap, syncUserMap, loginWithGoogle } from '../services/firebase';
+import { getCloudMap, smartMergeMap, syncUserMap } from '../services/firebase';
+import { getFontFamilyStyle } from '../utils/calloutFonts';
 import { CloudConflictModal } from './CloudConflictModal';
 import { ShareTacticModal } from './ShareTacticModal';
 import { resolveAssetPath } from '../utils/assets';
 import { encodeCompactTactic } from '../utils/tacticCodec';
 import {
   Info,
-  ArrowLeft,
-  ZoomIn,
-  ZoomOut,
-  Maximize2,
-  Minimize2,
-  Pencil,
-  Shield,
-  Flame,
-  RotateCcw,
   RotateCw,
-  Undo2,
-  Redo2,
   Trash2,
   Eraser,
-  Eye,
-  EyeOff,
-  Crosshair,
   Move,
   Check,
   Edit3,
-  HelpCircle,
   X,
-  Type,
-  Palette,
-  Square,
-  Download,
-  Image as ImageIcon,
-  Upload,
-  Activity,
-  PenTool,
   ArrowUp,
-  Share2,
-  Plus,
   ListFilter,
-  Volume2,
   Layers,
   Lock,
-  Unlock,
   Copy,
-  Grid3X3,
-  Users,
-  CheckCircle2,
   History,
-  MousePointer2,
-  BoxSelect,
-  ChevronRight,
-  PanelLeftClose,
   PanelLeftOpen,
   PanelRightOpen,
-  Map as MapIcon,
+  Spline,
 } from 'lucide-react';
 import { UtilitySymbol, UTILITY_META } from './UtilitySymbol';
 import { TacticalLayersPanel } from './TacticalLayersPanel';
-import { TacticalHistoryPanel, isAusgangsversion } from './TacticalHistoryPanel';
+import { TacticalHistoryPanel } from './TacticalHistoryPanel';
 import { HelpDocsModal } from './HelpDocsModal';
 import { CustomColorModal } from './CustomColorModal';
 import { TacticPreviewModal } from './TacticPreviewModal';
+import { TacticalSelectionBar } from './TacticalSelectionBar';
+import { TacticalContextMenu } from './TacticalContextMenu';
+import { TacticalMinimap } from './TacticalMinimap';
+import { TacticPresetsModal } from './TacticPresetsModal';
+import { EditOptionsModal } from './EditOptionsModal';
+import { CustomSelectionModal } from './CustomSelectionModal';
+import { TacticalBottomBar } from './TacticalBottomBar';
+import { TacticalMobileBottomBar } from './TacticalMobileBottomBar';
+import { TacticalLegendModal } from './TacticalLegendModal';
+import { CalloutEditorModal } from './CalloutEditorModal';
+import { SyncPromptModal } from './SyncPromptModal';
+import { TacticalHeaderBar } from './TacticalHeaderBar';
+import { TacticalMobileToolbar } from './TacticalMobileToolbar';
+import { TacticalLeftSidebar } from './TacticalLeftSidebar';
+import { TacticalMobileSheet } from './TacticalMobileSheet';
+import {
+  computeCurveBendFromHandlePoint,
+  distanceToThrowCurve,
+  evaluateQuadraticBezier,
+  formatThrowTypeFull,
+  getThrowGeometry,
+  THROW_TYPE_META,
+} from '../utils/utilityThrowGeometry';
+import { useTacticPresets } from '../hooks/useTacticPresets';
+import { useTacticHistory } from '../hooks/useTacticHistory';
+import { useTacticSelectionActions } from '../hooks/useTacticSelectionActions';
 import {
   MapData,
   Callout,
@@ -76,12 +68,14 @@ import {
   DangerLevel,
   ColorMode,
   UtilityType,
+  UtilityThrowType,
+  UtilityPlacementMode,
   UtilityMarker,
   PlayerToken,
   TacticalDrawingLine,
   TacticalTool,
   TacticLayer,
-  TacticSnapshot
+  TacticSnapshot,
 } from '../types';
 
 export const isCalloutForLevel = (
@@ -117,25 +111,7 @@ export const isCalloutForLevel = (
   return targetLevel === 'lower' ? seemsLower : !seemsLower;
 };
 
-export const getFontFamilyStyle = (fontKey?: string) => {
-  switch (fontKey) {
-    case 'rajdhani':
-      return "'Rajdhani', sans-serif";
-    case 'orbitron':
-      return "'Orbitron', sans-serif";
-    case 'russo':
-      return "'Russo One', sans-serif";
-    case 'teko':
-      return "'Teko', sans-serif";
-    case 'sans':
-      return "'Inter', system-ui, sans-serif";
-    case 'serif':
-      return "'Georgia', serif";
-    case 'mono':
-    default:
-      return "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Roboto Mono', monospace";
-  }
-};
+export { getFontFamilyStyle };
 
 interface TacticalMapViewProps {
   mapData: MapData;
@@ -278,11 +254,29 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   // Tactical tools
   const [activeTool, setActiveTool] = useState<TacticalTool>('select');
   const [selectedUtility, setSelectedUtility] = useState<UtilityType>('smoke');
+  const [utilityPlacementMode, setUtilityPlacementMode] = useState<UtilityPlacementMode>('throw');
+  const [selectedThrowType, setSelectedThrowType] = useState<UtilityThrowType>('left');
+  const [pendingUtilityThrowOrigin, setPendingUtilityThrowOrigin] = useState<{ x: number; y: number } | null>(null);
+  const [utilityHoverCoord, setUtilityHoverCoord] = useState<{ x: number; y: number } | null>(null);
+  const [hoveredUtilityId, setHoveredUtilityId] = useState<string | null>(null);
+  const [draggingUtilityHandle, setDraggingUtilityHandle] = useState<{
+    utilId: string;
+    mode: 'origin' | 'curve' | 'landing';
+    tileEl: HTMLElement | null;
+  } | null>(null);
   const [selectedPlayerSide, setSelectedPlayerSide] = useState<'ct' | 't'>('ct');
   const [penColor, setPenColor] = useState<string>('#ffffff');
   const [penWithArrow, setPenWithArrow] = useState<boolean>(true);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const pressTimer = useRef<number | null>(null);
+
+  // Clear pending throw origin when switching away from utility throw mode
+  useEffect(() => {
+    if (activeTool !== 'utility' || utilityPlacementMode !== 'throw') {
+      setPendingUtilityThrowOrigin(null);
+      setUtilityHoverCoord(null);
+    }
+  }, [activeTool, utilityPlacementMode]);
 
   const colors = ['#ffffff', '#000000', '#3b82f6', '#92400e', '#ef4444', '#22c55e', '#f97316'];
 
@@ -308,9 +302,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   };
 
 
-  // Tactical drawings and undo/redo stacks
+  // Tactical drawings, utilities, players & unified undo/redo stacks
   const [drawings, setDrawings] = useState<TacticalDrawingLine[]>(() => mapData.tacticData?.drawings || []);
-  const [drawingsRedoStack, setDrawingsRedoStack] = useState<TacticalDrawingLine[]>([]);
   const [currentDrawing, setCurrentDrawing] = useState<TacticalDrawingLine | null>(null);
   const [hoveredLineId, setHoveredLineId] = useState<string | null>(null);
 
@@ -333,11 +326,13 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const [activeLayerId, setActiveLayerId] = useState<string>(() =>
     mapData.tacticData?.layers?.[1]?.id || mapData.tacticData?.layers?.[0]?.id || 'layer_t'
   );
+
+  const [isPresetsModalOpen, setIsPresetsModalOpen] = useState<boolean>(false);
+
   const [selectedElementIds, setSelectedElementIds] = useState<string[]>([]);
   const [selectedCalloutIds, setSelectedCalloutIds] = useState<string[]>([]);
-  const [isToolbarVisible, setIsToolbarVisible] = useState<boolean>(() =>
-    typeof window !== 'undefined' ? window.innerWidth >= 768 : true
-  );
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState<boolean>(false);
+  const [isToolbarVisible, setIsToolbarVisible] = useState<boolean>(true);
   const [isRightPanelVisible, setIsRightPanelVisible] = useState<boolean>(true);
   const [showMinimap, setShowMinimap] = useState<boolean>(true);
   const [marqueeRect, setMarqueeRect] = useState<{
@@ -349,8 +344,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const marqueeAdditiveRef = useRef<boolean>(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [showContextColorSubmenu, setShowContextColorSubmenu] = useState<boolean>(false);
-  const minimapRef = useRef<HTMLDivElement | null>(null);
-  const [isDraggingMinimap, setIsDraggingMinimap] = useState<boolean>(false);
+  const [longPressVisual, setLongPressVisual] = useState<{ x: number; y: number } | null>(null);
 
   const [showGrid, setShowGrid] = useState<boolean>(false);
   const [showContextColorPicker, setShowContextColorPicker] = useState<boolean>(false);
@@ -358,61 +352,6 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const [isMobileSheetOpen, setIsMobileSheetOpen] = useState<boolean>(false);
   const [mobileSheetTab, setMobileSheetTab] = useState<'layers' | 'history'>('layers');
   const [isHistoryExpanded, setIsHistoryExpanded] = useState<boolean>(false);
-
-  // Map Version History Snapshots (max 5 saved versions per map in localStorage — callouts, areas, drawings, utilities & players)
-  const [snapshots, setSnapshots] = useState<TacticSnapshot[]>(() => {
-    if (typeof window === 'undefined') return [];
-    try {
-      const stored = localStorage.getItem(`cs2_map_history_${mapData.id}`);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          const valid = parsed
-            .filter((s) => s && Array.isArray(s.callouts))
-            .map((s) => ({
-              ...s,
-              drawings:
-                Array.isArray(s.drawings) && s.drawings.length > 0
-                  ? s.drawings
-                  : mapData.tacticData?.drawings || [],
-              utilities:
-                Array.isArray(s.utilities) && s.utilities.length > 0
-                  ? s.utilities
-                  : mapData.tacticData?.utilities || [],
-              players:
-                Array.isArray(s.players) && s.players.length > 0
-                  ? s.players
-                  : mapData.tacticData?.players || [],
-            }))
-            .slice(0, 5);
-          if (valid.length > 0) return valid;
-        }
-      }
-    } catch {
-      // ignore
-    }
-    return [
-      {
-        id: `map_snap_init_${Date.now()}`,
-        timestamp: Date.now(),
-        label: isDe ? 'Ausgangsversion' : 'Initial map',
-        changedCount: mapData.callouts.length,
-        callouts: JSON.parse(JSON.stringify(mapData.callouts)),
-        drawings: JSON.parse(JSON.stringify(mapData.tacticData?.drawings || [])),
-        utilities: JSON.parse(JSON.stringify(mapData.tacticData?.utilities || [])),
-        players: JSON.parse(JSON.stringify(mapData.tacticData?.players || [])),
-      },
-    ];
-  });
-
-  // Sync map history updates cleanly (keeps max 5 versions in localStorage)
-  useEffect(() => {
-    try {
-      localStorage.setItem(`cs2_map_history_${mapData.id}`, JSON.stringify(snapshots.slice(0, 5)));
-    } catch {
-      // ignore
-    }
-  }, [snapshots, mapData.id]);
 
   // Callouts & Inspector state
   const [hoveredCallout, setHoveredCallout] = useState<Callout | null>(null);
@@ -422,6 +361,133 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const [highlightedCalloutId, setHighlightedCalloutId] = useState<string | undefined>(
     initialHighlightedCalloutId
   );
+
+  // Layer helper predicates
+  const isLayerLocked = useCallback(
+    (layerId?: string) => {
+      const target = layers.find((l) => l.id === (layerId || activeLayerId));
+      return Boolean(target?.locked);
+    },
+    [layers, activeLayerId]
+  );
+
+  const isLayerVisible = useCallback(
+    (layerId?: string, defaultFallbackId = 'layer_t') => {
+      const target = layers.find((l) => l.id === (layerId || defaultFallbackId));
+      return target ? target.visible : true;
+    },
+    [layers]
+  );
+
+  const getLayerOpacity = useCallback(
+    (layerId?: string, defaultFallbackId = 'layer_t') => {
+      const target = layers.find((l) => l.id === (layerId || defaultFallbackId));
+      return target ? target.opacity : 1;
+    },
+    [layers]
+  );
+
+  // Persistent per-map tactic presets
+  const pushHistorySnapshotRef = useRef<() => void>(() => {});
+  const onBeforeLoadPreset = useCallback(() => {
+    pushHistorySnapshotRef.current();
+  }, []);
+
+  const {
+    tacticPresets,
+    handleSavePreset,
+    handleLoadPreset,
+    handleRenamePreset,
+    handleOverwritePreset,
+    handleDeletePreset,
+  } = useTacticPresets({
+    mapData,
+    drawings,
+    utilities,
+    players,
+    layers,
+    setDrawings,
+    setUtilities,
+    setPlayers,
+    setLayers,
+    setSelectedElementIds,
+    setSelectedCalloutIds,
+    setSelectedCallout,
+    setContextMenu,
+    setHasChangesInSession,
+    onUpdateMap,
+    onBeforeLoadPreset,
+  });
+
+  // Unified Undo / Redo + Map Version History Snapshots
+  const {
+    canUndo,
+    canRedo,
+    dragInitialHistoryRef,
+    eraserInitialHistoryRef,
+    createEditorSnapshot,
+    pushHistorySnapshot,
+    handleUndo,
+    handleRedo,
+    snapshots,
+    handleSaveSnapshot,
+    handleDeleteSnapshot,
+    handleClearHistory,
+    handleRestoreSnapshot,
+  } = useTacticHistory({
+    mapData,
+    isDe,
+    drawings,
+    utilities,
+    players,
+    layers,
+    tacticPresets,
+    setDrawings,
+    setUtilities,
+    setPlayers,
+    setLayers,
+    setSelectedElementIds,
+    setSelectedCalloutIds,
+    setSelectedCallout,
+    setHighlightedCalloutId,
+    setContextMenu,
+    setHasChangesInSession,
+    onUpdateMap,
+  });
+  pushHistorySnapshotRef.current = () => pushHistorySnapshot();
+
+  // Multi-element & callout selection / manipulation actions
+  const {
+    handleSelectElement,
+    handleSelectCalloutMulti,
+    handleDuplicateSelected,
+    handleGroupSelected,
+    handleToggleLockSelected,
+    handleDeleteSelectedElements,
+    handleUpdateSelectedElementsProps,
+  } = useTacticSelectionActions({
+    mapData,
+    isDe,
+    drawings,
+    utilities,
+    players,
+    selectedElementIds,
+    selectedCalloutIds,
+    isLayerLocked,
+    pushHistorySnapshot,
+    setDrawings,
+    setUtilities,
+    setPlayers,
+    setSelectedElementIds,
+    setSelectedCalloutIds,
+    setSelectedCallout,
+    setHighlightedCalloutId,
+    setContextMenu,
+    setShowContextColorPicker,
+    setShowContextColorSubmenu,
+    setHasChangesInSession,
+    onUpdateMap,
+  });
 
   // Edit mode, Options Modal & Single Callout Edit states
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
@@ -480,6 +546,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     if (!isEditMode || !callout.area || callout.locked) return;
     if ('button' in e && e.button !== 0) return;
     e.stopPropagation();
+    dragInitialHistoryRef.current = createEditorSnapshot();
     setRotatingAreaCalloutId(callout.id);
     const { clientX, clientY } = getClientCoords(e);
     if (mapContainerRef.current) {
@@ -540,21 +607,6 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const [calloutFormHidePin, setCalloutFormHidePin] = useState<boolean>(true);
   const [calloutFormPinOffsetX, setCalloutFormPinOffsetX] = useState<number>(0);
   const [calloutFormPinOffsetY, setCalloutFormPinOffsetY] = useState<number>(0);
-  const previewBoxRef = useRef<HTMLDivElement | null>(null);
-  const [isDraggingPinPreview, setIsDraggingPinPreview] = useState<boolean>(false);
-
-  const handlePreviewPointerMove = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!previewBoxRef.current) return;
-    const rect = previewBoxRef.current.getBoundingClientRect();
-    const clientX = 'touches' in e && e.touches && e.touches.length > 0 ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
-    const clientY = 'touches' in e && e.touches && e.touches.length > 0 ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    const dx = Math.max(-120, Math.min(120, Math.round(clientX - centerX)));
-    const dy = Math.max(-120, Math.min(120, Math.round(clientY - centerY)));
-    setCalloutFormPinOffsetX(dx);
-    setCalloutFormPinOffsetY(dy);
-  };
 
   const [calloutFormDescDe, setCalloutFormDescDe] = useState('');
   const [calloutFormDescEn, setCalloutFormDescEn] = useState('');
@@ -579,6 +631,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const svgOverlayRef = useRef<SVGSVGElement>(null);
   const mainWrapperRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -588,20 +641,40 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
   const calculateFitZoom = (overrideFs?: boolean) => {
     const fs = overrideFs !== undefined ? overrideFs : isFullscreen;
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
+    if (stageRef.current) {
+      const stageRect = stageRef.current.getBoundingClientRect();
+      const bottomDeduction = isMobile ? 76 : 16;
+      const availW = Math.max(240, stageRect.width - 16);
+      const availH = Math.max(220, stageRect.height - bottomDeduction);
+
+      if (currentLevel === 'both') {
+        const scaleW = availW / 1750;
+        const scaleH = availH / 850;
+        return Math.max(0.5, Math.min(2.5, Math.min(scaleW, scaleH) * (fs ? 0.96 : 0.92)));
+      }
+      const baseTileSize = Math.min(850, availW);
+      const availableSize = Math.min(availW, availH);
+      return Math.max(
+        0.5,
+        Math.min(2.5, (availableSize / Math.max(240, baseTileSize)) * (fs ? 0.95 : 0.92))
+      );
+    }
+
     if (!mainWrapperRef.current) {
-      if (typeof window !== 'undefined' && window.innerWidth < 768) {
-        return currentLevel === 'both' ? 0.5 : 0.95;
+      if (isMobile) {
+        return currentLevel === 'both' ? 0.5 : 0.92;
       }
       return 0.78;
     }
     const parentRect = mainWrapperRef.current.getBoundingClientRect();
-    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
     const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 1024;
     const leftDeduction = fs || isMobile ? 0 : isToolbarVisible ? 224 : 0;
     const rightDeduction = fs || isMobile ? 0 : isDesktop ? 304 : 0;
-    const topHeaderDeduction = fs ? 64 : isMobile ? (isToolbarVisible ? 116 : 64) : 80;
-    const availW = Math.max(260, parentRect.width - (leftDeduction + rightDeduction));
-    const availH = Math.max(260, parentRect.height - topHeaderDeduction);
+    const topHeaderDeduction = fs ? 64 : isMobile ? (isToolbarVisible ? 168 : 132) : 80;
+    const availW = Math.max(240, parentRect.width - (leftDeduction + rightDeduction));
+    const availH = Math.max(220, parentRect.height - topHeaderDeduction);
 
     if (currentLevel === 'both') {
       const scaleW = availW / 1750;
@@ -612,7 +685,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     const availableSize = Math.min(availW, availH);
     return Math.max(
       0.5,
-      Math.min(2.5, (availableSize / Math.max(260, baseTileSize)) * (fs ? 0.95 : 0.92))
+      Math.min(2.5, (availableSize / Math.max(240, baseTileSize)) * (fs ? 0.95 : 0.92))
     );
   };
 
@@ -703,510 +776,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     setIsCustomSelectionModalOpen(false);
   };
 
-  // Layer, Selection & History Helpers
-  const isLayerLocked = useCallback(
-    (layerId?: string) => {
-      const target = layers.find((l) => l.id === (layerId || activeLayerId));
-      return Boolean(target?.locked);
-    },
-    [layers, activeLayerId]
-  );
 
-  const isLayerVisible = useCallback(
-    (layerId?: string, defaultFallbackId = 'layer_t') => {
-      const target = layers.find((l) => l.id === (layerId || defaultFallbackId));
-      return target ? target.visible : true;
-    },
-    [layers]
-  );
-
-  const getLayerOpacity = useCallback(
-    (layerId?: string, defaultFallbackId = 'layer_t') => {
-      const target = layers.find((l) => l.id === (layerId || defaultFallbackId));
-      return target ? target.opacity : 1;
-    },
-    [layers]
-  );
-
-  const handleSaveSnapshot = useCallback(
-    (customLabel?: string, overrideCallouts?: Callout[]) => {
-      const targetCallouts = overrideCallouts || mapData.callouts;
-      const serialized = JSON.stringify(targetCallouts);
-      const serializedDrawings = JSON.stringify(drawings);
-      const serializedUtilities = JSON.stringify(utilities);
-      const serializedPlayers = JSON.stringify(players);
-      setSnapshots((prev) => {
-        if (
-          prev.length > 0 &&
-          JSON.stringify(prev[0].callouts) === serialized &&
-          JSON.stringify(prev[0].drawings ?? []) === serializedDrawings &&
-          JSON.stringify(prev[0].utilities ?? []) === serializedUtilities &&
-          JSON.stringify(prev[0].players ?? []) === serializedPlayers
-        ) {
-          return prev;
-        }
-        const areaCount = targetCallouts.filter((c) => Boolean(c.area)).length;
-        const newSnap: TacticSnapshot = {
-          id: `map_snap_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-          timestamp: Date.now(),
-          label:
-            customLabel ||
-            `${mapData.name} ${isDe ? 'gesichert' : 'saved'} (${targetCallouts.length} / ${areaCount})`,
-          changedCount: targetCallouts.length,
-          callouts: JSON.parse(serialized),
-          drawings: JSON.parse(serializedDrawings),
-          utilities: JSON.parse(serializedUtilities),
-          players: JSON.parse(serializedPlayers),
-        };
-        // Ausgangsversion is permanent and exempt from eviction; keep max 5 user snapshots
-        const userSnaps = prev.filter((s) => !isAusgangsversion(s));
-        const initSnap = prev.find((s) => isAusgangsversion(s));
-        const nextUserSnaps = [newSnap, ...userSnaps].slice(0, 5);
-        return initSnap ? [...nextUserSnaps, initSnap] : nextUserSnaps;
-      });
-    },
-    [mapData.callouts, mapData.name, isDe, drawings, utilities, players]
-  );
-
-  const handleDeleteSnapshot = useCallback((snapshotId: string) => {
-    setSnapshots((prev) => prev.filter((s) => s.id !== snapshotId || isAusgangsversion(s)));
-  }, []);
-
-  const handleClearHistory = useCallback(() => {
-    setSnapshots((prev) => {
-      const userSnaps = prev.filter((s) => !isAusgangsversion(s));
-      const initSnap = prev.find((s) => isAusgangsversion(s));
-      // Keep newest user snapshot + permanent Ausgangsversion
-      const keptUserSnap = userSnaps[0] ? [userSnaps[0]] : [];
-      return initSnap ? [...keptUserSnap, initSnap] : keptUserSnap;
-    });
-  }, []);
-
-  const handleRestoreSnapshot = useCallback(
-    (snap: TacticSnapshot) => {
-      const currentSerialized = JSON.stringify(mapData.callouts);
-      const targetSerialized = JSON.stringify(snap.callouts || []);
-      const currentDrawingsStr = JSON.stringify(drawings);
-      const currentUtilsStr = JSON.stringify(utilities);
-      const currentPlayersStr = JSON.stringify(players);
-      if (
-        currentSerialized !== targetSerialized ||
-        (snap.drawings && currentDrawingsStr !== JSON.stringify(snap.drawings)) ||
-        (snap.utilities && currentUtilsStr !== JSON.stringify(snap.utilities)) ||
-        (snap.players && currentPlayersStr !== JSON.stringify(snap.players))
-      ) {
-        const safetyBackup: TacticSnapshot = {
-          id: `map_snap_pre_restore_${Date.now()}`,
-          timestamp: Date.now(),
-          label: isDe ? 'Sicherung vor Wiederherstellung' : 'Backup before restore',
-          changedCount: mapData.callouts.length,
-          callouts: JSON.parse(currentSerialized),
-          drawings: JSON.parse(currentDrawingsStr),
-          utilities: JSON.parse(currentUtilsStr),
-          players: JSON.parse(currentPlayersStr),
-        };
-        setSnapshots((prev) => {
-          const userSnaps = prev.filter((s) => !isAusgangsversion(s));
-          const initSnap = prev.find((s) => isAusgangsversion(s));
-          const nextUserSnaps = [safetyBackup, ...userSnaps].slice(0, 5);
-          return initSnap ? [...nextUserSnaps, initSnap] : nextUserSnaps;
-        });
-      }
-
-      const restoredCallouts: Callout[] = JSON.parse(targetSerialized);
-      const nextDrawings = snap.drawings ? JSON.parse(JSON.stringify(snap.drawings)) : drawings;
-      const nextUtilities = snap.utilities ? JSON.parse(JSON.stringify(snap.utilities)) : utilities;
-      const nextPlayers = snap.players ? JSON.parse(JSON.stringify(snap.players)) : players;
-
-      if (snap.drawings) setDrawings(nextDrawings);
-      if (snap.utilities) setUtilities(nextUtilities);
-      if (snap.players) setPlayers(nextPlayers);
-
-      onUpdateMap(
-        {
-          ...mapData,
-          callouts: restoredCallouts,
-          tacticData: {
-            ...(mapData.tacticData || {}),
-            drawings: nextDrawings,
-            utilities: nextUtilities,
-            players: nextPlayers,
-            layers,
-          },
-          updatedAt: Date.now(),
-        },
-        true
-      );
-      setSelectedCallout(null);
-      setSelectedCalloutIds([]);
-      setHighlightedCalloutId(undefined);
-      setHasChangesInSession(true);
-    },
-    [mapData, onUpdateMap, isDe, drawings, utilities, players, layers]
-  );
-
-  const handleSelectElement = useCallback(
-    (elementId: string, multiKey = false) => {
-      setSelectedCallout(null);
-      const foundGroup =
-        drawings.find((d) => d.id === elementId)?.groupId ||
-        utilities.find((u) => u.id === elementId)?.groupId ||
-        players.find((p) => p.id === elementId)?.groupId;
-
-      const groupElementIds = foundGroup
-        ? [
-            ...drawings.filter((d) => d.groupId === foundGroup).map((d) => d.id),
-            ...utilities.filter((u) => u.groupId === foundGroup).map((u) => u.id),
-            ...players.filter((p) => p.groupId === foundGroup).map((p) => p.id),
-          ]
-        : [elementId];
-      const groupCalloutPeers = foundGroup
-        ? mapData.callouts.filter((c) => c.groupId === foundGroup).map((c) => c.id)
-        : [];
-
-      if (!multiKey) {
-        setSelectedCalloutIds(groupCalloutPeers);
-      } else if (groupCalloutPeers.length > 0) {
-        setSelectedCalloutIds((prev) => Array.from(new Set([...prev, ...groupCalloutPeers])));
-      }
-
-      setSelectedElementIds((prev) => {
-        if (multiKey) {
-          const allAlready = groupElementIds.every((id) => prev.includes(id));
-          if (allAlready) {
-            return prev.filter((id) => !groupElementIds.includes(id));
-          }
-          return Array.from(new Set([...prev, ...groupElementIds]));
-        }
-        return groupElementIds;
-      });
-    },
-    [drawings, utilities, players, mapData.callouts]
-  );
-
-  const handleSelectCalloutMulti = useCallback(
-    (callout: Callout, multiKey = false, openInspector = true) => {
-      const groupCalloutIds = callout.groupId
-        ? mapData.callouts.filter((c) => c.groupId === callout.groupId).map((c) => c.id)
-        : [callout.id];
-      const groupElIds = callout.groupId
-        ? [
-            ...drawings.filter((d) => d.groupId === callout.groupId).map((d) => d.id),
-            ...utilities.filter((u) => u.groupId === callout.groupId).map((u) => u.id),
-            ...players.filter((p) => p.groupId === callout.groupId).map((p) => p.id),
-          ]
-        : [];
-
-      if (multiKey) {
-        setSelectedCalloutIds((prev) => {
-          const allSelected = groupCalloutIds.every((id) => prev.includes(id));
-          const next = allSelected
-            ? prev.filter((id) => !groupCalloutIds.includes(id))
-            : Array.from(new Set([...prev, ...groupCalloutIds]));
-          if (next.length === 1 && openInspector) {
-            const single = mapData.callouts.find((c) => c.id === next[0]) || null;
-            setSelectedCallout(single);
-            setHighlightedCalloutId(single?.id);
-          } else {
-            setSelectedCallout(null);
-            setHighlightedCalloutId(next.length === 1 ? next[0] : undefined);
-          }
-          return next;
-        });
-        if (groupElIds.length > 0) {
-          setSelectedElementIds((prev) => Array.from(new Set([...prev, ...groupElIds])));
-        }
-      } else {
-        setSelectedCalloutIds(groupCalloutIds);
-        setSelectedElementIds(groupElIds);
-        if (openInspector && groupCalloutIds.length <= 1 && groupElIds.length === 0) {
-          setSelectedCallout(callout);
-          setHighlightedCalloutId(callout.id);
-        } else {
-          setSelectedCallout(null);
-          setHighlightedCalloutId(callout.id);
-        }
-      }
-    },
-    [mapData.callouts, drawings, utilities, players]
-  );
-
-  const handleDuplicateSelected = useCallback(() => {
-    const hasElements = selectedElementIds.length > 0;
-    const hasCallouts = selectedCalloutIds.length > 0;
-    if (!hasElements && !hasCallouts) return;
-
-    const offset = 2.8;
-    const newElIds: string[] = [];
-
-    if (hasElements) {
-      const clonedDrawings: TacticalDrawingLine[] = drawings
-        .filter((d) => selectedElementIds.includes(d.id))
-        .map((d, i) => {
-          const nid = `draw_dup_${Date.now()}_${i}`;
-          newElIds.push(nid);
-          return {
-            ...d,
-            id: nid,
-            groupId: undefined,
-            locked: false,
-            points: d.points.map((p) => ({ x: p.x + offset, y: p.y + offset })),
-          };
-        });
-
-      const clonedUtilities: UtilityMarker[] = utilities
-        .filter((u) => selectedElementIds.includes(u.id))
-        .map((u, i) => {
-          const nid = `util_dup_${Date.now()}_${i}`;
-          newElIds.push(nid);
-          return {
-            ...u,
-            id: nid,
-            groupId: undefined,
-            locked: false,
-            x: u.x + offset,
-            y: u.y + offset,
-          };
-        });
-
-      const clonedPlayers: PlayerToken[] = players
-        .filter((p) => selectedElementIds.includes(p.id))
-        .map((p, i) => {
-          const nid = `player_dup_${Date.now()}_${i}`;
-          newElIds.push(nid);
-          return {
-            ...p,
-            id: nid,
-            groupId: undefined,
-            locked: false,
-            x: p.x + offset,
-            y: p.y + offset,
-          };
-        });
-
-      if (clonedDrawings.length > 0) setDrawings((prev) => [...prev, ...clonedDrawings]);
-      if (clonedUtilities.length > 0) setUtilities((prev) => [...prev, ...clonedUtilities]);
-      if (clonedPlayers.length > 0) setPlayers((prev) => [...prev, ...clonedPlayers]);
-      setSelectedElementIds(newElIds);
-    }
-
-    if (hasCallouts) {
-      const newCalloutIds: string[] = [];
-      const clonedCallouts: Callout[] = mapData.callouts
-        .filter((c) => selectedCalloutIds.includes(c.id))
-        .map((c, i) => {
-          const cid = `custom_dup_${Date.now()}_${i}`;
-          newCalloutIds.push(cid);
-          return {
-            ...c,
-            id: cid,
-            name: `${c.name} (${isDe ? 'Kopie' : 'Copy'})`,
-            x: Math.round(Math.min(48, c.x + offset) * 10) / 10,
-            y: Math.round(Math.min(48, c.y + offset) * 10) / 10,
-            groupId: undefined,
-            locked: false,
-            isCustom: true,
-            area: c.area
-              ? {
-                  ...c.area,
-                  x: Math.round((c.area.x + offset) * 10) / 10,
-                  y: Math.round((c.area.y + offset) * 10) / 10,
-                  points: c.area.points
-                    ? c.area.points.map((pt) => ({
-                        x: Math.round((pt.x + offset) * 10) / 10,
-                        y: Math.round((pt.y + offset) * 10) / 10,
-                      }))
-                    : undefined,
-                }
-              : undefined,
-          };
-        });
-      if (clonedCallouts.length > 0) {
-        onUpdateMap({ ...mapData, callouts: [...mapData.callouts, ...clonedCallouts] }, true);
-        setSelectedCalloutIds(newCalloutIds);
-      }
-    }
-
-    setContextMenu(null);
-    setHasChangesInSession(true);
-  }, [selectedElementIds, selectedCalloutIds, drawings, utilities, players, mapData, onUpdateMap, isDe]);
-
-  const handleGroupSelected = useCallback(() => {
-    const totalCount = selectedElementIds.length + selectedCalloutIds.length;
-    if (totalCount < 2) return;
-
-    const selectedGroups = new Set([
-      ...drawings.filter((d) => selectedElementIds.includes(d.id)).map((d) => d.groupId),
-      ...utilities.filter((u) => selectedElementIds.includes(u.id)).map((u) => u.groupId),
-      ...players.filter((p) => selectedElementIds.includes(p.id)).map((p) => p.groupId),
-      ...mapData.callouts.filter((c) => selectedCalloutIds.includes(c.id)).map((c) => c.groupId),
-    ]);
-    const shouldUngroup = selectedGroups.size === 1 && !selectedGroups.has(undefined);
-    const nextGroupId = shouldUngroup ? undefined : `grp_${Date.now()}`;
-
-    if (selectedElementIds.length > 0) {
-      setDrawings((prev) =>
-        prev.map((d) => (selectedElementIds.includes(d.id) ? { ...d, groupId: nextGroupId } : d))
-      );
-      setUtilities((prev) =>
-        prev.map((u) => (selectedElementIds.includes(u.id) ? { ...u, groupId: nextGroupId } : u))
-      );
-      setPlayers((prev) =>
-        prev.map((p) => (selectedElementIds.includes(p.id) ? { ...p, groupId: nextGroupId } : p))
-      );
-    }
-
-    if (selectedCalloutIds.length > 0) {
-      const updatedCallouts = mapData.callouts.map((c) =>
-        selectedCalloutIds.includes(c.id) ? { ...c, groupId: nextGroupId } : c
-      );
-      onUpdateMap({ ...mapData, callouts: updatedCallouts }, true);
-    }
-
-    setContextMenu(null);
-    setHasChangesInSession(true);
-  }, [selectedElementIds, selectedCalloutIds, drawings, utilities, players, mapData, onUpdateMap]);
-
-  const handleToggleLockSelected = useCallback(() => {
-    if (selectedElementIds.length === 0 && selectedCalloutIds.length === 0) return;
-
-    const anyUnlocked =
-      drawings.some((d) => selectedElementIds.includes(d.id) && !d.locked) ||
-      utilities.some((u) => selectedElementIds.includes(u.id) && !u.locked) ||
-      players.some((p) => selectedElementIds.includes(p.id) && !p.locked) ||
-      mapData.callouts.some((c) => selectedCalloutIds.includes(c.id) && !c.locked);
-    const nextLock = anyUnlocked;
-
-    if (selectedElementIds.length > 0) {
-      setDrawings((prev) =>
-        prev.map((d) => (selectedElementIds.includes(d.id) ? { ...d, locked: nextLock } : d))
-      );
-      setUtilities((prev) =>
-        prev.map((u) => (selectedElementIds.includes(u.id) ? { ...u, locked: nextLock } : u))
-      );
-      setPlayers((prev) =>
-        prev.map((p) => (selectedElementIds.includes(p.id) ? { ...p, locked: nextLock } : p))
-      );
-    }
-
-    if (selectedCalloutIds.length > 0) {
-      const updatedCallouts = mapData.callouts.map((c) =>
-        selectedCalloutIds.includes(c.id) ? { ...c, locked: nextLock } : c
-      );
-      onUpdateMap({ ...mapData, callouts: updatedCallouts }, true);
-    }
-
-    setContextMenu(null);
-    setHasChangesInSession(true);
-  }, [selectedElementIds, selectedCalloutIds, drawings, utilities, players, mapData, onUpdateMap]);
-
-  const handleDeleteSelectedElements = useCallback(() => {
-    if (selectedElementIds.length === 0 && selectedCalloutIds.length === 0) return;
-
-    if (selectedElementIds.length > 0) {
-      setDrawings((prev) =>
-        prev.filter((d) => !(selectedElementIds.includes(d.id) && !d.locked && !isLayerLocked(d.layerId)))
-      );
-      setUtilities((prev) =>
-        prev.filter((u) => !(selectedElementIds.includes(u.id) && !u.locked && !isLayerLocked(u.layerId || 'layer_util')))
-      );
-      setPlayers((prev) =>
-        prev.filter(
-          (p) =>
-            !(
-              selectedElementIds.includes(p.id) &&
-              !p.locked &&
-              !isLayerLocked(p.layerId || (p.side === 'ct' ? 'layer_ct' : 'layer_t'))
-            )
-        )
-      );
-      setSelectedElementIds([]);
-    }
-
-    if (selectedCalloutIds.length > 0) {
-      const remainingCallouts = mapData.callouts.filter(
-        (c) => !(selectedCalloutIds.includes(c.id) && !c.locked)
-      );
-      onUpdateMap({ ...mapData, callouts: remainingCallouts }, true);
-      setSelectedCalloutIds([]);
-      setSelectedCallout(null);
-      setHighlightedCalloutId(undefined);
-    }
-
-    setContextMenu(null);
-    setShowContextColorPicker(false);
-    setShowContextColorSubmenu(false);
-    setHasChangesInSession(true);
-  }, [selectedElementIds, selectedCalloutIds, isLayerLocked, mapData, onUpdateMap]);
-
-  const handleUpdateSelectedElementsProps = useCallback(
-    (patch: { color?: string; opacity?: number; locked?: boolean }) => {
-      if (selectedElementIds.length === 0 && selectedCalloutIds.length === 0) return;
-
-      if (selectedElementIds.length > 0) {
-        setDrawings((prev) =>
-          prev.map((d) =>
-            selectedElementIds.includes(d.id)
-              ? {
-                  ...d,
-                  ...(patch.color !== undefined ? { color: patch.color } : {}),
-                  ...(patch.opacity !== undefined ? { opacity: patch.opacity } : {}),
-                  ...(patch.locked !== undefined ? { locked: patch.locked } : {}),
-                }
-              : d
-          )
-        );
-        setUtilities((prev) =>
-          prev.map((u) =>
-            selectedElementIds.includes(u.id)
-              ? {
-                  ...u,
-                  ...(patch.opacity !== undefined ? { opacity: patch.opacity } : {}),
-                  ...(patch.locked !== undefined ? { locked: patch.locked } : {}),
-                }
-              : u
-          )
-        );
-        setPlayers((prev) =>
-          prev.map((p) =>
-            selectedElementIds.includes(p.id)
-              ? {
-                  ...p,
-                  ...(patch.opacity !== undefined ? { opacity: patch.opacity } : {}),
-                  ...(patch.locked !== undefined ? { locked: patch.locked } : {}),
-                }
-              : p
-          )
-        );
-      }
-
-      if (selectedCalloutIds.length > 0 && patch.color !== undefined) {
-        const updatedCallouts = mapData.callouts.map((c) => {
-          if (!selectedCalloutIds.includes(c.id)) return c;
-          if (c.area) {
-            return { ...c, area: { ...c.area, customColor: patch.color } };
-          }
-          const w = 10;
-          const h = 10;
-          return {
-            ...c,
-            area: {
-              x: Math.max(-50, Math.min(50 - w, Math.round((c.x - w / 2) * 10) / 10)),
-              y: Math.max(-50, Math.min(50 - h, Math.round((c.y - h / 2) * 10) / 10)),
-              width: w,
-              height: h,
-              shape: 'rect' as const,
-              customColor: patch.color,
-            },
-          };
-        });
-        onUpdateMap({ ...mapData, callouts: updatedCallouts }, true);
-      }
-
-      setHasChangesInSession(true);
-    },
-    [selectedElementIds, selectedCalloutIds, mapData, onUpdateMap]
-  );
 
   // Keyboard shortcut listener (Undo: Ctrl+Z, Redo: Ctrl+Y / Ctrl+Shift+Z, Duplicate: Ctrl+D, Delete: Del/Backspace, Escape)
   useEffect(() => {
@@ -1220,6 +790,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         setShowContextColorSubmenu(false);
         setShowContextColorPicker(false);
         setMarqueeRect(null);
+        setPendingUtilityThrowOrigin(null);
+        setUtilityHoverCoord(null);
         if (isFullscreen && !document.fullscreenElement) {
           setIsFullscreen(false);
         }
@@ -1229,13 +801,13 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         if (e.shiftKey) {
-          handleRedoDrawing();
+          handleRedo();
         } else {
-          handleUndoDrawing();
+          handleUndo();
         }
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
         e.preventDefault();
-        handleRedoDrawing();
+        handleRedo();
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
         if (selectedElementIds.length > 0 || selectedCalloutIds.length > 0) {
           e.preventDefault();
@@ -1248,27 +820,35 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [drawings, drawingsRedoStack, selectedElementIds, selectedCalloutIds, handleDuplicateSelected, handleDeleteSelectedElements, isFullscreen]);
+  }, [handleUndo, handleRedo, selectedElementIds, selectedCalloutIds, handleDuplicateSelected, handleDeleteSelectedElements, isFullscreen]);
 
   // Fullscreen listener — synchronizes browser fullscreen & re-fits map on viewport resize
+  const calculateFitZoomRef = useRef(calculateFitZoom);
+  calculateFitZoomRef.current = calculateFitZoom;
+
   useEffect(() => {
+    window.scrollTo(0, 0);
     const handleFsChange = () => {
       const isFs = !!document.fullscreenElement;
       setIsFullscreen(isFs);
       requestAnimationFrame(() => {
-        setZoom(calculateFitZoom(isFs));
+        setZoom(calculateFitZoomRef.current(isFs));
         setPan({ x: 0, y: 0 });
       });
     };
     const handleResize = () => {
-      setZoom(calculateFitZoom());
-      setPan({ x: 0, y: 0 });
+      requestAnimationFrame(() => {
+        setZoom(calculateFitZoomRef.current());
+        setPan({ x: 0, y: 0 });
+      });
     };
     document.addEventListener('fullscreenchange', handleFsChange);
     window.addEventListener('resize', handleResize);
+    window.visualViewport?.addEventListener('resize', handleResize);
     return () => {
       document.removeEventListener('fullscreenchange', handleFsChange);
       window.removeEventListener('resize', handleResize);
+      window.visualViewport?.removeEventListener('resize', handleResize);
     };
   }, []);
 
@@ -1373,10 +953,43 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
     const coords = getCoordinatesFromEvent(e);
 
-    // Utility placement tool
+    // Utility placement tool (1-click Spot OR 2-click Throw Curve)
     if (activeTool === 'utility') {
       const targetLayerId = activeLayerId || 'layer_util';
       if (isLayerLocked(targetLayerId)) return;
+
+      if (utilityPlacementMode === 'throw') {
+        if (!pendingUtilityThrowOrigin) {
+          setPendingUtilityThrowOrigin(coords);
+          setUtilityHoverCoord(coords);
+          return;
+        }
+        const dist = Math.hypot(
+          coords.x - pendingUtilityThrowOrigin.x,
+          coords.y - pendingUtilityThrowOrigin.y
+        );
+        pushHistorySnapshot();
+        const newMarker: UtilityMarker = {
+          id: `util_${Date.now()}`,
+          type: selectedUtility,
+          x: coords.x,
+          y: coords.y,
+          ...(dist >= 1.2
+            ? {
+                throwFrom: pendingUtilityThrowOrigin,
+                throwType: selectedThrowType,
+              }
+            : {}),
+          layerId: targetLayerId,
+        };
+        setUtilities((prev) => [...prev, newMarker]);
+        setPendingUtilityThrowOrigin(null);
+        setUtilityHoverCoord(null);
+        setHasChangesInSession(true);
+        return;
+      }
+
+      pushHistorySnapshot();
       const newMarker: UtilityMarker = {
         id: `util_${Date.now()}`,
         type: selectedUtility,
@@ -1393,6 +1006,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     if (activeTool === 'player') {
       const targetLayerId = activeLayerId || (selectedPlayerSide === 'ct' ? 'layer_ct' : 'layer_t');
       if (isLayerLocked(targetLayerId)) return;
+      pushHistorySnapshot();
       const count = players.filter((p) => p.side === selectedPlayerSide).length;
       const newPlayer: PlayerToken = {
         id: `player_${Date.now()}`,
@@ -1408,21 +1022,47 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       return;
     }
 
-    // Select tool: clicking background clears inspector, callouts, elements & context menu
+    // Select tool: clicking background clears inspector, callouts, elements & context menu (unless mobile multi-select mode is active)
     if (activeTool === 'select') {
       setSelectedCallout(null);
       setHighlightedCalloutId(undefined);
-      setSelectedElementIds([]);
-      setSelectedCalloutIds([]);
+      if (!isMultiSelectMode) {
+        setSelectedElementIds([]);
+        setSelectedCalloutIds([]);
+      }
       setContextMenu(null);
       setShowContextColorSubmenu(false);
       setShowContextColorPicker(false);
     }
   };
 
+  const startUtilityHandleDrag = (
+    util: UtilityMarker,
+    mode: 'origin' | 'curve' | 'landing',
+    e: React.MouseEvent | React.TouchEvent
+  ) => {
+    if (activeTool !== 'select') return;
+    if ('button' in e && e.button !== 0) return;
+    const isLockedEl = Boolean(util.locked || isLayerLocked(util.layerId || 'layer_util'));
+    if (isLockedEl) return;
+    setHasMovedDistance(false);
+    dragInitialHistoryRef.current = createEditorSnapshot();
+    const targetEl = e.currentTarget as HTMLElement | null;
+    const tileEl = (targetEl?.closest('.map-canvas-tile') as HTMLElement) || null;
+    setDraggingUtilityHandle({ utilId: util.id, mode, tileEl });
+  };
+
   // Mouse & Dragging handling
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (draggingCalloutId || draggingAreaCalloutId || resizingAreaCalloutId) return;
+    if (
+      draggingCalloutId ||
+      draggingAreaCalloutId ||
+      resizingAreaCalloutId ||
+      draggingUtilityHandle ||
+      (e.target as HTMLElement)?.closest?.('[data-utility-handle]')
+    ) {
+      return;
+    }
     if ((e.target as HTMLElement).closest('[data-no-map-click]')) return;
     setContextMenu(null);
     setShowContextColorSubmenu(false);
@@ -1442,7 +1082,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     // Marquee area selection box tool ('marquee')
     if (activeTool === 'marquee' && e.button === 0) {
       const coords = getCoordinatesFromEvent(e);
-      marqueeAdditiveRef.current = e.ctrlKey || e.metaKey || e.shiftKey;
+      marqueeAdditiveRef.current = e.ctrlKey || e.metaKey || e.shiftKey || isMultiSelectMode;
       setMarqueeRect({
         startX: coords.x,
         startY: coords.y,
@@ -1470,6 +1110,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     }
 
     if (activeTool === 'eraser') {
+      eraserInitialHistoryRef.current = createEditorSnapshot();
+      setMouseDownPos({ x: e.clientX, y: e.clientY });
       return;
     }
 
@@ -1495,7 +1137,33 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   }, [isPanning]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    // 0. Panning takes TOP PRIORITY whenever user is panning
+    // 0a. Dragging utility throw handle (1. origin, 2. landing, or 3. Bezier curve bend)
+    if (draggingUtilityHandle) {
+      const coords = getCoordinatesFromClient(e.clientX, e.clientY, draggingUtilityHandle.tileEl);
+      setHasMovedDistance(true);
+      setUtilities((prev) =>
+        prev.map((u) => {
+          if (u.id !== draggingUtilityHandle.utilId) return u;
+          if (draggingUtilityHandle.mode === 'origin') {
+            return { ...u, throwFrom: coords };
+          }
+          if (draggingUtilityHandle.mode === 'landing') {
+            return { ...u, x: coords.x, y: coords.y };
+          }
+          if (draggingUtilityHandle.mode === 'curve' && u.throwFrom) {
+            return {
+              ...u,
+              curveBend: computeCurveBendFromHandlePoint(u.throwFrom, u, coords),
+            };
+          }
+          return u;
+        })
+      );
+      setHasChangesInSession(true);
+      return;
+    }
+
+    // 0b. Panning when user drags empty canvas
     if (isPanning && mouseDownPos) {
       const dx = Math.abs(e.clientX - mouseDownPos.x);
       const dy = Math.abs(e.clientY - mouseDownPos.y);
@@ -1509,11 +1177,16 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       return;
     }
 
-    // 0b. Marquee Selection Box resize while dragging
+    // 0c. Marquee Selection Box resize while dragging
     if (marqueeRect) {
       const coords = getCoordinatesFromEvent(e);
       setMarqueeRect((prev) => (prev ? { ...prev, currentX: coords.x, currentY: coords.y } : null));
       return;
+    }
+
+    // 0d. Live curved throw preview while Step 2 landing spot is pending
+    if (activeTool === 'utility' && utilityPlacementMode === 'throw' && pendingUtilityThrowOrigin) {
+      setUtilityHoverCoord(getCoordinatesFromEvent(e));
     }
 
     if (isDrawingPolygonArea) {
@@ -1522,7 +1195,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       return;
     }
 
-    // 1. Eraser Tool Brush Scrubbing (Real-time erase when dragging, respecting locks)
+    // 1. Eraser Tool Brush Scrubbing (Real-time erase for drawings & utilities, respecting locks)
     if (activeTool === 'eraser' && mouseDownPos) {
       const coords = getCoordinatesFromEvent(e);
       setDrawings((prev) =>
@@ -1532,6 +1205,16 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             (p) => Math.hypot(p.x - coords.x, p.y - coords.y) < 5
           );
           return !isNear;
+        })
+      );
+      setUtilities((prev) =>
+        prev.filter((util) => {
+          if (util.locked || isLayerLocked(util.layerId || 'layer_util')) return true;
+          const nearLanding = Math.hypot(util.x - coords.x, util.y - coords.y) < 4.5;
+          const nearCurve = util.throwFrom
+            ? distanceToThrowCurve(coords, util.throwFrom, util, util.curveBend) < 3.5
+            : false;
+          return !(nearLanding || nearCurve);
         })
       );
       setHasChangesInSession(true);
@@ -1707,14 +1390,17 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             )
             .map((d) => d.id),
           ...utilities
-            .filter(
-              (u) =>
-                isLayerVisible(u.layerId, 'layer_util') &&
-                u.x >= minX &&
-                u.x <= maxX &&
-                u.y >= minY &&
-                u.y <= maxY
-            )
+            .filter((u) => {
+              if (!isLayerVisible(u.layerId, 'layer_util')) return false;
+              const landingHit = u.x >= minX && u.x <= maxX && u.y >= minY && u.y <= maxY;
+              const originHit =
+                Boolean(u.throwFrom) &&
+                u.throwFrom!.x >= minX &&
+                u.throwFrom!.x <= maxX &&
+                u.throwFrom!.y >= minY &&
+                u.throwFrom!.y <= maxY;
+              return landingHit || originHit;
+            })
             .map((u) => u.id),
           ...players
             .filter(
@@ -1744,6 +1430,36 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       setMarqueeRect(null);
     }
 
+    if (draggingUtilityHandle) {
+      if (
+        dragInitialHistoryRef.current &&
+        JSON.stringify(dragInitialHistoryRef.current.utilities) !== JSON.stringify(utilities)
+      ) {
+        pushHistorySnapshot(dragInitialHistoryRef.current);
+      }
+      dragInitialHistoryRef.current = null;
+      setDraggingUtilityHandle(null);
+    }
+
+    if (draggingCalloutId || draggingAreaCalloutId || resizingAreaCalloutId || rotatingAreaCalloutId) {
+      if (
+        dragInitialHistoryRef.current &&
+        JSON.stringify(dragInitialHistoryRef.current.callouts) !== JSON.stringify(mapData.callouts)
+      ) {
+        pushHistorySnapshot(dragInitialHistoryRef.current);
+      }
+      dragInitialHistoryRef.current = null;
+    }
+    if (eraserInitialHistoryRef.current) {
+      if (
+        JSON.stringify(eraserInitialHistoryRef.current.drawings) !== JSON.stringify(drawings) ||
+        JSON.stringify(eraserInitialHistoryRef.current.utilities) !== JSON.stringify(utilities)
+      ) {
+        pushHistorySnapshot(eraserInitialHistoryRef.current);
+      }
+      eraserInitialHistoryRef.current = null;
+    }
+
     if (draggingCalloutId) {
       setDraggingCalloutId(null);
       setCalloutDragStart(null);
@@ -1763,8 +1479,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     }
     if (currentDrawing) {
       if (currentDrawing.points.length > 1) {
+        pushHistorySnapshot();
         setDrawings((prev) => [...prev, currentDrawing]);
-        setDrawingsRedoStack([]); // reset redo stack on new stroke
         setHasChangesInSession(true);
       }
       setCurrentDrawing(null);
@@ -1773,8 +1489,81 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     setMouseDownPos(null);
   };
 
+  // Mobile long-press (touch & hold) context menu handlers with 500ms visual ring
+  const touchLongPressTimerRef = useRef<number | null>(null);
+  const touchStartCoordRef = useRef<{ x: number; y: number } | null>(null);
+  const longPressTargetCandidateRef = useRef<{ callout?: Callout; elementId?: string } | null>(null);
+
+  const cancelTouchLongPress = useCallback(() => {
+    if (touchLongPressTimerRef.current) {
+      window.clearTimeout(touchLongPressTimerRef.current);
+      touchLongPressTimerRef.current = null;
+    }
+    touchStartCoordRef.current = null;
+    setLongPressVisual(null);
+  }, []);
+
+  const startTouchLongPress = useCallback(
+    (clientX: number, clientY: number, targetCallout?: Callout, targetElementId?: string) => {
+      cancelTouchLongPress();
+      touchStartCoordRef.current = { x: clientX, y: clientY };
+      setLongPressVisual({ x: clientX, y: clientY });
+      touchLongPressTimerRef.current = window.setTimeout(() => {
+        if (touchStartCoordRef.current && !isDrawingPolygonArea) {
+          setLongPressVisual(null);
+          if (typeof navigator !== 'undefined' && navigator.vibrate) {
+            try {
+              navigator.vibrate(40);
+            } catch {
+              // ignore
+            }
+          }
+          if (targetCallout) {
+            if (!selectedCalloutIds.includes(targetCallout.id)) {
+              handleSelectCalloutMulti(targetCallout, isMultiSelectMode, false);
+            } else {
+              setSelectedCallout(null);
+            }
+          } else if (targetElementId) {
+            if (!selectedElementIds.includes(targetElementId)) {
+              handleSelectElement(targetElementId, isMultiSelectMode);
+            }
+          }
+          setShowContextColorSubmenu(false);
+          setContextMenu({ x: clientX, y: clientY });
+        }
+      }, 500);
+    },
+    [
+      isDrawingPolygonArea,
+      handleSelectCalloutMulti,
+      handleSelectElement,
+      cancelTouchLongPress,
+      selectedCalloutIds,
+      selectedElementIds,
+      isMultiSelectMode,
+    ]
+  );
+
+  const checkTouchLongPressMove = useCallback(
+    (clientX: number, clientY: number) => {
+      if (touchStartCoordRef.current) {
+        const dist = Math.hypot(
+          clientX - touchStartCoordRef.current.x,
+          clientY - touchStartCoordRef.current.y
+        );
+        if (dist > 10) {
+          cancelTouchLongPress();
+        }
+      }
+    },
+    [cancelTouchLongPress]
+  );
+
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     if (e.touches.length === 2) {
+      longPressTargetCandidateRef.current = null;
+      cancelTouchLongPress();
       // 2-finger pinch gesture start
       const t1 = e.touches[0];
       const t2 = e.touches[1];
@@ -1789,6 +1578,16 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       }
       initialPinchDistRef.current = null;
       const touch = e.touches[0];
+      const candidate = longPressTargetCandidateRef.current;
+      longPressTargetCandidateRef.current = null;
+      if (
+        activeTool !== 'pen' &&
+        activeTool !== 'arrow' &&
+        activeTool !== 'eraser' &&
+        activeTool !== 'marquee'
+      ) {
+        startTouchLongPress(touch.clientX, touch.clientY, candidate?.callout, candidate?.elementId);
+      }
       handleMouseDown({
         clientX: touch.clientX,
         clientY: touch.clientY,
@@ -1800,6 +1599,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
   const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
     if (e.touches.length === 2 && initialPinchDistRef.current && initialPinchDistRef.current > 0) {
+      cancelTouchLongPress();
       if (e.cancelable) {
         e.preventDefault();
       }
@@ -1810,10 +1610,11 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       const newZoom = Math.max(0.5, Math.min(2.5, initialPinchZoomRef.current * factor));
       setZoom(Math.round(newZoom * 100) / 100);
     } else if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      checkTouchLongPressMove(touch.clientX, touch.clientY);
       if ((activeTool === 'pen' || activeTool === 'arrow' || activeTool === 'eraser' || activeTool === 'marquee' || currentDrawing || marqueeRect) && e.cancelable) {
         e.preventDefault();
       }
-      const touch = e.touches[0];
       handleMouseMove({
         clientX: touch.clientX,
         clientY: touch.clientY,
@@ -1823,6 +1624,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   };
 
   const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    longPressTargetCandidateRef.current = null;
+    cancelTouchLongPress();
     if (e.touches.length < 2) {
       initialPinchDistRef.current = null;
     }
@@ -1848,34 +1651,27 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const handleZoomIn = () => handleZoomChange(zoom + 0.05);
   const handleZoomOut = () => handleZoomChange(zoom - 0.05);
 
-  // Drawing undo, redo & single line delete
-  const handleUndoDrawing = () => {
-    if (drawings.length === 0) return;
-    const last = drawings[drawings.length - 1];
-    setDrawings((prev) => prev.slice(0, -1));
-    setDrawingsRedoStack((prev) => [...prev, last]);
-  };
-
-  const handleRedoDrawing = () => {
-    if (drawingsRedoStack.length === 0) return;
-    const last = drawingsRedoStack[drawingsRedoStack.length - 1];
-    setDrawingsRedoStack((prev) => prev.slice(0, -1));
-    setDrawings((prev) => [...prev, last]);
-  };
-
   const handleDeleteSingleLine = (lineId: string) => {
     const target = drawings.find((d) => d.id === lineId);
     if (!target) return;
     if (target.locked || isLayerLocked(target.layerId)) return;
+    pushHistorySnapshot();
     setDrawings((prev) => prev.filter((d) => d.id !== lineId));
-    setDrawingsRedoStack((prev) => [...prev, target]);
     setSelectedElementIds((prev) => prev.filter((id) => id !== lineId));
     setHasChangesInSession(true);
   };
 
   const handleClearTactics = () => {
+    const unlockedDrawings = drawings.filter((d) => !d.locked && !isLayerLocked(d.layerId));
+    const unlockedUtilities = utilities.filter((u) => !u.locked && !isLayerLocked(u.layerId || 'layer_util'));
+    const unlockedPlayers = players.filter(
+      (p) => !p.locked && !isLayerLocked(p.layerId || (p.side === 'ct' ? 'layer_ct' : 'layer_t'))
+    );
+    if (unlockedDrawings.length === 0 && unlockedUtilities.length === 0 && unlockedPlayers.length === 0) {
+      return;
+    }
+    pushHistorySnapshot();
     setDrawings((prev) => prev.filter((d) => d.locked || isLayerLocked(d.layerId)));
-    setDrawingsRedoStack([]);
     setUtilities((prev) => prev.filter((u) => u.locked || isLayerLocked(u.layerId || 'layer_util')));
     setPlayers((prev) =>
       prev.filter((p) => p.locked || isLayerLocked(p.layerId || (p.side === 'ct' ? 'layer_ct' : 'layer_t')))
@@ -1914,11 +1710,12 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     if ('button' in e && e.button !== 0) return;
     e.stopPropagation();
     setHasMovedDistance(false);
-    const isMulti = 'ctrlKey' in e && (e.ctrlKey || e.metaKey || e.shiftKey);
+    const isMulti = ('ctrlKey' in e && (e.ctrlKey || e.metaKey || e.shiftKey)) || isMultiSelectMode;
     if (!isMulti && !selectedCalloutIds.includes(callout.id)) {
       handleSelectCalloutMulti(callout, false);
     }
     if (callout.locked) return;
+    dragInitialHistoryRef.current = createEditorSnapshot();
     const { clientX, clientY } = getClientCoords(e);
     setDraggingCalloutId(callout.id);
     setDraggedCoords({ x: callout.x, y: callout.y });
@@ -1935,6 +1732,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     if (!isEditMode || !callout.area || callout.locked) return;
     if ('button' in e && e.button !== 0) return;
     e.stopPropagation();
+    dragInitialHistoryRef.current = createEditorSnapshot();
     const { clientX, clientY } = getClientCoords(e);
     setDraggingAreaCalloutId(callout.id);
     setAreaDragStart({
@@ -1953,6 +1751,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     if (!isEditMode || !callout.area || callout.locked) return;
     if ('button' in e && e.button !== 0) return;
     e.stopPropagation();
+    dragInitialHistoryRef.current = createEditorSnapshot();
     const { clientX, clientY } = getClientCoords(e);
     setResizingAreaCalloutId(callout.id);
     setAreaDragStart({
@@ -1968,6 +1767,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   // Quick Rotate Callout by +45°
   const handleQuickRotateCallout = (callout: Callout, e: React.MouseEvent) => {
     e.stopPropagation();
+    pushHistorySnapshot();
     const currentRot = callout.rotation || 0;
     let nextRot = currentRot + 45;
     if (nextRot > 180) nextRot = -135;
@@ -1980,6 +1780,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   // Quick Toggle / Add Area for Callout (ALWAYS CENTERED!)
   const handleQuickToggleArea = (callout: Callout, e: React.MouseEvent) => {
     e.stopPropagation();
+    pushHistorySnapshot();
     let updatedCallouts: Callout[];
     if (callout.area) {
       // Remove area
@@ -2109,6 +1910,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     e.preventDefault();
     const sanitizedName = calloutFormName.split(/\r?\n/).slice(0, 2).join('\n').trim();
     if (!sanitizedName || !pendingCalloutCoords) return;
+    pushHistorySnapshot();
 
     let areaObj: CalloutArea | undefined = undefined;
     if (calloutFormHasArea) {
@@ -2277,6 +2079,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     setShowAreas(true);
 
     if (editingCallout) {
+      pushHistorySnapshot();
       const updated = mapData.callouts.map((c) =>
         c.id === editingCallout.id
           ? {
@@ -2446,6 +2249,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const handleDeleteCallout = (calloutId: string) => {
     const target = mapData.callouts.find((c) => c.id === calloutId);
     if (target?.locked) return;
+    pushHistorySnapshot();
     const updated = {
       ...mapData,
       callouts: mapData.callouts.filter((c) => c.id !== calloutId),
@@ -2759,7 +2563,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                 onClick={(e) => {
                   if (!hasMovedDistance) {
                     e.stopPropagation();
-                    handleSelectCalloutMulti(callout, e.ctrlKey || e.metaKey || e.shiftKey);
+                    handleSelectCalloutMulti(callout, e.ctrlKey || e.metaKey || e.shiftKey || isMultiSelectMode);
                   }
                 }}
                 onContextMenu={(e) => {
@@ -2795,6 +2599,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                   }
                 }}
                 onTouchStart={(e) => {
+                  longPressTargetCandidateRef.current = { callout };
                   if (movingAreaCalloutId === callout.id) {
                     handleAreaMoveStart(callout, e);
                   }
@@ -2936,6 +2741,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                         }
                       }}
                       onTouchStart={(e) => {
+                        longPressTargetCandidateRef.current = { callout };
                         if (movingAreaCalloutId === callout.id) {
                           handleAreaMoveStart(callout, e);
                         }
@@ -2943,7 +2749,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       onClick={(e) => {
                         if (!hasMovedDistance) {
                           e.stopPropagation();
-                          handleSelectCalloutMulti(callout, e.ctrlKey || e.metaKey || e.shiftKey);
+                          handleSelectCalloutMulti(callout, e.ctrlKey || e.metaKey || e.shiftKey || isMultiSelectMode);
                         }
                       }}
                       onContextMenu={(e) => {
@@ -3051,13 +2857,18 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       }
                       onMouseEnter={() => setHoveredLineId(line.id)}
                       onMouseLeave={() => setHoveredLineId(null)}
+                      onTouchStart={() => {
+                        if (activeTool === 'select' || activeTool === 'marquee') {
+                          longPressTargetCandidateRef.current = { elementId: line.id };
+                        }
+                      }}
                       onClick={(e) => {
                         if (activeTool === 'eraser') {
                           e.stopPropagation();
                           handleDeleteSingleLine(line.id);
                         } else if (activeTool === 'select' || activeTool === 'marquee') {
                           e.stopPropagation();
-                          handleSelectElement(line.id, e.ctrlKey || e.metaKey || e.shiftKey);
+                          handleSelectElement(line.id, e.ctrlKey || e.metaKey || e.shiftKey || isMultiSelectMode);
                         }
                       }}
                       onContextMenu={(e) => {
@@ -3080,6 +2891,233 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                 );
               })}
 
+          {/* SAVED UTILITY THROW TRAJECTORIES (CURVED BEZIER ARCS + ORIGIN BULLSEYES) */}
+          {!isDrawingPolygonArea &&
+            utilities
+              .filter((util) => util.throwFrom && isLayerVisible(util.layerId, 'layer_util'))
+              .map((util) => {
+                const geom = getThrowGeometry(util.throwFrom!, util, util.curveBend);
+                const meta = UTILITY_META[util.type] || UTILITY_META.smoke;
+                const utilColor = meta.colorHex || '#38bdf8';
+                const isSelectedEl = selectedElementIds.includes(util.id);
+                const isLockedEl = Boolean(util.locked || isLayerLocked(util.layerId || 'layer_util'));
+                const isEraserHovered = hoveredUtilityId === util.id && activeTool === 'eraser';
+                const elOpacity = (util.opacity ?? 1) * getLayerOpacity(util.layerId, 'layer_util');
+                const pathD = `M ${geom.from.x} ${geom.from.y} Q ${geom.cp.x} ${geom.cp.y} ${util.x} ${util.y}`;
+
+                // Chevron slightly before landing spot oriented cleanly along arrival tangent
+                const tip =
+                  geom.dist > 5
+                    ? evaluateQuadraticBezier(geom.from, geom.cp, util, 0.85)
+                    : null;
+                const chevLen = 1.6;
+                const chevAngle = geom.arrivalAngleRad;
+                const chevronPoints = tip
+                  ? `${tip.x + Math.cos(chevAngle) * 0.8},${tip.y + Math.sin(chevAngle) * 0.8} ` +
+                    `${tip.x - chevLen * Math.cos(chevAngle - Math.PI / 5)},${tip.y - chevLen * Math.sin(chevAngle - Math.PI / 5)} ` +
+                    `${tip.x - chevLen * Math.cos(chevAngle + Math.PI / 5)},${tip.y - chevLen * Math.sin(chevAngle + Math.PI / 5)}`
+                  : null;
+
+                return (
+                  <g key={`throw_svg_${util.id}`} opacity={elOpacity}>
+                    {isSelectedEl && (
+                      <>
+                        <line
+                          x1={geom.from.x}
+                          y1={geom.from.y}
+                          x2={geom.cp.x}
+                          y2={geom.cp.y}
+                          stroke="#38bdf8"
+                          strokeWidth={0.28}
+                          strokeDasharray="0.8,0.8"
+                          strokeOpacity={0.55}
+                          className="pointer-events-none"
+                        />
+                        <line
+                          x1={geom.cp.x}
+                          y1={geom.cp.y}
+                          x2={util.x}
+                          y2={util.y}
+                          stroke="#38bdf8"
+                          strokeWidth={0.28}
+                          strokeDasharray="0.8,0.8"
+                          strokeOpacity={0.55}
+                          className="pointer-events-none"
+                        />
+                        <path
+                          d={pathD}
+                          fill="none"
+                          stroke="#38bdf8"
+                          strokeWidth={1.9}
+                          strokeOpacity={0.5}
+                          strokeLinecap="round"
+                          className="pointer-events-none"
+                        />
+                      </>
+                    )}
+
+                    {/* Outer dark casing for high contrast */}
+                    <path
+                      d={pathD}
+                      fill="none"
+                      stroke="rgba(9,9,11,0.82)"
+                      strokeWidth={isSelectedEl ? 1.35 : 1.05}
+                      strokeLinecap="round"
+                      className="pointer-events-none"
+                    />
+
+                    {/* Dashed flight trajectory */}
+                    <path
+                      d={pathD}
+                      fill="none"
+                      stroke={isEraserHovered ? '#ef4444' : utilColor}
+                      strokeWidth={isSelectedEl ? 0.8 : 0.6}
+                      strokeDasharray={isEraserHovered ? '1.2,1.2' : '1.7,1.1'}
+                      strokeLinecap="round"
+                      className="pointer-events-none"
+                    />
+
+                    {/* Arrival directional triangle near landing spot */}
+                    {chevronPoints && (
+                      <polygon
+                        points={chevronPoints}
+                        fill={isEraserHovered ? '#ef4444' : utilColor}
+                        stroke="rgba(9,9,11,0.9)"
+                        strokeWidth={0.25}
+                        className="pointer-events-none"
+                      />
+                    )}
+
+                    {/* Origin bullseye in SVG */}
+                    <circle
+                      cx={geom.from.x}
+                      cy={geom.from.y}
+                      r={isSelectedEl ? 1.35 : 1.05}
+                      fill="#09090b"
+                      stroke={isEraserHovered ? '#ef4444' : utilColor}
+                      strokeWidth={0.45}
+                      className="pointer-events-none"
+                    />
+                    <circle
+                      cx={geom.from.x}
+                      cy={geom.from.y}
+                      r={0.45}
+                      fill="#ffffff"
+                      className="pointer-events-none"
+                    />
+
+                    {/* Wide transparent hit area along trajectory for effortless click/erase */}
+                    <path
+                      d={pathD}
+                      fill="none"
+                      stroke="transparent"
+                      strokeWidth={3.6}
+                      onMouseEnter={() => setHoveredUtilityId(util.id)}
+                      onMouseLeave={() => setHoveredUtilityId(null)}
+                      onTouchStart={() => {
+                        if (activeTool === 'select' || activeTool === 'marquee') {
+                          longPressTargetCandidateRef.current = { elementId: util.id };
+                        }
+                      }}
+                      onClick={(e) => {
+                        if (activeTool === 'eraser') {
+                          e.stopPropagation();
+                          if (isLockedEl) return;
+                          pushHistorySnapshot();
+                          setUtilities((prev) => prev.filter((u) => u.id !== util.id));
+                          setSelectedElementIds((prev) => prev.filter((id) => id !== util.id));
+                          setHasChangesInSession(true);
+                        } else if (activeTool === 'select' || activeTool === 'marquee') {
+                          e.stopPropagation();
+                          handleSelectElement(
+                            util.id,
+                            e.ctrlKey || e.metaKey || e.shiftKey || isMultiSelectMode
+                          );
+                        }
+                      }}
+                      onContextMenu={(e) => {
+                        if (isEditMode || isDrawingPolygonArea) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!selectedElementIds.includes(util.id)) {
+                          handleSelectElement(util.id, false);
+                        }
+                        setShowContextColorSubmenu(false);
+                        setContextMenu({ x: e.clientX, y: e.clientY });
+                      }}
+                      className={
+                        activeTool === 'eraser' || activeTool === 'select' || activeTool === 'marquee'
+                          ? 'pointer-events-auto cursor-pointer'
+                          : 'pointer-events-none'
+                      }
+                    />
+                  </g>
+                );
+              })}
+
+          {/* LIVE PENDING 2-POINT UTILITY THROW PREVIEW */}
+          {!isDrawingPolygonArea &&
+            activeTool === 'utility' &&
+            utilityPlacementMode === 'throw' &&
+            pendingUtilityThrowOrigin && (() => {
+              const previewColor = UTILITY_META[selectedUtility]?.colorHex || '#0ea5e9';
+              const hoverTarget = utilityHoverCoord || pendingUtilityThrowOrigin;
+              const previewGeom = getThrowGeometry(pendingUtilityThrowOrigin, hoverTarget);
+              const showArc =
+                Math.hypot(
+                  hoverTarget.x - pendingUtilityThrowOrigin.x,
+                  hoverTarget.y - pendingUtilityThrowOrigin.y
+                ) >= 1.2;
+              return (
+                <g className="pointer-events-none">
+                  {showArc && (
+                    <>
+                      <path
+                        d={`M ${pendingUtilityThrowOrigin.x} ${pendingUtilityThrowOrigin.y} Q ${previewGeom.cp.x} ${previewGeom.cp.y} ${hoverTarget.x} ${hoverTarget.y}`}
+                        fill="none"
+                        stroke="rgba(9,9,11,0.75)"
+                        strokeWidth={1.2}
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d={`M ${pendingUtilityThrowOrigin.x} ${pendingUtilityThrowOrigin.y} Q ${previewGeom.cp.x} ${previewGeom.cp.y} ${hoverTarget.x} ${hoverTarget.y}`}
+                        fill="none"
+                        stroke={previewColor}
+                        strokeWidth={0.7}
+                        strokeDasharray="1.6,1.1"
+                        strokeLinecap="round"
+                      />
+                      <circle
+                        cx={hoverTarget.x}
+                        cy={hoverTarget.y}
+                        r={1.8}
+                        fill={previewColor}
+                        fillOpacity={0.22}
+                        stroke={previewColor}
+                        strokeWidth={0.45}
+                      />
+                    </>
+                  )}
+                  <circle
+                    cx={pendingUtilityThrowOrigin.x}
+                    cy={pendingUtilityThrowOrigin.y}
+                    r={2.1}
+                    fill={previewColor}
+                    fillOpacity={0.25}
+                  />
+                  <circle
+                    cx={pendingUtilityThrowOrigin.x}
+                    cy={pendingUtilityThrowOrigin.y}
+                    r={1.2}
+                    fill="#09090b"
+                    stroke={previewColor}
+                    strokeWidth={0.55}
+                  />
+                  <circle cx={pendingUtilityThrowOrigin.x} cy={pendingUtilityThrowOrigin.y} r={0.45} fill="#ffffff" />
+                </g>
+              );
+            })()}
+
           {/* Real-time stroke while drawing */}
           {currentDrawing && currentDrawing.points.length > 1 && (
             <polyline
@@ -3098,6 +3136,135 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           )}
         </svg>
 
+        {/* INTERACTIVE THROW ORIGIN & CURVE BEND HANDLES (HTML overlay above SVG) */}
+        {!isDrawingPolygonArea &&
+          utilities
+            .filter((util) => util.throwFrom && isLayerVisible(util.layerId, 'layer_util'))
+            .map((util) => {
+              const geom = getThrowGeometry(util.throwFrom!, util, util.curveBend);
+              const isSelectedEl = selectedElementIds.includes(util.id);
+              const isLockedEl = Boolean(util.locked || isLayerLocked(util.layerId || 'layer_util'));
+              const elOpacity = (util.opacity ?? 1) * getLayerOpacity(util.layerId, 'layer_util');
+              const meta = UTILITY_META[util.type] || UTILITY_META.smoke;
+              const throwBadge =
+                util.throwType && util.throwType !== 'left'
+                  ? THROW_TYPE_META[util.throwType]?.short
+                  : null;
+
+              return (
+                <React.Fragment key={`throw_handles_${util.id}`}>
+                  {/* 1. Abwurfpunkt Interactive Origin Handle */}
+                  <div
+                    data-utility-handle="origin"
+                    style={{
+                      left: `calc(50% + ${geom.from.x}%)`,
+                      top: `calc(50% + ${geom.from.y}%)`,
+                      opacity: elOpacity,
+                    }}
+                    onMouseDown={(e) => {
+                      if (activeTool === 'select' && !isLockedEl) {
+                        e.stopPropagation();
+                        startUtilityHandleDrag(util, 'origin', e);
+                      }
+                    }}
+                    onTouchStart={(e) => {
+                      if (activeTool === 'select' && !isLockedEl && isSelectedEl) {
+                        e.stopPropagation();
+                        cancelTouchLongPress();
+                        startUtilityHandleDrag(util, 'origin', e);
+                      } else if (activeTool !== 'eraser') {
+                        longPressTargetCandidateRef.current = { elementId: util.id };
+                      }
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (hasMovedDistance) return;
+                      if (activeTool === 'eraser') {
+                        if (isLockedEl) return;
+                        pushHistorySnapshot();
+                        setUtilities((prev) => prev.filter((u) => u.id !== util.id));
+                        setSelectedElementIds((prev) => prev.filter((id) => id !== util.id));
+                        setHasChangesInSession(true);
+                      } else {
+                        handleSelectElement(
+                          util.id,
+                          e.ctrlKey || e.metaKey || e.shiftKey || isMultiSelectMode
+                        );
+                      }
+                    }}
+                    onContextMenu={(e) => {
+                      if (isEditMode || isDrawingPolygonArea) return;
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (!selectedElementIds.includes(util.id)) {
+                        handleSelectElement(util.id, false);
+                      }
+                      setShowContextColorSubmenu(false);
+                      setContextMenu({ x: e.clientX, y: e.clientY });
+                    }}
+                    className={`absolute -translate-x-1/2 -translate-y-1/2 z-26 flex items-center justify-center ${
+                      activeTool === 'select' && !isLockedEl
+                        ? 'cursor-grab active:cursor-grabbing'
+                        : 'cursor-pointer'
+                    } ${isSelectedEl ? 'w-6 h-6' : 'w-4 h-4 hover:scale-125'} transition-transform`}
+                    title={
+                      isDe
+                        ? `Abwurfpunkt (${meta.labelDe})${activeTool === 'select' && !isLockedEl ? ' · Ziehen zum Verschieben' : ''}`
+                        : `Throw Origin (${meta.labelEn})`
+                    }
+                  >
+                    {isSelectedEl && (
+                      <span
+                        className="w-4 h-4 rounded-full border-2 border-sky-300 bg-zinc-950/90 shadow-lg flex items-center justify-center"
+                      >
+                        <span
+                          className="w-1.5 h-1.5 rounded-full"
+                          style={{ backgroundColor: meta.colorHex }}
+                        />
+                      </span>
+                    )}
+                    {throwBadge && (
+                      <span
+                        style={{ borderColor: meta.colorHex }}
+                        className="absolute -top-4 left-1/2 -translate-x-1/2 px-1 py-0 rounded bg-zinc-950/95 border text-[8px] font-mono font-black text-white whitespace-nowrap shadow-md pointer-events-none"
+                      >
+                        {throwBadge}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* 2. Draggable Curve Bend Handle (when selected & unlocked) */}
+                  {isSelectedEl && activeTool === 'select' && !isLockedEl && (
+                    <div
+                      data-utility-handle="curve"
+                      style={{
+                        left: `calc(50% + ${geom.midOnCurve.x}%)`,
+                        top: `calc(50% + ${geom.midOnCurve.y}%)`,
+                      }}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        startUtilityHandleDrag(util, 'curve', e);
+                      }}
+                      onTouchStart={(e) => {
+                        e.stopPropagation();
+                        cancelTouchLongPress();
+                        startUtilityHandleDrag(util, 'curve', e);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute -translate-x-1/2 -translate-y-1/2 z-35 w-4 h-4 rounded-full bg-sky-400 border-2 border-zinc-950 shadow-[0_0_8px_rgba(56,189,248,0.85)] cursor-move hover:scale-125 transition-transform flex items-center justify-center"
+                      title={
+                        isDe
+                          ? 'Kurvenbogen ziehen (z.B. Bandenwurf anpassen)'
+                          : 'Drag to bend throw curve'
+                      }
+                    >
+                      <span className="w-1 h-1 rounded-full bg-zinc-950 pointer-events-none" />
+                    </div>
+                  )}
+                </React.Fragment>
+              );
+            })}
+
         {/* UTILITY MARKERS (Granaten-Symbole ohne Kreis, in Kreisgröße w-6 h-6 mit Originalfarben) */}
         {!isDrawingPolygonArea &&
           utilities
@@ -3110,20 +3277,37 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
               return (
                 <div
                   key={util.id}
+                  data-utility-handle="landing"
                   style={{
                     left: `calc(50% + ${util.x}%)`,
                     top: `calc(50% + ${util.y}%)`,
                     opacity: elOpacity,
                   }}
+                  onMouseDown={(e) => {
+                    if (activeTool === 'select' && !isLockedEl) {
+                      e.stopPropagation();
+                      startUtilityHandleDrag(util, 'landing', e);
+                    }
+                  }}
+                  onTouchStart={(e) => {
+                    if (activeTool === 'select' && !isLockedEl && isSelectedEl) {
+                      cancelTouchLongPress();
+                      startUtilityHandleDrag(util, 'landing', e);
+                    } else if (activeTool !== 'eraser') {
+                      longPressTargetCandidateRef.current = { elementId: util.id };
+                    }
+                  }}
                   onClick={(e) => {
                     e.stopPropagation();
+                    if (hasMovedDistance) return;
                     if (activeTool === 'eraser') {
                       if (isLockedEl) return;
+                      pushHistorySnapshot();
                       setUtilities((prev) => prev.filter((u) => u.id !== util.id));
                       setSelectedElementIds((prev) => prev.filter((id) => id !== util.id));
                       setHasChangesInSession(true);
                     } else {
-                      handleSelectElement(util.id, e.ctrlKey || e.metaKey || e.shiftKey);
+                      handleSelectElement(util.id, e.ctrlKey || e.metaKey || e.shiftKey || isMultiSelectMode);
                     }
                   }}
                   onContextMenu={(e) => {
@@ -3136,7 +3320,9 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                     setShowContextColorSubmenu(false);
                     setContextMenu({ x: e.clientX, y: e.clientY });
                   }}
-                  className={`absolute -translate-x-1/2 -translate-y-1/2 z-25 w-6 h-6 flex items-center justify-center cursor-pointer hover:scale-115 transition-all ${
+                  className={`absolute -translate-x-1/2 -translate-y-1/2 z-25 w-6 h-6 flex items-center justify-center ${
+                    activeTool === 'select' && !isLockedEl ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+                  } hover:scale-115 transition-all ${
                     meta.textClass
                   } drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)] ${
                     isSelectedEl
@@ -3148,12 +3334,17 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       ? isDe
                         ? 'Klicken zum Entfernen'
                         : 'Click to remove'
-                      : `${isDe ? meta.labelDe : meta.labelEn} — ${
-                          isDe ? 'Klicken zum Auswählen (Strg für Mehrfachauswahl)' : 'Click to select (Ctrl for multi-select)'
+                      : `${isDe ? meta.labelDe : meta.labelEn}${util.label ? ` · ${util.label}` : ''} — ${
+                          isDe ? 'Klicken zum Auswählen · Ziehen zum Verschieben' : 'Click to select · Drag to move'
                         }`
                   }
                 >
                   <UtilitySymbol type={util.type} size="md" />
+                  {util.label && (
+                    <span className="absolute top-6 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded bg-zinc-950/90 border border-zinc-700/80 text-[9px] font-semibold text-zinc-100 whitespace-nowrap shadow-md pointer-events-none">
+                      {util.label}
+                    </span>
+                  )}
                   {isLockedEl && (
                     <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-zinc-950 border border-amber-400 flex items-center justify-center">
                       <Lock className="w-2 h-2 text-amber-400" />
@@ -3182,15 +3373,21 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                     top: `calc(50% + ${player.y}%)`,
                     opacity: elOpacity,
                   }}
+                  onTouchStart={() => {
+                    if (activeTool !== 'eraser') {
+                      longPressTargetCandidateRef.current = { elementId: player.id };
+                    }
+                  }}
                   onClick={(e) => {
                     e.stopPropagation();
                     if (activeTool === 'eraser') {
                       if (isLockedEl) return;
+                      pushHistorySnapshot();
                       setPlayers((prev) => prev.filter((p) => p.id !== player.id));
                       setSelectedElementIds((prev) => prev.filter((id) => id !== player.id));
                       setHasChangesInSession(true);
                     } else {
-                      handleSelectElement(player.id, e.ctrlKey || e.metaKey || e.shiftKey);
+                      handleSelectElement(player.id, e.ctrlKey || e.metaKey || e.shiftKey || isMultiSelectMode);
                     }
                   }}
                   onContextMenu={(e) => {
@@ -3279,7 +3476,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                 onClick={(e) => {
                   e.stopPropagation();
                   if (!hasMovedDistance) {
-                    handleSelectCalloutMulti(callout, e.ctrlKey || e.metaKey || e.shiftKey);
+                    handleSelectCalloutMulti(callout, e.ctrlKey || e.metaKey || e.shiftKey || isMultiSelectMode);
                   }
                 }}
                 onContextMenu={(e) => {
@@ -3306,7 +3503,10 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                     {isImageMode ? (
                       <div
                         onMouseDown={(e) => handleCalloutDragStart(callout, e)}
-                        onTouchStart={(e) => handleCalloutDragStart(callout, e)}
+                        onTouchStart={(e) => {
+                          longPressTargetCandidateRef.current = { callout };
+                          handleCalloutDragStart(callout, e);
+                        }}
                         style={{
                           width: `${calloutImgSize}px`,
                           height: `${calloutImgSize}px`,
@@ -3350,6 +3550,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                           }
                         }}
                         onTouchStart={(e) => {
+                          longPressTargetCandidateRef.current = { callout };
                           if (movingAreaCalloutId === callout.id) {
                             handleAreaMoveStart(callout, e);
                           } else {
@@ -3397,6 +3598,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       }
                     }}
                     onTouchStart={(e) => {
+                      longPressTargetCandidateRef.current = { callout };
                       if (movingAreaCalloutId === callout.id) {
                         handleAreaMoveStart(callout, e);
                       } else {
@@ -3451,6 +3653,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
+                        pushHistorySnapshot();
                         const currentTextRot = callout.textRotation !== undefined ? callout.textRotation : (callout.rotation || 0);
                         let nextRot = currentTextRot + 45;
                         if (nextRot > 180) nextRot = -135;
@@ -3546,16 +3749,17 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     <div
       ref={mainWrapperRef}
       onClick={handleOutsideClick}
-      className="fixed inset-0 z-50 flex flex-col bg-zinc-950 text-zinc-100 select-none overflow-hidden"
+      style={{ overscrollBehavior: 'none' }}
+      className="fixed inset-0 h-dvh w-full z-50 flex flex-col bg-zinc-950 text-zinc-100 select-none overflow-hidden overscroll-none"
     >
       {/* AREA MOVE MODE BANNER (HIDES OTHERS) */}
       {movingAreaCalloutId && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 px-4 py-2.5 bg-amber-500 text-zinc-950 font-bold rounded-xl shadow-2xl animate-bounce">
-          <Move className="w-4 h-4" />
-          <span>{isDe ? 'Bereich-Verschiebungsmodus' : 'Area Move Mode'}</span>
+        <div className="absolute top-26 md:top-16 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 bg-amber-500 text-zinc-950 font-bold rounded-xl shadow-2xl animate-bounce max-w-[92vw] text-xs sm:text-sm">
+          <Move className="w-4 h-4 shrink-0" />
+          <span className="truncate">{isDe ? 'Bereich-Verschiebungsmodus' : 'Area Move Mode'}</span>
           <button
             onClick={() => setMovingAreaCalloutId(null)}
-            className="flex items-center gap-1.5 px-3 py-1 bg-zinc-950 text-white rounded-lg text-xs hover:bg-zinc-900 transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 bg-zinc-950 text-white rounded-lg text-xs hover:bg-zinc-900 transition-colors cursor-pointer shrink-0"
           >
             <Check className="w-3.5 h-3.5 text-amber-400" />
             <span>{isDe ? 'Fertig' : 'Done'}</span>
@@ -3565,7 +3769,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
       {/* CUSTOM SELECTION ACTIVE BANNER */}
       {isCustomSelectionActive && !movingAreaCalloutId && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-3 py-1.5 bg-indigo-950/90 border border-indigo-500/40 text-indigo-200 text-xs font-semibold rounded-full shadow-xl backdrop-blur-md animate-in fade-in duration-200">
+        <div className="absolute top-26 md:top-16 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-3 py-1.5 bg-indigo-950/90 border border-indigo-500/40 text-indigo-200 text-xs font-semibold rounded-full shadow-xl backdrop-blur-md animate-in fade-in duration-200 max-w-[92vw]">
           <ListFilter className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
           <span>{isDe ? `Meine Auswahl: ${visibleCallouts.length} Callouts` : `My Selection: ${visibleCallouts.length} Callouts`}</span>
           <button
@@ -3584,786 +3788,136 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         </div>
       )}
       {/* 1. CLEAN STUDIO TOP HEADER BAR */}
-      <header className="h-13 sm:h-14 border-b border-zinc-800 bg-zinc-950/95 px-2 sm:px-4 flex items-center justify-between gap-2 shrink-0 backdrop-blur-md print:hidden z-40">
-        {/* Left: Back, Brand + Map Name, Floor Switcher */}
-        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0 min-w-0">
-          <button
-            onClick={handleTryBack}
-            className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 text-xs font-bold rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 transition-colors cursor-pointer shrink-0"
-            title={isDe ? 'Kartenübersicht' : 'Overview'}
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span className="hidden lg:inline">{isDe ? 'Kartenübersicht' : 'Overview'}</span>
-          </button>
-
-          <div className="hidden sm:flex items-center gap-1.5 text-amber-400 font-black tracking-tight text-sm shrink-0">
-            <Crosshair className="w-4 h-4" />
-            <span className="hidden xl:inline text-white">CS2Freitag</span>
-          </div>
-
-          <div className="flex items-center gap-1.5 min-w-0">
-            <h1 className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-white truncate max-w-[90px] sm:max-w-[160px] md:max-w-none">
-              {mapData.name}
-            </h1>
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-zinc-800 text-zinc-400 hidden xl:inline uppercase">
-              {mapData.category}
-            </span>
-          </div>
-
-          {/* Floor Switcher (Upper / Lower / Both) */}
-          {mapData.lowerImage && (
-            <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-zinc-900 border border-zinc-800 shrink-0">
-              <button
-                onClick={() => setCurrentLevel('upper')}
-                className={`px-1.5 sm:px-2 py-1 text-[10px] sm:text-xs font-semibold rounded-md transition-colors cursor-pointer ${
-                  currentLevel === 'upper'
-                    ? 'bg-zinc-100 text-zinc-950 font-bold shadow-xs'
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-                title={isDe ? 'Nur Obere Ebene (O)' : 'Upper floor only (U)'}
-              >
-                {isDe ? 'O' : 'U'}
-              </button>
-              <button
-                onClick={() => setCurrentLevel('lower')}
-                className={`px-1.5 sm:px-2 py-1 text-[10px] sm:text-xs font-semibold rounded-md transition-colors cursor-pointer ${
-                  currentLevel === 'lower'
-                    ? 'bg-purple-600 text-white font-bold shadow-xs'
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-                title={isDe ? 'Nur Untere Ebene (U)' : 'Lower floor only (L)'}
-              >
-                {isDe ? 'U' : 'L'}
-              </button>
-              <button
-                onClick={() => setCurrentLevel('both')}
-                className={`hidden md:inline-flex px-2 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
-                  currentLevel === 'both'
-                    ? 'bg-purple-600 text-white font-bold shadow-xs'
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-                title={isDe ? 'Beide Ebenen nebeneinander (O + U)' : 'Both floors side-by-side'}
-              >
-                {isDe ? 'O + U' : 'U + L'}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Center: Zone Filter + Local Session Indicator */}
-        <div className="hidden xl:flex items-center gap-2 shrink-0">
-          <div className="flex items-center gap-1 p-1 rounded-lg bg-zinc-900/90 border border-zinc-800 text-xs">
-            <button
-              onClick={() => setSelectedZoneFilter('all')}
-              className={`px-2.5 py-1 rounded-md transition-colors font-medium cursor-pointer ${
-                selectedZoneFilter === 'all'
-                  ? 'bg-zinc-100 text-zinc-950 font-bold'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              {isDe ? 'Alle' : 'All'}
-            </button>
-            <button
-              onClick={() => setSelectedZoneFilter('a_site')}
-              className={`px-2.5 py-1 rounded-md transition-colors font-medium cursor-pointer ${
-                selectedZoneFilter === 'a_site'
-                  ? 'bg-amber-400 text-zinc-950 font-bold'
-                  : 'text-amber-400/80 hover:text-amber-300'
-              }`}
-            >
-              A
-            </button>
-            <button
-              onClick={() => setSelectedZoneFilter('b_site')}
-              className={`px-2.5 py-1 rounded-md transition-colors font-medium cursor-pointer ${
-                selectedZoneFilter === 'b_site'
-                  ? 'bg-sky-400 text-zinc-950 font-bold'
-                  : 'text-sky-400/80 hover:text-sky-300'
-              }`}
-            >
-              B
-            </button>
-          </div>
-
-          <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 px-2.5 py-1 rounded-lg bg-zinc-900/60 border border-zinc-800/80">
-            <CheckCircle2
-              className={`w-3.5 h-3.5 ${hasChangesInSession ? 'text-amber-400' : 'text-emerald-400'}`}
-            />
-            <span>
-              {hasChangesInSession
-                ? isDe
-                  ? 'Änderungen offen'
-                  : 'Unsaved edits'
-                : isDe
-                ? 'Bereit'
-                : 'Ready'}
-            </span>
-          </div>
-        </div>
-
-        {/* Right: Undo/Redo/Clear, Share, Edit/Done, Filter, Color Mode, Legend, Tablet Drawer, Fullscreen */}
-        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-          {/* Undo / Redo / Clear Board (Mobil & Tablet: lg:hidden; auf PC unter Werkzeuge) */}
-          <div className="flex lg:hidden items-center gap-0.5 p-0.5 rounded-lg bg-zinc-900 border border-zinc-800">
-            <button
-              onClick={handleUndoDrawing}
-              disabled={drawings.length === 0}
-              className={`p-1.5 rounded-md transition-colors ${
-                drawings.length > 0
-                  ? 'text-zinc-200 hover:text-white hover:bg-zinc-800 cursor-pointer'
-                  : 'text-zinc-600 cursor-not-allowed'
-              }`}
-              title={isDe ? 'Rückgängig (Strg+Z)' : 'Undo (Ctrl+Z)'}
-            >
-              <Undo2 className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={handleRedoDrawing}
-              disabled={drawingsRedoStack.length === 0}
-              className={`p-1.5 rounded-md transition-colors ${
-                drawingsRedoStack.length > 0
-                  ? 'text-zinc-200 hover:text-white hover:bg-zinc-800 cursor-pointer'
-                  : 'text-zinc-600 cursor-not-allowed'
-              }`}
-              title={isDe ? 'Wiederholen (Strg+Y)' : 'Redo (Ctrl+Y)'}
-            >
-              <Redo2 className="w-3.5 h-3.5" />
-            </button>
-            {(drawings.length > 0 || utilities.length > 0 || players.length > 0) && (
-              <button
-                onClick={handleClearTactics}
-                className="p-1.5 rounded-md text-zinc-400 hover:text-red-400 hover:bg-zinc-800 cursor-pointer"
-                title={isDe ? 'Board leeren (entsperrte Elemente)' : 'Clear unlocked items'}
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          {/* Share / Export */}
-          <button
-            onClick={handleShareTactics}
-            className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg border border-sky-500/40 bg-sky-950/60 hover:bg-sky-900/80 text-sky-300 hover:text-white transition-all cursor-pointer flex items-center gap-1.5"
-            title={isDe ? 'Taktik teilen & exportieren' : 'Share & export tactic'}
-          >
-            <Share2 className="w-4 h-4 text-sky-400" />
-            <span className="text-xs font-bold hidden md:inline">{isDe ? 'Teilen' : 'Share'}</span>
-          </button>
-
-          {/* Bearbeiten / Fertig */}
-          <button
-            onClick={() => {
-              if (isEditMode || singleEditCalloutId) {
-                if (hasChangesInSession) {
-                  handleSaveSnapshot(
-                    isDe
-                      ? `Karte bearbeitet (${mapData.callouts.length} Callouts)`
-                      : `Map edited (${mapData.callouts.length} Callouts)`
-                  );
-                }
-                setIsEditMode(false);
-                setSingleEditCalloutId(null);
-                setSelectedCallout(null);
-                setSelectedCalloutIds([]);
-                setHighlightedCalloutId(undefined);
-                setMovingAreaCalloutId(null);
-                setContextMenu(null);
-              } else {
-                setIsEditOptionsModalOpen(true);
-              }
-            }}
-            className={`flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
-              isEditMode || singleEditCalloutId
-                ? 'border-amber-400 bg-amber-400 text-zinc-950 shadow-md'
-                : 'border-zinc-800 bg-zinc-900 text-zinc-200 hover:text-white hover:bg-zinc-800'
-            }`}
-            title={isDe ? 'Callouts bearbeiten' : 'Edit callouts'}
-          >
-            {isEditMode || singleEditCalloutId ? (
-              <>
-                <Check className="w-4 h-4 stroke-[3]" />
-                <span className="hidden sm:inline">{isDe ? 'Fertig' : 'Done'}</span>
-              </>
-            ) : (
-              <>
-                <Edit3 className="w-4 h-4 text-amber-400" />
-                <span className="hidden sm:inline">{isDe ? 'Bearbeiten' : 'Edit'}</span>
-              </>
-            )}
-          </button>
-
-          {/* Tablet-Only Layers Slide-Over Trigger */}
-          <button
-            onClick={() => setIsTabletLayersOpen((p) => !p)}
-            className={`hidden md:inline-flex lg:hidden items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-bold transition-colors cursor-pointer ${
-              isTabletLayersOpen
-                ? 'border-sky-500/60 bg-sky-500/20 text-sky-200'
-                : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-white'
-            }`}
-            title={isDe ? 'Ebenen & Eigenschaften' : 'Layers & Properties'}
-          >
-            <Layers className="w-4 h-4 text-sky-400" />
-            <span>{isDe ? 'Ebenen' : 'Layers'}</span>
-          </button>
-
-          {/* Color Mode Toggle */}
-          <div className="hidden sm:flex items-center gap-0.5 p-0.5 rounded-lg bg-zinc-900 border border-zinc-800">
-            <button
-              onClick={() => setColorMode('zone')}
-              className={`p-1.5 rounded-md transition-all cursor-pointer ${
-                colorMode === 'zone' ? 'bg-amber-400 text-zinc-950' : 'text-zinc-400 hover:text-white'
-              }`}
-              title={isDe ? 'Zonen-Farben' : 'Zone colors'}
-            >
-              <Palette className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setColorMode('danger')}
-              className={`p-1.5 rounded-md transition-all cursor-pointer ${
-                colorMode === 'danger' ? 'bg-red-500 text-white' : 'text-zinc-400 hover:text-white'
-              }`}
-              title={isDe ? 'Gefahren-Farben' : 'Danger levels'}
-            >
-              <Shield className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {/* Meine Callout-Auswahl (Desktop & Mobil) */}
-          <button
-            onClick={() => {
-              if (customSelectedCalloutIds.length === 0) {
-                handleOpenCustomSelectionModal();
-              } else {
-                setIsCustomSelectionActive(!isCustomSelectionActive);
-              }
-            }}
-            className={`relative p-1.5 rounded-lg border transition-all cursor-pointer inline-flex items-center ${
-              isCustomSelectionActive
-                ? 'border-indigo-400 bg-indigo-500/25 text-indigo-300'
-                : 'border-zinc-800 bg-zinc-900 text-indigo-400 hover:text-white'
-            }`}
-            title={isDe ? 'Meine Callout-Auswahl' : 'My Callout Selection'}
-          >
-            <ListFilter className="w-4 h-4" />
-            {customSelectedCalloutIds.length > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-1 text-[9px] font-bold rounded-full flex items-center justify-center leading-none bg-indigo-500 text-white">
-                {customSelectedCalloutIds.length}
-              </span>
-            )}
-          </button>
-
-          {/* Quick Help & App Guide */}
-          <button
-            onClick={() => setIsHelpDocsOpen(true)}
-            className="p-1.5 rounded-lg border border-zinc-800 bg-zinc-900 text-amber-400 hover:text-white hover:bg-zinc-800 cursor-pointer transition-colors"
-            title={isDe ? 'Hilfe & App-Erklärungen' : 'Help & App Guide'}
-          >
-            <HelpCircle className="w-4 h-4" />
-          </button>
-
-          {/* Fullscreen (nur für die Karte — blendet Menüs links & rechts aus, oberes Menü bleibt sichtbar) */}
-          <button
-            onClick={toggleFullscreen}
-            className={`p-1.5 rounded-lg border inline-flex cursor-pointer transition-colors ${
-              isFullscreen
-                ? 'border-amber-400 bg-amber-400 text-zinc-950'
-                : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-white'
-            }`}
-            title={
-              isFullscreen
-                ? isDe
-                  ? 'Karten-Vollbild beenden'
-                  : 'Exit map fullscreen'
-                : isDe
-                ? 'Karten-Vollbild (Menüs links/rechts ausblenden)'
-                : 'Map fullscreen (hide sidebars)'
-            }
-          >
-            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-          </button>
-        </div>
-      </header>
-
-      {/* 2. MOBILE-ONLY TOP DRAWING TOOLBAR (md:hidden — NEVER duplicated on Desktop/Tablet, toggleable, hidden in map fullscreen!) */}
-      {isToolbarVisible && !isFullscreen && (
-      <div className="md:hidden border-b border-zinc-800 bg-zinc-900/95 px-2 py-1.5 flex flex-col gap-1.5 shrink-0 print:hidden z-30">
-        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
-          <button
-            type="button"
-            onClick={() => setIsToolbarVisible(false)}
-            className="p-2 min-h-[38px] rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 shrink-0 cursor-pointer transition-colors"
-            title={isDe ? 'Werkzeugleiste ausblenden' : 'Hide toolbar'}
-          >
-            <PanelLeftClose className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => setActiveTool('select')}
-            className={`flex items-center gap-1 px-2.5 min-h-[38px] rounded-lg text-xs font-semibold shrink-0 cursor-pointer transition-colors ${
-              activeTool === 'select'
-                ? 'bg-sky-500/20 text-sky-200 border border-sky-500/50'
-                : 'bg-zinc-950/60 text-zinc-300 border border-zinc-800'
-            }`}
-          >
-            <MousePointer2 className="w-3.5 h-3.5" />
-            <span>{isDe ? 'Auswahl' : 'Select'}</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTool('marquee')}
-            className={`flex items-center gap-1 px-2.5 min-h-[38px] rounded-lg text-xs font-semibold shrink-0 cursor-pointer transition-colors ${
-              activeTool === 'marquee'
-                ? 'bg-sky-500/20 text-sky-200 border border-sky-500/50'
-                : 'bg-zinc-950/60 text-zinc-300 border border-zinc-800'
-            }`}
-          >
-            <BoxSelect className="w-3.5 h-3.5" />
-            <span>{isDe ? 'Bereich' : 'Area'}</span>
-          </button>
-
-          <button
-            onClick={() => handleToolPress('pen', false)}
-            className={`flex items-center gap-1 px-2.5 min-h-[38px] rounded-lg text-xs font-semibold shrink-0 cursor-pointer transition-colors ${
-              activeTool === 'pen' && !penWithArrow
-                ? 'bg-sky-500/20 text-sky-200 border border-sky-500/50'
-                : 'bg-zinc-950/60 text-zinc-300 border border-zinc-800'
-            }`}
-          >
-            <Pencil className="w-3.5 h-3.5" />
-            <span>{isDe ? 'Linie' : 'Line'}</span>
-          </button>
-
-          <button
-            onClick={() => handleToolPress('arrow', true)}
-            className={`flex items-center gap-1 px-2.5 min-h-[38px] rounded-lg text-xs font-semibold shrink-0 cursor-pointer transition-colors ${
-              activeTool === 'arrow'
-                ? 'bg-sky-500/20 text-sky-200 border border-sky-500/50'
-                : 'bg-zinc-950/60 text-zinc-300 border border-zinc-800'
-            }`}
-          >
-            <ArrowUp className="w-3.5 h-3.5 rotate-45" />
-            <span>{isDe ? 'Pfeil' : 'Arrow'}</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTool('eraser')}
-            className={`flex items-center gap-1 px-2.5 min-h-[38px] rounded-lg text-xs font-semibold shrink-0 cursor-pointer transition-colors ${
-              activeTool === 'eraser'
-                ? 'bg-red-500/25 text-red-200 border border-red-500/60'
-                : 'bg-zinc-950/60 text-zinc-300 border border-zinc-800'
-            }`}
-          >
-            <Eraser className="w-3.5 h-3.5" />
-            <span>{isDe ? 'Radierer' : 'Eraser'}</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTool('utility')}
-            className={`flex items-center gap-1 px-2.5 min-h-[38px] rounded-lg text-xs font-semibold shrink-0 cursor-pointer transition-colors ${
-              activeTool === 'utility'
-                ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-500/50'
-                : 'bg-zinc-950/60 text-zinc-300 border border-zinc-800'
-            }`}
-          >
-            <UtilitySymbol type={selectedUtility} size="xs" />
-            <span>Utility</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTool('player')}
-            className={`flex items-center gap-1 px-2.5 min-h-[38px] rounded-lg text-xs font-semibold shrink-0 cursor-pointer transition-colors ${
-              activeTool === 'player'
-                ? 'bg-amber-500/20 text-amber-200 border border-amber-500/50'
-                : 'bg-zinc-950/60 text-zinc-300 border border-zinc-800'
-            }`}
-          >
-            <Users className="w-3.5 h-3.5" />
-            <span>T / CT</span>
-          </button>
-
-          {/* Compact Color Picker Button */}
-          <button
-            onClick={() => setShowColorPicker(!showColorPicker)}
-            className="flex items-center gap-1 px-2.5 min-h-[38px] rounded-lg bg-zinc-950/60 border border-zinc-800 shrink-0 cursor-pointer"
-            title={isDe ? 'Farbe wählen' : 'Color'}
-          >
-            <span
-              className="w-4 h-4 rounded-full border border-white/50"
-              style={{ backgroundColor: penColor }}
-            />
-          </button>
-        </div>
-
-        {/* Mobile Secondary Sub-Row for Utility / Player / Color Swatches */}
-        {showColorPicker && (
-          <div className="flex items-center gap-2 px-1 py-1 bg-zinc-950/90 rounded-lg border border-zinc-800 overflow-x-auto no-scrollbar">
-            <span className="text-[11px] text-zinc-400 shrink-0">{isDe ? 'Farbe:' : 'Color:'}</span>
-            {colors.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => {
-                  setPenColor(c);
-                  setShowColorPicker(false);
-                }}
-                style={{ backgroundColor: c }}
-                className={`w-7 h-7 rounded-full border shrink-0 cursor-pointer ${
-                  penColor === c ? 'border-amber-400 ring-2 ring-amber-400/40 scale-105' : 'border-zinc-700'
-                }`}
-              />
-            ))}
-            <button
-              type="button"
-              onClick={() => {
-                setCustomColorTarget('pen');
-                setIsCustomColorModalOpen(true);
-                setShowColorPicker(false);
-              }}
-              className="px-2.5 h-7 rounded-full bg-zinc-900 hover:bg-zinc-800 text-amber-300 border border-zinc-700 text-[11px] font-bold shrink-0 cursor-pointer flex items-center gap-1"
-            >
-              <Palette className="w-3 h-3" />
-              <span>{isDe ? 'Eigene' : 'Custom'}</span>
-            </button>
-          </div>
-        )}
-
-        {activeTool === 'utility' && (
-          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
-            {(['smoke', 'flash', 'molotov', 'he', 'decoy'] as UtilityType[]).map((u) => {
-              const meta = UTILITY_META[u];
-              return (
-                <button
-                  key={u}
-                  onClick={() => setSelectedUtility(u)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-bold uppercase shrink-0 cursor-pointer border ${
-                    selectedUtility === u
-                      ? `${meta.bgClass} ${meta.borderClass}`
-                      : 'bg-zinc-950 text-zinc-300 border-zinc-800'
-                  }`}
-                >
-                  <UtilitySymbol type={u} size="xs" />
-                  <span>{u === 'molotov' ? 'Molo' : u}</span>
-                </button>
+      <TacticalHeaderBar
+        lang={lang}
+        mapName={mapData.name}
+        mapCategory={mapData.category}
+        hasLowerImage={Boolean(mapData.lowerImage)}
+        currentLevel={currentLevel}
+        onChangeLevel={setCurrentLevel}
+        selectedZoneFilter={selectedZoneFilter}
+        onChangeZoneFilter={setSelectedZoneFilter}
+        hasChangesInSession={hasChangesInSession}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+        hasBoardElements={drawings.length > 0 || utilities.length > 0 || players.length > 0}
+        onClearTactics={handleClearTactics}
+        presetCount={tacticPresets.length}
+        onOpenPresets={() => setIsPresetsModalOpen(true)}
+        onShare={handleShareTactics}
+        isEditActive={Boolean(isEditMode || singleEditCalloutId)}
+        onEditAction={() => {
+          if (isEditMode || singleEditCalloutId) {
+            if (hasChangesInSession) {
+              handleSaveSnapshot(
+                isDe
+                  ? `Karte bearbeitet (${mapData.callouts.length} Callouts)`
+                  : `Map edited (${mapData.callouts.length} Callouts)`
               );
-            })}
-          </div>
-        )}
+            }
+            setIsEditMode(false);
+            setSingleEditCalloutId(null);
+            setSelectedCallout(null);
+            setSelectedCalloutIds([]);
+            setHighlightedCalloutId(undefined);
+            setMovingAreaCalloutId(null);
+            setContextMenu(null);
+          } else {
+            setIsEditOptionsModalOpen(true);
+          }
+        }}
+        isTabletLayersOpen={isTabletLayersOpen}
+        onToggleTabletLayers={() => setIsTabletLayersOpen((p) => !p)}
+        colorMode={colorMode}
+        onChangeColorMode={setColorMode}
+        customSelectedCount={customSelectedCalloutIds.length}
+        onToggleCustomSelection={() => {
+          if (customSelectedCalloutIds.length === 0) {
+            handleOpenCustomSelectionModal();
+          } else {
+            setIsCustomSelectionActive(!isCustomSelectionActive);
+          }
+        }}
+        isCustomSelectionActive={isCustomSelectionActive}
+        onOpenHelp={() => setIsHelpDocsOpen(true)}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={toggleFullscreen}
+        onTryBack={handleTryBack}
+      />
 
-        {activeTool === 'player' && (
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setSelectedPlayerSide('ct')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold cursor-pointer border ${
-                selectedPlayerSide === 'ct'
-                  ? 'bg-blue-600 text-white border-blue-400'
-                  : 'bg-zinc-950 text-zinc-300 border-zinc-800'
-              }`}
-            >
-              <img src={resolveAssetPath('ct.png')} alt="CT" className="w-4 h-4 object-contain" />
-              <span>CT-Spieler</span>
-            </button>
-            <button
-              onClick={() => setSelectedPlayerSide('t')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold cursor-pointer border ${
-                selectedPlayerSide === 't'
-                  ? 'bg-amber-600 text-zinc-950 border-amber-400'
-                  : 'bg-zinc-950 text-zinc-300 border-zinc-800'
-              }`}
-            >
-              <img src={resolveAssetPath('T.png')} alt="T" className="w-4 h-4 object-contain" />
-              <span>T-Spieler</span>
-            </button>
-          </div>
-        )}
-      </div>
+      {/* 2. MOBILE-ONLY TOP DRAWING TOOLBAR */}
+      {isToolbarVisible && !isFullscreen && (
+        <TacticalMobileToolbar
+          lang={lang}
+          activeTool={activeTool}
+          penWithArrow={penWithArrow}
+          isMultiSelectMode={isMultiSelectMode}
+          penColor={penColor}
+          colors={colors}
+          showColorPicker={showColorPicker}
+          selectedUtility={selectedUtility}
+          utilityPlacementMode={utilityPlacementMode}
+          selectedThrowType={selectedThrowType}
+          selectedPlayerSide={selectedPlayerSide}
+          onHideToolbar={() => setIsToolbarVisible(false)}
+          onSelectTool={setActiveTool}
+          onToggleMultiSelect={() => {
+            setIsMultiSelectMode((prev) => !prev);
+            setActiveTool('select');
+          }}
+          onToolPress={handleToolPress}
+          onToggleColorPicker={() => setShowColorPicker(!showColorPicker)}
+          onSelectColor={(c) => {
+            setPenColor(c);
+            setShowColorPicker(false);
+          }}
+          onOpenCustomColor={() => {
+            setCustomColorTarget('pen');
+            setIsCustomColorModalOpen(true);
+            setShowColorPicker(false);
+          }}
+          onSelectUtility={setSelectedUtility}
+          onSelectUtilityPlacementMode={setUtilityPlacementMode}
+          onSelectThrowType={setSelectedThrowType}
+          onSelectPlayerSide={setSelectedPlayerSide}
+        />
       )}
 
       {/* 3. MAIN 3-COLUMN STUDIO STAGE */}
-      <div className="relative flex-1 flex overflow-hidden">
-        {/* LEFT VERTICAL TOOL RAIL (Desktop & Tablet ONLY — toggleable, hidden in map fullscreen!) */}
+      <div className="relative flex-1 min-h-0 min-w-0 flex overflow-hidden">
+        {/* LEFT VERTICAL TOOL RAIL (Desktop & Tablet ONLY) */}
         {isToolbarVisible && !isFullscreen && (
-        <aside className="hidden md:flex flex-col justify-between w-52 lg:w-56 border-r border-zinc-800 bg-zinc-950 p-2.5 overflow-y-auto shrink-0 print:hidden z-30">
-          <div className="space-y-3">
-            {/* Werkzeuge Section */}
-            <div>
-              <div className="flex items-center justify-between px-1.5 mb-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
-                  {isDe ? 'Werkzeuge' : 'Tools'}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setIsToolbarVisible(false)}
-                  className="p-1 rounded text-zinc-500 hover:text-white hover:bg-zinc-900 cursor-pointer"
-                  title={isDe ? 'Werkzeugleiste ausblenden' : 'Hide toolbar'}
-                >
-                  <PanelLeftClose className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              <div className="space-y-1">
-                <button
-                  onClick={() => setActiveTool('select')}
-                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
-                    activeTool === 'select'
-                      ? 'bg-sky-500/15 border-sky-500/60 text-sky-200'
-                      : 'bg-zinc-900/50 border-zinc-800/80 text-zinc-300 hover:text-white hover:bg-zinc-900'
-                  }`}
-                >
-                  <MousePointer2 className="w-4 h-4 shrink-0" />
-                  <span>{isDe ? 'Auswählen' : 'Select'}</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveTool('marquee')}
-                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
-                    activeTool === 'marquee'
-                      ? 'bg-sky-500/15 border-sky-500/60 text-sky-200'
-                      : 'bg-zinc-900/50 border-zinc-800/80 text-zinc-300 hover:text-white hover:bg-zinc-900'
-                  }`}
-                >
-                  <BoxSelect className="w-4 h-4 shrink-0" />
-                  <span>{isDe ? 'Bereich' : 'Area Box'}</span>
-                </button>
-
-                <button
-                  onClick={() => handleToolPress('pen', false)}
-                  className={`w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
-                    activeTool === 'pen' && !penWithArrow
-                      ? 'bg-sky-500/15 border-sky-500/60 text-sky-200'
-                      : 'bg-zinc-900/50 border-zinc-800/80 text-zinc-300 hover:text-white hover:bg-zinc-900'
-                  }`}
-                >
-                  <span className="flex items-center gap-2.5">
-                    <Pencil className="w-4 h-4 shrink-0" />
-                    <span>{isDe ? 'Linie' : 'Line'}</span>
-                  </span>
-                  <span
-                    className="w-2.5 h-2.5 rounded-full border border-white/40"
-                    style={{ backgroundColor: penColor }}
-                  />
-                </button>
-
-                <button
-                  onClick={() => handleToolPress('arrow', true)}
-                  className={`w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
-                    activeTool === 'arrow'
-                      ? 'bg-sky-500/15 border-sky-500/60 text-sky-200'
-                      : 'bg-zinc-900/50 border-zinc-800/80 text-zinc-300 hover:text-white hover:bg-zinc-900'
-                  }`}
-                >
-                  <span className="flex items-center gap-2.5">
-                    <ArrowUp className="w-4 h-4 rotate-45 shrink-0" />
-                    <span>{isDe ? 'Pfeil (Rush)' : 'Arrow'}</span>
-                  </span>
-                  <span
-                    className="w-2.5 h-2.5 rounded-full border border-white/40"
-                    style={{ backgroundColor: penColor }}
-                  />
-                </button>
-
-                <button
-                  onClick={() => setActiveTool('eraser')}
-                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
-                    activeTool === 'eraser'
-                      ? 'bg-red-500/20 border-red-500/60 text-red-200'
-                      : 'bg-zinc-900/50 border-zinc-800/80 text-zinc-300 hover:text-white hover:bg-zinc-900'
-                  }`}
-                >
-                  <Eraser className="w-4 h-4 shrink-0" />
-                  <span>{isDe ? 'Radierer' : 'Eraser'}</span>
-                </button>
-
-                {/* Utility Tool + Symbol Sub-Selector (matching T/CT symbol style) */}
-                <div className="space-y-1">
-                  <button
-                    onClick={() => setActiveTool('utility')}
-                    className={`w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
-                      activeTool === 'utility'
-                        ? 'bg-emerald-500/15 border-emerald-500/60 text-emerald-200'
-                        : 'bg-zinc-900/50 border-zinc-800/80 text-zinc-300 hover:text-white hover:bg-zinc-900'
-                    }`}
-                  >
-                    <span className="flex items-center gap-2.5">
-                      <UtilitySymbol type={selectedUtility} size="sm" />
-                      <span>Utility</span>
-                    </span>
-                    <span className="text-[10px] font-mono uppercase text-zinc-400">
-                      {selectedUtility === 'molotov' ? 'Molo' : selectedUtility}
-                    </span>
-                  </button>
-                  {activeTool === 'utility' && (
-                    <div className="grid grid-cols-3 gap-1 p-1.5 rounded-lg bg-zinc-900 border border-zinc-800">
-                      {(['smoke', 'flash', 'molotov', 'he', 'decoy'] as UtilityType[]).map((u) => {
-                        const meta = UTILITY_META[u];
-                        return (
-                          <button
-                            key={u}
-                            onClick={() => setSelectedUtility(u)}
-                            className={`flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 rounded text-[10px] font-bold uppercase cursor-pointer border transition-colors ${
-                              selectedUtility === u
-                                ? `${meta.bgClass} ${meta.borderClass} shadow-xs`
-                                : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-white'
-                            }`}
-                            title={isDe ? meta.labelDe : meta.labelEn}
-                          >
-                            <UtilitySymbol type={u} size="sm" />
-                            <span className="leading-none text-[9px]">{u === 'molotov' ? 'Molo' : u}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Player Tokens (T / CT) + Inline Side Selector */}
-                <div className="space-y-1">
-                  <button
-                    onClick={() => setActiveTool('player')}
-                    className={`w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
-                      activeTool === 'player'
-                        ? 'bg-amber-500/15 border-amber-500/60 text-amber-200'
-                        : 'bg-zinc-900/50 border-zinc-800/80 text-zinc-300 hover:text-white hover:bg-zinc-900'
-                    }`}
-                  >
-                    <span className="flex items-center gap-2.5">
-                      <Users className="w-4 h-4 shrink-0" />
-                      <span>T / CT</span>
-                    </span>
-                    <span className="text-[10px] font-mono uppercase text-zinc-400">
-                      {selectedPlayerSide.toUpperCase()}
-                    </span>
-                  </button>
-                  {activeTool === 'player' && (
-                    <div className="grid grid-cols-2 gap-1 p-1.5 rounded-lg bg-zinc-900 border border-zinc-800">
-                      <button
-                        onClick={() => setSelectedPlayerSide('ct')}
-                        className={`flex items-center justify-center gap-1 py-1.5 rounded text-[11px] font-bold cursor-pointer border ${
-                          selectedPlayerSide === 'ct'
-                            ? 'bg-blue-600 text-white border-blue-400'
-                            : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-white'
-                        }`}
-                      >
-                        <img src={resolveAssetPath('ct.png')} alt="CT" className="w-3.5 h-3.5 object-contain" />
-                        <span>CT</span>
-                      </button>
-                      <button
-                        onClick={() => setSelectedPlayerSide('t')}
-                        className={`flex items-center justify-center gap-1 py-1.5 rounded text-[11px] font-bold cursor-pointer border ${
-                          selectedPlayerSide === 't'
-                            ? 'bg-amber-600 text-zinc-950 border-amber-400'
-                            : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-white'
-                        }`}
-                      >
-                        <img src={resolveAssetPath('T.png')} alt="T" className="w-3.5 h-3.5 object-contain" />
-                        <span>T</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Zeichenfarbe Swatches */}
-            <div className="pt-2 border-t border-zinc-800/80">
-              <div className="flex items-center justify-between px-1.5 mb-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
-                  {isDe ? 'Farbe' : 'Color'}
-                </span>
-                <span className="text-[10px] font-mono text-zinc-500">{penColor}</span>
-              </div>
-              <div className="flex items-center justify-between gap-1 px-1">
-                {colors.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setPenColor(c)}
-                    style={{ backgroundColor: c }}
-                    className={`w-5 h-5 rounded-full border transition-transform hover:scale-110 cursor-pointer ${
-                      penColor === c
-                        ? 'border-amber-400 ring-2 ring-amber-400/50 scale-110'
-                        : 'border-zinc-700'
-                    }`}
-                    title={c}
-                  />
-                ))}
-              </div>
-              <div className="mt-2 px-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCustomColorTarget('pen');
-                    setIsCustomColorModalOpen(true);
-                  }}
-                  className="w-full py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-amber-300 border border-zinc-700 text-[10px] font-bold cursor-pointer transition-colors flex items-center justify-center gap-1.5"
-                >
-                  <Palette className="w-3 h-3" />
-                  <span>{isDe ? 'Eigene Farbe...' : 'Custom Color...'}</span>
-                </button>
-              </div>
-
-              {/* PC Version: Rückgängig, Vorwärts & Löschen unter Werkzeuge / Eigene Farbe */}
-              <div className="mt-2.5 pt-2 border-t border-zinc-800/80 px-1 space-y-1.5">
-                <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-zinc-400">
-                  <span>{isDe ? 'Aktionen' : 'Actions'}</span>
-                </div>
-                <div className="flex items-center gap-1 p-1 rounded-xl bg-zinc-900/90 border border-zinc-800 shadow-inner">
-                  <button
-                    type="button"
-                    onClick={handleUndoDrawing}
-                    disabled={drawings.length === 0}
-                    className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg border text-xs font-semibold transition-colors ${
-                      drawings.length > 0
-                        ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border-zinc-700 cursor-pointer shadow-xs'
-                        : 'bg-zinc-950 text-zinc-600 border-zinc-900 cursor-not-allowed opacity-50'
-                    }`}
-                    title={isDe ? 'Rückgängig (Strg+Z)' : 'Undo (Ctrl+Z)'}
-                  >
-                    <Undo2 className="w-3.5 h-3.5" />
-                    <span className="text-[11px]">{isDe ? 'Zurück' : 'Undo'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleRedoDrawing}
-                    disabled={drawingsRedoStack.length === 0}
-                    className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg border text-xs font-semibold transition-colors ${
-                      drawingsRedoStack.length > 0
-                        ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border-zinc-700 cursor-pointer shadow-xs'
-                        : 'bg-zinc-950 text-zinc-600 border-zinc-900 cursor-not-allowed opacity-50'
-                    }`}
-                    title={isDe ? 'Wiederholen (Strg+Y)' : 'Redo (Ctrl+Y)'}
-                  >
-                    <Redo2 className="w-3.5 h-3.5" />
-                    <span className="text-[11px]">{isDe ? 'Vor' : 'Redo'}</span>
-                  </button>
-                  {(drawings.length > 0 || utilities.length > 0 || players.length > 0) && (
-                    <button
-                      type="button"
-                      onClick={handleClearTactics}
-                      className="p-1.5 rounded-lg border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors cursor-pointer"
-                      title={isDe ? 'Board leeren (entsperrte Linien, Utilitys & Spieler löschen)' : 'Clear board'}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Shortcut Hint Footer (vergrößert mit Tasten-Badges) */}
-          <div className="pt-3 mt-3 border-t border-zinc-800/80 px-1 text-xs text-zinc-200 leading-relaxed space-y-1.5">
-            <div className="flex items-center gap-1.5">
-              <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-amber-300 font-mono text-[11px] font-bold shadow-xs">
-                Strg+Klick
-              </kbd>
-              <span className="text-zinc-300">{isDe ? 'Mehrfachauswahl' : 'Multi-select'}</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-sky-300 font-mono text-[11px] font-bold shadow-xs">
-                Rechtsklick
-              </kbd>
-              <span className="text-zinc-300">{isDe ? 'Kontextmenü' : 'Context menu'}</span>
-            </div>
-          </div>
-        </aside>
+          <TacticalLeftSidebar
+            lang={lang}
+            activeTool={activeTool}
+            penWithArrow={penWithArrow}
+            penColor={penColor}
+            colors={colors}
+            selectedUtility={selectedUtility}
+            utilityPlacementMode={utilityPlacementMode}
+            selectedThrowType={selectedThrowType}
+            selectedPlayerSide={selectedPlayerSide}
+            canUndo={canUndo}
+            canRedo={canRedo}
+            hasBoardElements={drawings.length > 0 || utilities.length > 0 || players.length > 0}
+            onHideToolbar={() => setIsToolbarVisible(false)}
+            onSelectTool={setActiveTool}
+            onToolPress={handleToolPress}
+            onSelectUtility={setSelectedUtility}
+            onSelectUtilityPlacementMode={setUtilityPlacementMode}
+            onSelectThrowType={setSelectedThrowType}
+            onSelectPlayerSide={setSelectedPlayerSide}
+            onSelectColor={setPenColor}
+            onOpenCustomColor={() => {
+              setCustomColorTarget('pen');
+              setIsCustomColorModalOpen(true);
+            }}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
+            onClearTactics={handleClearTactics}
+          />
         )}
 
         {/* MINIMALIST LEFT-SIDE REOPEN BUTTON (an Werkzeuge-Position wenn ausgeblendet) */}
@@ -4376,10 +3930,11 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
               e.stopPropagation();
               setIsToolbarVisible(true);
             }}
-            className="absolute top-3 left-3 z-40 p-1.5 rounded-lg bg-zinc-950/90 border border-zinc-800/90 text-zinc-400 hover:text-white hover:bg-zinc-900 shadow-lg backdrop-blur-xs transition-colors cursor-pointer print:hidden"
+            className="absolute top-2.5 left-2.5 z-40 flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-zinc-950/90 border border-zinc-800/90 text-zinc-300 hover:text-white hover:bg-zinc-900 shadow-lg backdrop-blur-xs transition-colors cursor-pointer text-[11px] font-semibold print:hidden"
             title={isDe ? 'Werkzeuge einblenden' : 'Show tools'}
           >
-            <PanelLeftOpen className="w-3.5 h-3.5" />
+            <PanelLeftOpen className="w-3.5 h-3.5 text-sky-400" />
+            <span className="md:hidden">{isDe ? 'Werkzeuge' : 'Tools'}</span>
           </button>
         )}
 
@@ -4402,8 +3957,9 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
         {/* CENTER MAP CANVAS STAGE */}
         <div
+          ref={stageRef}
           style={{ touchAction: 'none' }}
-          className={`relative flex-1 bg-zinc-950 flex items-center justify-center overflow-hidden ${
+          className={`relative flex-1 min-h-0 min-w-0 bg-zinc-950 flex items-center justify-center overflow-hidden ${
             isPanning
               ? 'cursor-grabbing'
               : activeTool === 'eraser'
@@ -4493,499 +4049,231 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             </div>
           )}
 
-          {/* FLOATING ELEMENT & CALLOUT SELECTION CONTEXT BAR */}
+          {/* 2-POINT UTILITY THROW STEP GUIDANCE PILL */}
           {!isDrawingPolygonArea &&
             !isEditMode &&
-            !contextMenu &&
-            (selectedElementIds.length > 0 || selectedCalloutIds.length > 0) && (() => {
-              const totalCount = selectedElementIds.length + selectedCalloutIds.length;
-              const singleSelectedCallout =
-                selectedCalloutIds.length > 0
-                  ? mapData.callouts.find((c) => selectedCalloutIds.includes(c.id)) || null
-                  : null;
-              const selectedGroupSet = new Set([
-                ...drawings.filter((d) => selectedElementIds.includes(d.id) && d.groupId).map((d) => d.groupId),
-                ...utilities.filter((u) => selectedElementIds.includes(u.id) && u.groupId).map((u) => u.groupId),
-                ...players.filter((p) => selectedElementIds.includes(p.id) && p.groupId).map((p) => p.groupId),
-                ...mapData.callouts.filter((c) => selectedCalloutIds.includes(c.id) && c.groupId).map((c) => c.groupId),
-              ]);
-              const isGrouped = selectedGroupSet.size > 0;
-              const allLocked =
-                drawings.filter((d) => selectedElementIds.includes(d.id)).every((d) => d.locked) &&
-                utilities.filter((u) => selectedElementIds.includes(u.id)).every((u) => u.locked) &&
-                players.filter((p) => selectedElementIds.includes(p.id)).every((p) => p.locked) &&
-                mapData.callouts.filter((c) => selectedCalloutIds.includes(c.id)).every((c) => c.locked);
-
-              return (
-                <div
-                  data-no-map-click="true"
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => e.stopPropagation()}
-                  className="absolute top-3 left-1/2 -translate-x-1/2 z-40 flex flex-wrap items-center justify-center gap-1 px-2 py-1 rounded-xl bg-zinc-950/95 border border-zinc-700 shadow-2xl backdrop-blur-md text-xs text-zinc-100 w-max max-w-[calc(100%-72px)] print:hidden"
-                >
-                  <span className="px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono font-bold tabular-nums shrink-0">
-                    {totalCount}
-                    <span className="hidden sm:inline"> {isDe ? 'gewählt' : 'selected'}</span>
-                  </span>
-                  {isGrouped && (
-                    <span className="px-1.5 py-0.5 rounded border border-sky-500/50 bg-sky-500/10 text-sky-300 text-[10px] font-bold shrink-0">
-                      {isDe ? 'Gruppe' : 'Group'}
-                    </span>
-                  )}
-
-                  {/* Callout Bearbeiten */}
-                  {singleSelectedCallout && (
-                    <button
-                      type="button"
-                      onClick={(e) => handleOpenCalloutEditor(singleSelectedCallout, e)}
-                      className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-zinc-800 text-zinc-200 hover:text-white transition-colors shrink-0 cursor-pointer"
-                      title={isDe ? 'Callout bearbeiten' : 'Edit callout'}
-                    >
-                      <Edit3 className="w-3.5 h-3.5 text-amber-400" />
-                      <span className="hidden sm:inline">{isDe ? 'Bearbeiten' : 'Edit'}</span>
-                    </button>
-                  )}
-
-                  {/* Bereich verschieben */}
-                  {singleSelectedCallout && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (movingAreaCalloutId === singleSelectedCallout.id) {
-                          setMovingAreaCalloutId(null);
-                        } else {
-                          if (!singleSelectedCallout.area) {
-                            const width = 10;
-                            const height = 10;
-                            const areaX = Math.max(
-                              -50,
-                              Math.min(50 - width, Math.round((singleSelectedCallout.x - width / 2) * 10) / 10)
-                            );
-                            const areaY = Math.max(
-                              -50,
-                              Math.min(50 - height, Math.round((singleSelectedCallout.y - height / 2) * 10) / 10)
-                            );
-                            const updatedCallouts = mapData.callouts.map((c) =>
-                              c.id === singleSelectedCallout.id
-                                ? {
-                                    ...c,
-                                    area: { x: areaX, y: areaY, width, height, shape: 'rect' as const },
-                                  }
-                                : c
-                            );
-                            handleMapUpdate({ ...mapData, callouts: updatedCallouts });
-                          }
-                          setIsEditMode(true);
-                          setMovingAreaCalloutId(singleSelectedCallout.id);
-                        }
-                      }}
-                      className={`flex items-center gap-1 px-2 py-1 rounded-lg transition-colors shrink-0 cursor-pointer ${
-                        movingAreaCalloutId === singleSelectedCallout.id
-                          ? 'bg-amber-500/25 text-amber-300 border border-amber-500/50'
-                          : 'hover:bg-zinc-800 text-zinc-200 hover:text-white'
-                      }`}
-                      title={
-                        movingAreaCalloutId === singleSelectedCallout.id
-                          ? isDe
-                            ? 'Bereich-Verschieben beenden'
-                            : 'Stop moving area'
-                          : isDe
-                          ? 'Bereich verschieben'
-                          : 'Move area'
-                      }
-                    >
-                      <Move className="w-3.5 h-3.5 text-amber-400" />
-                      <span className="hidden sm:inline">
-                        {movingAreaCalloutId === singleSelectedCallout.id
-                          ? isDe
-                            ? 'Verschieben beenden'
-                            : 'Stop move'
-                          : isDe
-                          ? 'Bereich verschieben'
-                          : 'Move area'}
-                      </span>
-                    </button>
-                  )}
-
-                  {(totalCount >= 2 || isGrouped) && (
-                    <button
-                      type="button"
-                      onClick={handleGroupSelected}
-                      className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-zinc-800 text-zinc-200 hover:text-white transition-colors shrink-0 cursor-pointer"
-                      title={isDe ? 'Elemente gruppieren / Gruppe auflösen' : 'Group / Ungroup'}
-                    >
-                      <Users className="w-3.5 h-3.5 text-sky-400" />
-                      <span className="hidden sm:inline">
-                        {isGrouped ? (isDe ? 'Lösen' : 'Ungroup') : isDe ? 'Gruppieren' : 'Group'}
-                      </span>
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={handleDuplicateSelected}
-                    className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-zinc-800 text-zinc-200 hover:text-white transition-colors shrink-0 cursor-pointer"
-                    title={isDe ? 'Duplizieren (Strg+D)' : 'Duplicate (Ctrl+D)'}
-                  >
-                    <Copy className="w-3.5 h-3.5 text-emerald-400" />
-                    <span className="hidden sm:inline">{isDe ? 'Duplizieren' : 'Duplicate'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleToggleLockSelected}
-                    className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-zinc-800 text-zinc-200 hover:text-white transition-colors shrink-0 cursor-pointer"
-                    title={isDe ? 'Auswahl sperren / entsperren' : 'Lock / Unlock'}
-                  >
-                    {allLocked ? (
-                      <Unlock className="w-3.5 h-3.5 text-amber-400" />
-                    ) : (
-                      <Lock className="w-3.5 h-3.5 text-amber-400" />
-                    )}
-                    <span className="hidden sm:inline">
-                      {allLocked ? (isDe ? 'Entsperren' : 'Unlock') : isDe ? 'Sperren' : 'Lock'}
-                    </span>
-                  </button>
-
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setShowContextColorPicker((p) => !p)}
-                      className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-zinc-800 text-zinc-200 hover:text-white transition-colors shrink-0 cursor-pointer"
-                      title={isDe ? 'Farbe ändern' : 'Change color'}
-                    >
-                      <Palette className="w-3.5 h-3.5 text-purple-400" />
-                      <span className="hidden sm:inline">{isDe ? 'Farbe' : 'Color'}</span>
-                    </button>
-                    {showContextColorPicker && (
-                      <div className="fixed top-24 left-1/2 -translate-x-1/2 p-2 rounded-xl bg-zinc-900 border border-zinc-700 shadow-2xl flex items-center gap-1.5 z-50">
-                        {colors.map((c) => (
-                          <button
-                            key={c}
-                            type="button"
-                            onClick={() => {
-                              handleUpdateSelectedElementsProps({ color: c });
-                              setShowContextColorPicker(false);
-                            }}
-                            style={{ backgroundColor: c }}
-                            className="w-6 h-6 rounded-full border border-zinc-600 hover:scale-115 transition-transform cursor-pointer"
-                          />
-                        ))}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCustomColorTarget('selection');
-                            setIsCustomColorModalOpen(true);
-                            setShowContextColorPicker(false);
-                          }}
-                          className="px-2 h-6 rounded-full bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-zinc-600 text-[10px] font-bold cursor-pointer flex items-center gap-1"
-                        >
-                          <Palette className="w-3 h-3" />
-                          <span>{isDe ? 'Eigene' : 'Custom'}</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleDeleteSelectedElements}
-                    className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors shrink-0 cursor-pointer"
-                    title={isDe ? 'Auswahl löschen (Entf)' : 'Delete selected (Del)'}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">{isDe ? 'Löschen' : 'Delete'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedElementIds([]);
-                      setSelectedCalloutIds([]);
-                      setSelectedCallout(null);
-                      setShowContextColorPicker(false);
-                    }}
-                    className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 cursor-pointer shrink-0"
-                    title={isDe ? 'Auswahl aufheben' : 'Deselect'}
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              );
-            })()}
-
-          {/* RIGHT-CLICK CONTEXT MENU POPOVER */}
-          {contextMenu && !isDrawingPolygonArea && (() => {
-            const totalCount = selectedElementIds.length + selectedCalloutIds.length;
-            const singleCtxCallout =
-              selectedCalloutIds.length === 1 && selectedElementIds.length === 0
-                ? mapData.callouts.find((c) => c.id === selectedCalloutIds[0]) || null
-                : null;
-            const selectedGroupSet = new Set([
-              ...drawings.filter((d) => selectedElementIds.includes(d.id) && d.groupId).map((d) => d.groupId),
-              ...utilities.filter((u) => selectedElementIds.includes(u.id) && u.groupId).map((u) => u.groupId),
-              ...players.filter((p) => selectedElementIds.includes(p.id) && p.groupId).map((p) => p.groupId),
-              ...mapData.callouts.filter((c) => selectedCalloutIds.includes(c.id) && c.groupId).map((c) => c.groupId),
-            ]);
-            const isGrouped = selectedGroupSet.size > 0;
-            const allLocked =
-              totalCount > 0 &&
-              drawings.filter((d) => selectedElementIds.includes(d.id)).every((d) => d.locked) &&
-              utilities.filter((u) => selectedElementIds.includes(u.id)).every((u) => u.locked) &&
-              players.filter((p) => selectedElementIds.includes(p.id)).every((p) => p.locked) &&
-              mapData.callouts.filter((c) => selectedCalloutIds.includes(c.id)).every((c) => c.locked);
-
-            const menuLeft =
-              typeof window !== 'undefined' ? Math.min(contextMenu.x, window.innerWidth - 260) : contextMenu.x;
-            const menuTop =
-              typeof window !== 'undefined'
-                ? Math.min(contextMenu.y, window.innerHeight - (singleCtxCallout ? 430 : 300))
-                : contextMenu.y;
-
-            return (
+            selectedElementIds.length === 0 &&
+            selectedCalloutIds.length === 0 &&
+            activeTool === 'utility' &&
+            utilityPlacementMode === 'throw' && (
               <div
                 data-no-map-click="true"
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }}
-                style={{ left: `${Math.max(12, menuLeft)}px`, top: `${Math.max(12, menuTop)}px` }}
-                className="fixed z-[110] w-60 rounded-xl bg-zinc-900/95 border border-zinc-700/90 shadow-2xl backdrop-blur-md text-xs text-zinc-100 overflow-hidden print:hidden"
+                className={`absolute ${
+                  !isToolbarVisible && !isFullscreen ? 'top-12 md:top-3' : 'top-3'
+                } left-1/2 -translate-x-1/2 z-40 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 px-3 py-1.5 rounded-xl bg-zinc-950/95 border border-emerald-500/60 text-xs text-zinc-100 shadow-2xl backdrop-blur-md w-max max-w-[94vw] print:hidden`}
               >
-                {/* Header */}
-                <div className="px-3.5 py-2.5 border-b border-zinc-800 flex items-center justify-between gap-2 bg-zinc-950/60">
-                  <span className="font-semibold text-zinc-100 truncate">
-                    {singleCtxCallout
-                      ? singleCtxCallout.name.replace(/\n/g, ' ')
-                      : totalCount === 1
-                      ? isDe
-                        ? '1 Element ausgewählt'
-                        : '1 element selected'
-                      : isDe
-                      ? `${totalCount} Elemente ausgewählt`
-                      : `${totalCount} elements selected`}
-                  </span>
-                  <span
-                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold border shrink-0 ${
-                      isGrouped
-                        ? 'border-sky-400/70 bg-sky-500/20 text-sky-300'
-                        : 'border-sky-500/40 bg-sky-500/10 text-sky-300/80'
-                    }`}
-                  >
-                    {isDe ? 'Gruppe' : 'Group'}
-                  </span>
-                </div>
-
-                {/* Action Rows */}
-                <div className="p-1.5 space-y-0.5">
-                  {singleCtxCallout && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          handleOpenCalloutEditor(singleCtxCallout, e);
-                          setContextMenu(null);
-                        }}
-                        className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-zinc-800 text-zinc-100 transition-colors cursor-pointer"
-                      >
-                        <span className="flex items-center gap-2.5">
-                          <Edit3 className="w-4 h-4 text-amber-400" />
-                          <span className="font-medium">
-                            {isDe ? 'Callout bearbeiten' : 'Edit callout'}
-                          </span>
-                        </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const currentTextRot =
-                            singleCtxCallout.textRotation !== undefined
-                              ? singleCtxCallout.textRotation
-                              : singleCtxCallout.rotation || 0;
-                          let nextRot = currentTextRot + 45;
-                          if (nextRot > 180) nextRot = -135;
-                          const updated = mapData.callouts.map((c) =>
-                            c.id === singleCtxCallout.id ? { ...c, textRotation: nextRot } : c
-                          );
-                          handleMapUpdate({ ...mapData, callouts: updated });
-                        }}
-                        className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-zinc-800 text-zinc-100 transition-colors cursor-pointer"
-                      >
-                        <span className="flex items-center gap-2.5">
-                          <RotateCw className="w-4 h-4 text-sky-400" />
-                          <span className="font-medium">
-                            {isDe ? 'Text drehen (+45°)' : 'Rotate text (+45°)'}
-                          </span>
-                        </span>
-                        <span className="text-[11px] font-mono text-zinc-500">
-                          {singleCtxCallout.textRotation !== undefined
-                            ? singleCtxCallout.textRotation
-                            : singleCtxCallout.rotation || 0}
-                          °
-                        </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (movingAreaCalloutId === singleCtxCallout.id) {
-                            setMovingAreaCalloutId(null);
-                          } else {
-                            if (!singleCtxCallout.area) {
-                              const width = 10;
-                              const height = 10;
-                              const areaX = Math.max(
-                                -50,
-                                Math.min(50 - width, Math.round((singleCtxCallout.x - width / 2) * 10) / 10)
-                              );
-                              const areaY = Math.max(
-                                -50,
-                                Math.min(50 - height, Math.round((singleCtxCallout.y - height / 2) * 10) / 10)
-                              );
-                              const updatedCallouts = mapData.callouts.map((c) =>
-                                c.id === singleCtxCallout.id
-                                  ? {
-                                      ...c,
-                                      area: { x: areaX, y: areaY, width, height, shape: 'rect' as const },
-                                    }
-                                  : c
-                              );
-                              handleMapUpdate({ ...mapData, callouts: updatedCallouts });
-                            }
-                            setIsEditMode(true);
-                            setMovingAreaCalloutId(singleCtxCallout.id);
-                          }
-                          setContextMenu(null);
-                        }}
-                        className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-zinc-800 text-zinc-100 transition-colors cursor-pointer"
-                      >
-                        <span className="flex items-center gap-2.5">
-                          <Move className="w-4 h-4 text-amber-400" />
-                          <span className="font-medium">
-                            {movingAreaCalloutId === singleCtxCallout.id
-                              ? isDe
-                                ? 'Bereich-Verschieben beenden'
-                                : 'Stop moving area'
-                              : isDe
-                              ? 'Bereich verschieben'
-                              : 'Move area'}
-                          </span>
-                        </span>
-                      </button>
-
-                      <div className="my-1 border-t border-zinc-800" />
-                    </>
-                  )}
-                  <button
-                    type="button"
-                    disabled={totalCount < 2 && !isGrouped}
-                    onClick={handleGroupSelected}
-                    className={`w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left transition-colors ${
-                      totalCount >= 2 || isGrouped
-                        ? 'hover:bg-zinc-800 text-zinc-100 cursor-pointer'
-                        : 'text-zinc-600 cursor-not-allowed'
-                    }`}
-                  >
-                    <span className="flex items-center gap-2.5">
-                      <Users className="w-4 h-4 text-zinc-300" />
-                      <span className="font-medium">
-                        {isGrouped
-                          ? isDe
-                            ? 'Gruppe aufheben'
-                            : 'Ungroup'
-                          : isDe
-                          ? 'Gruppieren'
-                          : 'Group'}
-                      </span>
+                <Spline className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                {pendingUtilityThrowOrigin ? (
+                  <>
+                    <span className="font-semibold text-emerald-200">
+                      {isDe
+                        ? '1. Abwurf gesetzt → 2. Landeplatz wählen'
+                        : '1. Origin set → 2. Tap landing spot'}
                     </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleDuplicateSelected}
-                    className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-zinc-800 text-zinc-100 transition-colors cursor-pointer"
-                  >
-                    <span className="flex items-center gap-2.5">
-                      <Copy className="w-4 h-4 text-zinc-300" />
-                      <span className="font-medium">{isDe ? 'Duplizieren' : 'Duplicate'}</span>
+                    <span className="px-1.5 py-0.5 rounded bg-sky-500/15 border border-sky-400/40 text-[10px] font-semibold text-sky-300 whitespace-nowrap">
+                      {formatThrowTypeFull(selectedThrowType, lang)}
                     </span>
-                    <span className="text-[11px] font-mono text-zinc-500">Ctrl+D</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleToggleLockSelected}
-                    className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-zinc-800 text-zinc-100 transition-colors cursor-pointer"
-                  >
-                    <span className="flex items-center gap-2.5">
-                      {allLocked ? (
-                        <Unlock className="w-4 h-4 text-amber-400" />
-                      ) : (
-                        <Lock className="w-4 h-4 text-zinc-300" />
-                      )}
-                      <span className="font-medium">
-                        {allLocked ? (isDe ? 'Entsperren' : 'Unlock') : isDe ? 'Sperren' : 'Lock'}
-                      </span>
-                    </span>
-                  </button>
-
-                  {/* Farbe ändern > */}
-                  <div>
                     <button
                       type="button"
-                      onClick={() => setShowContextColorSubmenu((p) => !p)}
-                      className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-zinc-800 text-zinc-100 transition-colors cursor-pointer"
+                      onClick={() => {
+                        setPendingUtilityThrowOrigin(null);
+                        setUtilityHoverCoord(null);
+                      }}
+                      className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-[11px] font-bold text-zinc-300 hover:text-white cursor-pointer"
                     >
-                      <span className="flex items-center gap-2.5">
-                        <Palette className="w-4 h-4 text-zinc-300" />
-                        <span className="font-medium">{isDe ? 'Farbe ändern' : 'Change color'}</span>
-                      </span>
-                      <ChevronRight
-                        className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${
-                          showContextColorSubmenu ? 'rotate-90' : ''
-                        }`}
-                      />
+                      {isDe ? 'Abbrechen' : 'Cancel'}
                     </button>
-                    {showContextColorSubmenu && (
-                      <div className="px-2.5 py-2 mt-0.5 rounded-lg bg-zinc-950/90 border border-zinc-800 flex items-center justify-between gap-1.5">
-                        {colors.map((c) => (
-                          <button
-                            key={c}
-                            type="button"
-                            onClick={() => {
-                              handleUpdateSelectedElementsProps({ color: c });
-                              setShowContextColorSubmenu(false);
-                              setContextMenu(null);
-                            }}
-                            style={{ backgroundColor: c }}
-                            className="w-5 h-5 rounded-full border border-zinc-600 hover:scale-120 transition-transform cursor-pointer"
-                            title={c}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="my-1 border-t border-zinc-800" />
-
-                  <button
-                    type="button"
-                    onClick={handleDeleteSelectedElements}
-                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors cursor-pointer"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    <span className="font-medium">{isDe ? 'Löschen' : 'Delete'}</span>
-                  </button>
-                </div>
+                  </>
+                ) : (
+                  <>
+                    <span className="font-medium text-zinc-200">
+                      {isDe
+                        ? '1. Punkt tippen: Abwurfort wählen'
+                        : 'Step 1: Tap throw origin'}
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded bg-sky-500/15 border border-sky-400/40 text-[10px] font-semibold text-sky-300 whitespace-nowrap">
+                      {formatThrowTypeFull(selectedThrowType, lang)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setUtilityPlacementMode('point')}
+                      className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-[10px] font-bold text-zinc-300 hover:text-white border border-zinc-700 cursor-pointer"
+                    >
+                      {isDe ? 'Nur Spot' : 'Spot'}
+                    </button>
+                  </>
+                )}
               </div>
-            );
-          })()}
+            )}
+
+          {/* 500ms TOUCH LONG-PRESS VISUAL PROGRESS RING */}
+          {longPressVisual && (
+            <div
+              style={{
+                left: `${longPressVisual.x}px`,
+                top: `${longPressVisual.y}px`,
+              }}
+              className="fixed -translate-x-1/2 -translate-y-1/2 z-[120] pointer-events-none"
+            >
+              <svg width="56" height="56" viewBox="0 0 56 56" className="-rotate-90 drop-shadow-[0_0_8px_rgba(56,189,248,0.65)]">
+                <circle
+                  cx="28"
+                  cy="28"
+                  r="22"
+                  fill="rgba(9,9,11,0.45)"
+                  stroke="rgba(255,255,255,0.22)"
+                  strokeWidth="3.5"
+                />
+                <circle
+                  cx="28"
+                  cy="28"
+                  r="22"
+                  fill="none"
+                  stroke="#38bdf8"
+                  strokeWidth="3.5"
+                  strokeLinecap="round"
+                  strokeDasharray="138.23"
+                  strokeDashoffset="138.23"
+                >
+                  <animate
+                    attributeName="stroke-dashoffset"
+                    from="138.23"
+                    to="0"
+                    dur="0.5s"
+                    fill="freeze"
+                  />
+                </circle>
+              </svg>
+            </div>
+          )}
+
+          {/* FLOATING ELEMENT & CALLOUT SELECTION CONTEXT BAR */}
+          {!isDrawingPolygonArea && !isEditMode && !contextMenu && (
+            <TacticalSelectionBar
+              lang={lang}
+              selectedElementIds={selectedElementIds}
+              selectedCalloutIds={selectedCalloutIds}
+              callouts={mapData.callouts}
+              drawings={drawings}
+              utilities={utilities}
+              players={players}
+              colors={colors}
+              movingAreaCalloutId={movingAreaCalloutId}
+              showContextColorPicker={showContextColorPicker}
+              onToggleContextColorPicker={() => setShowContextColorPicker((p) => !p)}
+              onShowCalloutInfo={(c) => {
+                setSelectedCallout(c);
+                setMobileSheetTab('layers');
+                setIsMobileSheetOpen(true);
+              }}
+              onEditCallout={handleOpenCalloutEditor}
+              onToggleMoveArea={(c) => {
+                if (movingAreaCalloutId === c.id) {
+                  setMovingAreaCalloutId(null);
+                } else {
+                  if (!c.area) {
+                    pushHistorySnapshot();
+                    const width = 10;
+                    const height = 10;
+                    const areaX = Math.max(-50, Math.min(50 - width, Math.round((c.x - width / 2) * 10) / 10));
+                    const areaY = Math.max(-50, Math.min(50 - height, Math.round((c.y - height / 2) * 10) / 10));
+                    const updatedCallouts = mapData.callouts.map((item) =>
+                      item.id === c.id
+                        ? { ...item, area: { x: areaX, y: areaY, width, height, shape: 'rect' as const } }
+                        : item
+                    );
+                    handleMapUpdate({ ...mapData, callouts: updatedCallouts });
+                  }
+                  setIsEditMode(true);
+                  setMovingAreaCalloutId(c.id);
+                }
+              }}
+              onGroupSelected={handleGroupSelected}
+              onDuplicateSelected={handleDuplicateSelected}
+              onToggleLockSelected={handleToggleLockSelected}
+              onUpdateColor={(c) => {
+                handleUpdateSelectedElementsProps({ color: c });
+                setShowContextColorPicker(false);
+              }}
+              onUpdateSelectedElementsProps={handleUpdateSelectedElementsProps}
+              onOpenCustomColor={() => {
+                setCustomColorTarget('selection');
+                setIsCustomColorModalOpen(true);
+                setShowContextColorPicker(false);
+              }}
+              onDeleteSelected={handleDeleteSelectedElements}
+              onClearSelection={() => {
+                setSelectedElementIds([]);
+                setSelectedCalloutIds([]);
+                setSelectedCallout(null);
+                setShowContextColorPicker(false);
+              }}
+            />
+          )}
+
+          {/* RIGHT-CLICK / LONG-PRESS CONTEXT MENU POPOVER */}
+          {contextMenu && !isDrawingPolygonArea && (
+            <TacticalContextMenu
+              lang={lang}
+              position={contextMenu}
+              selectedElementIds={selectedElementIds}
+              selectedCalloutIds={selectedCalloutIds}
+              callouts={mapData.callouts}
+              drawings={drawings}
+              utilities={utilities}
+              players={players}
+              colors={colors}
+              movingAreaCalloutId={movingAreaCalloutId}
+              showColorSubmenu={showContextColorSubmenu}
+              onToggleColorSubmenu={() => setShowContextColorSubmenu((p) => !p)}
+              onEditCallout={handleOpenCalloutEditor}
+              onRotateCalloutText={(c) => {
+                pushHistorySnapshot();
+                const currentTextRot =
+                  c.textRotation !== undefined ? c.textRotation : c.rotation || 0;
+                let nextRot = currentTextRot + 45;
+                if (nextRot > 180) nextRot = -135;
+                const updated = mapData.callouts.map((item) =>
+                  item.id === c.id ? { ...item, textRotation: nextRot } : item
+                );
+                handleMapUpdate({ ...mapData, callouts: updated });
+              }}
+              onToggleMoveArea={(c) => {
+                if (movingAreaCalloutId === c.id) {
+                  setMovingAreaCalloutId(null);
+                } else {
+                  if (!c.area) {
+                    pushHistorySnapshot();
+                    const width = 10;
+                    const height = 10;
+                    const areaX = Math.max(-50, Math.min(50 - width, Math.round((c.x - width / 2) * 10) / 10));
+                    const areaY = Math.max(-50, Math.min(50 - height, Math.round((c.y - height / 2) * 10) / 10));
+                    const updatedCallouts = mapData.callouts.map((item) =>
+                      item.id === c.id
+                        ? { ...item, area: { x: areaX, y: areaY, width, height, shape: 'rect' as const } }
+                        : item
+                    );
+                    handleMapUpdate({ ...mapData, callouts: updatedCallouts });
+                  }
+                  setIsEditMode(true);
+                  setMovingAreaCalloutId(c.id);
+                }
+              }}
+              onGroupSelected={handleGroupSelected}
+              onDuplicateSelected={handleDuplicateSelected}
+              onToggleLockSelected={handleToggleLockSelected}
+              onUpdateColor={(c) => {
+                handleUpdateSelectedElementsProps({ color: c });
+                setShowContextColorSubmenu(false);
+                setContextMenu(null);
+              }}
+              onUpdateSelectedElementsProps={handleUpdateSelectedElementsProps}
+              onDeleteSelected={handleDeleteSelectedElements}
+              onClose={() => setContextMenu(null)}
+            />
+          )}
 
           {/* Zoomable & Pannable Radar Map Container */}
           <div
@@ -5039,33 +4327,50 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             </div>
           )}
 
-          {/* MOBILE INITIAL SHORTCUT HINT BANNER (10 Sekunden oder Klick/Tap zum Schließen) */}
-          {showMobileHintBanner && !isDrawingPolygonArea && !isEditMode && (
+          {/* MOBILE INITIAL SHORTCUT HINT BANNER (Touch-Gesten: 10 Sekunden oder Tippen zum Schließen) */}
+          {showMobileHintBanner &&
+            !isDrawingPolygonArea &&
+            !isEditMode &&
+            selectedElementIds.length === 0 &&
+            selectedCalloutIds.length === 0 &&
+            !(activeTool === 'utility' && utilityPlacementMode === 'throw') && (
             <div
               data-no-map-click="true"
               onClick={() => setShowMobileHintBanner(false)}
-              className="md:hidden absolute top-4 left-3 right-3 z-40 flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-zinc-950/95 border border-sky-500/60 text-zinc-100 text-xs font-medium backdrop-blur-md shadow-2xl cursor-pointer transition-all animate-in fade-in slide-in-from-top-2 print:hidden"
+              className={`md:hidden absolute ${
+                !isToolbarVisible && !isFullscreen ? 'top-12' : 'top-3'
+              } left-2 right-2 z-40 flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-zinc-950/95 border border-sky-500/60 text-zinc-100 text-xs font-medium backdrop-blur-md shadow-2xl cursor-pointer transition-all animate-in fade-in slide-in-from-top-2 print:hidden`}
               title={isDe ? 'Tippen zum Schließen' : 'Tap to dismiss'}
             >
               <div className="flex items-center gap-2 min-w-0">
                 <Info className="w-4 h-4 text-sky-400 shrink-0 animate-pulse" />
-                <div className="flex flex-wrap items-center gap-1.5 leading-snug">
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px] leading-snug">
                   <span className="inline-flex items-center gap-1">
-                    <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-amber-300 font-mono text-[10px] font-bold">
-                      Strg+Klick
-                    </kbd>
-                    <span className="text-zinc-300 text-[11px]">
-                      {isDe ? 'Mehrfachauswahl' : 'Multi-select'}
+                    <span className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-amber-300 font-bold text-[10px]">
+                      {isDe ? 'Tippen' : 'Tap'}
                     </span>
+                    <span className="text-zinc-300">{isDe ? 'Auswählen' : 'Select'}</span>
                   </span>
                   <span className="text-zinc-600">·</span>
                   <span className="inline-flex items-center gap-1">
-                    <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-sky-300 font-mono text-[10px] font-bold">
-                      Rechtsklick
-                    </kbd>
-                    <span className="text-zinc-300 text-[11px]">
-                      {isDe ? 'Kontextmenü' : 'Context menu'}
+                    <span className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-sky-300 font-bold text-[10px]">
+                      {isDe ? 'Halten (0,5s)' : 'Hold (0.5s)'}
                     </span>
+                    <span className="text-zinc-300">{isDe ? 'Menü' : 'Menu'}</span>
+                  </span>
+                  <span className="text-zinc-600">·</span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-indigo-300 font-bold text-[10px]">
+                      {isDe ? 'Mehrfach' : 'Multi'}
+                    </span>
+                    <span className="text-zinc-300">{isDe ? 'Multi-Wahl' : 'Multi-select'}</span>
+                  </span>
+                  <span className="text-zinc-600">·</span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-emerald-300 font-bold text-[10px]">
+                      {isDe ? 'Info' : 'Info'}
+                    </span>
+                    <span className="text-zinc-300">{isDe ? 'Details' : 'Details'}</span>
                   </span>
                 </div>
               </div>
@@ -5102,309 +4407,61 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           )}
 
           {/* PC-ONLY INTERACTIVE LIVE RADAR MINIMAP (hidden lg:block) */}
-          {!isDrawingPolygonArea &&
-            (() => {
-              const baseTileSize = mapContainerRef.current?.clientWidth || 720;
-              const stageEl = mapContainerRef.current?.parentElement;
-              const stageW = stageEl?.clientWidth || 900;
-              const stageH = stageEl?.clientHeight || 700;
-              const scaledW = Math.max(1, baseTileSize * zoom);
-              const scaledH = Math.max(1, baseTileSize * zoom);
-              const viewWFrac = Math.min(1, stageW / scaledW);
-              const viewHFrac = Math.min(1, stageH / scaledH);
-              const centerXFrac = 0.5 - pan.x / scaledW;
-              const centerYFrac = 0.5 - pan.y / scaledH;
-              const boxLeft = Math.max(0, Math.min(1 - viewWFrac, centerXFrac - viewWFrac / 2));
-              const boxTop = Math.max(0, Math.min(1 - viewHFrac, centerYFrac - viewHFrac / 2));
-
-              const panToMinimapEvent = (clientX: number, clientY: number) => {
-                if (!minimapRef.current) return;
-                const r = minimapRef.current.getBoundingClientRect();
-                const nx = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
-                const ny = Math.max(0, Math.min(1, (clientY - r.top) / r.height));
-                setPan({
-                  x: Math.round((0.5 - nx) * scaledW),
-                  y: Math.round((0.5 - ny) * scaledH),
-                });
-              };
-
-              if (!showMinimap) {
-                return (
-                  <button
-                    type="button"
-                    data-no-map-click="true"
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowMinimap(true);
-                    }}
-                    className="hidden lg:flex items-center gap-1.5 absolute bottom-3 right-3 z-30 px-2.5 py-1.5 rounded-xl bg-zinc-950/90 border border-zinc-800 hover:border-sky-500/50 text-xs font-bold text-zinc-200 hover:text-white shadow-2xl backdrop-blur-md cursor-pointer print:hidden"
-                    title={isDe ? 'Minikarte anzeigen' : 'Show minimap'}
-                  >
-                    <MapIcon className="w-3.5 h-3.5 text-sky-400" />
-                    <span>Minikarte</span>
-                  </button>
-                );
-              }
-
-              return (
-                <div
-                  data-no-map-click="true"
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => e.stopPropagation()}
-                  className="hidden lg:flex flex-col absolute bottom-3 right-3 z-30 w-[156px] rounded-xl bg-zinc-950/95 border border-zinc-700/90 shadow-2xl backdrop-blur-md p-1.5 gap-1 print:hidden"
-                >
-                  <div className="flex items-center justify-between px-1">
-                    <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-zinc-300">
-                      <MapIcon className="w-3 h-3 text-sky-400" />
-                      <span>Minikarte</span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setShowMinimap(false)}
-                      className="p-0.5 rounded text-zinc-500 hover:text-white hover:bg-zinc-800 cursor-pointer"
-                      title={isDe ? 'Minikarte ausblenden' : 'Hide minimap'}
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-
-                  <div
-                    ref={minimapRef}
-                    onMouseDown={(e) => {
-                      e.stopPropagation();
-                      setIsDraggingMinimap(true);
-                      panToMinimapEvent(e.clientX, e.clientY);
-                    }}
-                    onMouseMove={(e) => {
-                      if (!isDraggingMinimap) return;
-                      e.stopPropagation();
-                      panToMinimapEvent(e.clientX, e.clientY);
-                    }}
-                    onMouseUp={() => setIsDraggingMinimap(false)}
-                    onMouseLeave={() => setIsDraggingMinimap(false)}
-                    className="relative w-full aspect-square rounded-lg overflow-hidden border border-zinc-800 bg-zinc-900 cursor-crosshair select-none"
-                    title={isDe ? 'Klicken oder ziehen zum Navigieren' : 'Click or drag to pan'}
-                  >
-                    <img
-                      src={resolveAssetPath(activeImage)}
-                      alt="Minimap"
-                      className="w-full h-full object-cover opacity-80 pointer-events-none"
-                      draggable={false}
-                    />
-                    <svg
-                      className="absolute inset-0 w-full h-full pointer-events-none"
-                      viewBox="-50 -50 100 100"
-                      preserveAspectRatio="none"
-                    >
-                      {drawings
-                        .filter((d) => isLayerVisible(d.layerId, 'layer_t'))
-                        .map((d) => (
-                          <polyline
-                            key={`mini_${d.id}`}
-                            points={d.points.map((p) => `${p.x},${p.y}`).join(' ')}
-                            fill="none"
-                            stroke={d.color || '#ffffff'}
-                            strokeWidth={1.6}
-                            strokeLinecap="round"
-                          />
-                        ))}
-                      {utilities
-                        .filter((u) => isLayerVisible(u.layerId, 'layer_util'))
-                        .map((u) => (
-                          <circle
-                            key={`mini_${u.id}`}
-                            cx={u.x}
-                            cy={u.y}
-                            r={2.5}
-                            fill={UTILITY_META[u.type]?.colorHex || '#38bdf8'}
-                          />
-                        ))}
-                      {players
-                        .filter((p) => isLayerVisible(p.layerId, p.side === 'ct' ? 'layer_ct' : 'layer_t'))
-                        .map((p) => (
-                          <circle
-                            key={`mini_${p.id}`}
-                            cx={p.x}
-                            cy={p.y}
-                            r={2.5}
-                            fill={p.side === 'ct' ? '#2563eb' : '#d97706'}
-                          />
-                        ))}
-                    </svg>
-
-                    {/* Live Viewport Frame */}
-                    <div
-                      style={{
-                        left: `${boxLeft * 100}%`,
-                        top: `${boxTop * 100}%`,
-                        width: `${viewWFrac * 100}%`,
-                        height: `${viewHFrac * 100}%`,
-                      }}
-                      className="absolute border-[1.5px] border-sky-400 bg-transparent rounded-[2px] pointer-events-none"
-                    />
-                  </div>
-                </div>
-              );
-            })()}
+          {!isDrawingPolygonArea && (
+            <TacticalMinimap
+              lang={lang}
+              activeImage={activeImage}
+              showMinimap={showMinimap}
+              onToggleShowMinimap={setShowMinimap}
+              mapContainerEl={mapContainerRef.current}
+              zoom={zoom}
+              pan={pan}
+              onSetPan={setPan}
+              drawings={drawings}
+              utilities={utilities}
+              players={players}
+              isLayerVisible={isLayerVisible}
+            />
+          )}
 
         </div>
 
-        {/* MOBILE FLOATING BOTTOM BAR (Karten-Zoom & Schrift-Zoom mit je einem Schieberegler, Bereiche, Raster & Ebenen-Button — md:hidden) */}
+        {/* MOBILE FLOATING BOTTOM BAR */}
         {!isDrawingPolygonArea && (
-          <div
-            data-no-map-click="true"
-            onMouseDown={(e) => e.stopPropagation()}
-            onTouchStart={(e) => e.stopPropagation()}
-            onTouchMove={(e) => e.stopPropagation()}
-            onTouchEnd={(e) => e.stopPropagation()}
-            onPointerDown={(e) => e.stopPropagation()}
-            className="md:hidden absolute bottom-2 left-2 right-2 z-30 flex items-end justify-between gap-1.5 pointer-events-none print:hidden"
-          >
-            <div className="pointer-events-auto flex flex-col gap-1 p-1.5 rounded-xl bg-zinc-950/95 border border-zinc-800 shadow-2xl backdrop-blur-md max-w-[calc(100%-46px)]">
-              {/* Zeile 1: Karten-Zoom (Schieberegler) + Fit + Bereiche + Raster */}
-              <div className="flex flex-wrap items-center gap-1" style={{ touchAction: 'pan-x' }}>
-                <button
-                  type="button"
-                  onClick={handleZoomOut}
-                  className="w-6 h-7 flex items-center justify-center rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 cursor-pointer shrink-0"
-                  title="Zoom -"
-                >
-                  <ZoomOut className="w-3.5 h-3.5" />
-                </button>
-                <input
-                  type="range"
-                  min="50"
-                  max="250"
-                  step="1"
-                  value={Math.round(zoom * 100)}
-                  onChange={(e) => handleZoomChange(Number(e.target.value) / 100)}
-                  onInput={(e) => handleZoomChange(Number((e.target as HTMLInputElement).value) / 100)}
-                  style={{ touchAction: 'pan-x' }}
-                  className="w-[74px] accent-sky-400 cursor-pointer h-2 bg-zinc-800 rounded-lg shrink-0"
-                  title={isDe ? 'Karten-Zoom anpassen' : 'Adjust map zoom'}
-                />
-                <span className="text-[10px] font-mono font-bold tabular-nums text-zinc-100 min-w-[30px] text-center shrink-0">
-                  {Math.round(zoom * 100)}%
-                </span>
-                <button
-                  type="button"
-                  onClick={handleZoomIn}
-                  className="w-6 h-7 flex items-center justify-center rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 cursor-pointer shrink-0"
-                  title="Zoom +"
-                >
-                  <ZoomIn className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setZoom(calculateFitZoom());
-                    setPan({ x: 0, y: 0 });
-                  }}
-                  className="px-1.5 h-7 rounded-lg text-[10px] font-mono font-bold bg-zinc-900 hover:bg-zinc-800 text-amber-300 border border-zinc-800 cursor-pointer shrink-0"
-                  title={isDe ? 'Karte einpassen' : 'Fit map'}
-                >
-                  Fit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowAreas((a) => !a)}
-                  className={`w-6 h-7 flex items-center justify-center rounded-lg border transition-colors cursor-pointer shrink-0 ${
-                    showAreas
-                      ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
-                      : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800'
-                  }`}
-                  title={isDe ? 'Bereiche' : 'Areas'}
-                >
-                  <Square className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowGrid((g) => !g)}
-                  className={`w-6 h-7 flex items-center justify-center rounded-lg border transition-colors cursor-pointer shrink-0 ${
-                    showGrid
-                      ? 'bg-sky-500/20 border-sky-500/50 text-sky-300'
-                      : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800'
-                  }`}
-                  title={isDe ? 'Raster' : 'Grid'}
-                >
-                  <Grid3X3 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              {/* Zeile 2: Schriftgröße (Schieberegler) + Fit */}
-              <div className="flex flex-wrap items-center gap-1" style={{ touchAction: 'pan-x' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowCalloutLabels((p) => !p)}
-                  className={`w-6 h-7 flex items-center justify-center rounded-lg border transition-colors cursor-pointer shrink-0 ${
-                    showCalloutLabels
-                      ? 'border-zinc-700 bg-zinc-900 text-zinc-200'
-                      : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:bg-zinc-800'
-                  }`}
-                  title={isDe ? 'Callout-Namen ein-/ausblenden' : 'Toggle labels'}
-                >
-                  {showCalloutLabels ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setCalloutScale((prev) => Math.max(0.4, Math.round((prev - 0.05) * 100) / 100))
-                  }
-                  className="px-1.5 h-7 rounded-lg text-[10px] font-bold bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 cursor-pointer shrink-0"
-                  title={isDe ? 'Schrift kleiner' : 'Smaller text'}
-                >
-                  A-
-                </button>
-                <input
-                  type="range"
-                  min="40"
-                  max="200"
-                  step="1"
-                  value={Math.round(calloutScale * 100)}
-                  onChange={(e) => setCalloutScale(Number(e.target.value) / 100)}
-                  onInput={(e) => setCalloutScale(Number((e.target as HTMLInputElement).value) / 100)}
-                  style={{ touchAction: 'pan-x' }}
-                  className="w-[82px] accent-amber-400 cursor-pointer h-2 bg-zinc-800 rounded-lg shrink-0"
-                  title={isDe ? 'Schriftgröße anpassen' : 'Adjust font size'}
-                />
-                <span className="text-[10px] font-mono font-bold tabular-nums text-zinc-200 min-w-[30px] text-center shrink-0">
-                  {Math.round(calloutScale * 100)}%
-                </span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setCalloutScale((prev) => Math.min(2.0, Math.round((prev + 0.05) * 100) / 100))
-                  }
-                  className="px-1.5 h-7 rounded-lg text-[10px] font-bold bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 cursor-pointer shrink-0"
-                  title={isDe ? 'Schrift größer' : 'Larger text'}
-                >
-                  A+
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCalloutScale(0.6)}
-                  className="px-1.5 h-7 rounded-lg text-[10px] font-mono font-bold bg-zinc-900 hover:bg-zinc-800 text-amber-300 border border-zinc-800 cursor-pointer shrink-0"
-                  title={isDe ? 'Schriftgröße zurücksetzen (60%)' : 'Reset font size (60%)'}
-                >
-                  Fit
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                setMobileSheetTab('layers');
-                setIsMobileSheetOpen(true);
-              }}
-              className="pointer-events-auto w-10 h-10 flex items-center justify-center rounded-xl bg-sky-500 hover:bg-sky-400 text-zinc-950 shadow-2xl cursor-pointer transition-colors shrink-0"
-              title={isDe ? 'Ebenen & Verlauf' : 'Layers & History'}
-              aria-label={isDe ? 'Ebenen & Verlauf' : 'Layers & History'}
-            >
-              <Layers className="w-4 h-4" />
-            </button>
-          </div>
+          <TacticalMobileBottomBar
+            lang={lang}
+            zoom={zoom}
+            onZoomOut={handleZoomOut}
+            onZoomIn={handleZoomIn}
+            onZoomChange={handleZoomChange}
+            onFitZoom={() => {
+              setZoom(calculateFitZoom());
+              setPan({ x: 0, y: 0 });
+            }}
+            showAreas={showAreas}
+            onToggleAreas={() => setShowAreas((a) => !a)}
+            showGrid={showGrid}
+            onToggleGrid={() => setShowGrid((g) => !g)}
+            showCalloutLabels={showCalloutLabels}
+            onToggleLabels={() => setShowCalloutLabels((p) => !p)}
+            calloutScale={calloutScale}
+            onChangeCalloutScale={setCalloutScale}
+            hasSelectedCallout={Boolean(selectedCallout || selectedCalloutIds.length > 0)}
+            onOpenCalloutInfo={() => {
+              const target =
+                selectedCallout ||
+                (selectedCalloutIds.length > 0
+                  ? mapData.callouts.find((c) => selectedCalloutIds.includes(c.id))
+                  : null);
+              if (target) setSelectedCallout(target);
+              setMobileSheetTab('layers');
+              setIsMobileSheetOpen(true);
+            }}
+            onOpenLayersSheet={() => {
+              setMobileSheetTab('layers');
+              setIsMobileSheetOpen(true);
+            }}
+          />
         )}
 
         {/* DESKTOP PINNED RIGHT INSPECTOR SIDEBAR (lg+ — kürzer durch volle untere Leiste, anfangs eingeblendet) */}
@@ -5443,6 +4500,9 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
               setHasChangesInSession(true);
             }}
             onUpdateLayerProps={(id, patch) => {
+              if (patch.color !== undefined) {
+                pushHistorySnapshot();
+              }
               setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
               if (patch.color !== undefined) {
                 setDrawings((prev) =>
@@ -5461,6 +4521,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             }}
             onUpdateSelectedElementsProps={handleUpdateSelectedElementsProps}
             onDeleteElement={(id) => {
+              pushHistorySnapshot();
               setDrawings((prev) =>
                 prev.filter((d) => !(d.id === id && !d.locked && !isLayerLocked(d.layerId)))
               );
@@ -5557,6 +4618,9 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                   setHasChangesInSession(true);
                 }}
                 onUpdateLayerProps={(id, patch) => {
+                  if (patch.color !== undefined) {
+                    pushHistorySnapshot();
+                  }
                   setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
                   if (patch.color !== undefined) {
                     setDrawings((prev) =>
@@ -5575,6 +4639,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                 }}
                 onUpdateSelectedElementsProps={handleUpdateSelectedElementsProps}
                 onDeleteElement={(id) => {
+                  pushHistorySnapshot();
                   setDrawings((prev) =>
                     prev.filter((d) => !(d.id === id && !d.locked && !isLayerLocked(d.layerId)))
                   );
@@ -5615,188 +4680,33 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         )}
       </div>
 
-      {/* FULL-WIDTH DESKTOP & TABLET BOTTOM CONTROL BAR (nutzt den kompletten unteren Bereich über dem Verlauf, rechtes Fenster bleibt darüber) */}
+      {/* FULL-WIDTH DESKTOP & TABLET BOTTOM CONTROL BAR */}
       {!isDrawingPolygonArea && (
-        <div
-          data-no-map-click="true"
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-          className="hidden md:flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 border-t border-zinc-800 bg-zinc-950/95 text-xs text-zinc-200 shrink-0 print:hidden z-30"
-        >
-          {/* Linke Steuerung: Bereiche, Raster & Schriftgröße */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <button
-              type="button"
-              onClick={() => setShowAreas((a) => !a)}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-semibold transition-colors cursor-pointer shrink-0 ${
-                showAreas
-                  ? 'bg-amber-500/15 border-amber-500/40 text-amber-200'
-                  : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
-              }`}
-              title={isDe ? 'Callout-Bereiche ein-/ausblenden' : 'Toggle areas'}
-            >
-              <Square className="w-3.5 h-3.5" />
-              <span>{isDe ? 'Bereiche' : 'Areas'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowGrid((g) => !g)}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-semibold transition-colors cursor-pointer shrink-0 ${
-                showGrid
-                  ? 'bg-sky-500/20 border-sky-500/50 text-sky-200'
-                  : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
-              }`}
-              title={isDe ? 'Koordinaten-Raster ein-/ausblenden' : 'Toggle grid'}
-            >
-              <Grid3X3 className="w-3.5 h-3.5" />
-              <span>{isDe ? 'Raster' : 'Grid'}</span>
-            </button>
-
-            <div className="h-4 w-px bg-zinc-800 shrink-0" />
-
-            {/* Schriftgröße (Callout Scale) */}
-            <div className="flex items-center gap-1 shrink-0">
-              <button
-                type="button"
-                onClick={() => setShowCalloutLabels((p) => !p)}
-                className={`p-1 rounded-md border cursor-pointer transition-colors ${
-                  showCalloutLabels
-                    ? 'bg-zinc-900 border-zinc-700 text-zinc-200 hover:text-white'
-                    : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-white'
-                }`}
-                title={isDe ? 'Callout-Namen ein-/ausblenden' : 'Toggle labels'}
-              >
-                {showCalloutLabels ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setCalloutScale((prev) => Math.max(0.4, Math.round((prev - 0.05) * 100) / 100))
-                }
-                className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 cursor-pointer"
-                title={isDe ? 'Schrift kleiner' : 'Smaller text'}
-              >
-                A-
-              </button>
-              <input
-                type="range"
-                min="40"
-                max="200"
-                step="1"
-                value={Math.round(calloutScale * 100)}
-                onChange={(e) => setCalloutScale(Number(e.target.value) / 100)}
-                onInput={(e) => setCalloutScale(Number((e.target as HTMLInputElement).value) / 100)}
-                style={{ touchAction: 'pan-x' }}
-                className="w-16 lg:w-24 accent-amber-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
-                title={isDe ? 'Schriftgröße anpassen' : 'Adjust font size'}
-              />
-              <span className="font-mono font-bold tabular-nums text-[11px] text-zinc-300 w-9 text-center">
-                {Math.round(calloutScale * 100)}%
-              </span>
-              <button
-                type="button"
-                onClick={() =>
-                  setCalloutScale((prev) => Math.min(2.0, Math.round((prev + 0.05) * 100) / 100))
-                }
-                className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 cursor-pointer"
-                title={isDe ? 'Schrift größer' : 'Larger text'}
-              >
-                A+
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const defaultScale =
-                    typeof window !== 'undefined' && window.innerWidth < 768 ? 0.6 : 1.0;
-                  setCalloutScale(defaultScale);
-                }}
-                className="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-zinc-900 hover:bg-zinc-800 text-amber-300 border border-zinc-800 cursor-pointer"
-                title={isDe ? 'Schriftgröße zurücksetzen (100%)' : 'Reset font size'}
-              >
-                Fit
-              </button>
-            </div>
-          </div>
-
-          {/* Rechte Steuerung: Zoom, Fit & Versionsverlauf */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-1 shrink-0">
-              <button
-                type="button"
-                onClick={handleZoomOut}
-                className="p-1 rounded-md bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 cursor-pointer"
-                title="Zoom -"
-              >
-                <ZoomOut className="w-3.5 h-3.5" />
-              </button>
-              <input
-                type="range"
-                min="50"
-                max="250"
-                step="1"
-                value={Math.round(zoom * 100)}
-                onChange={(e) => handleZoomChange(Number(e.target.value) / 100)}
-                onInput={(e) => handleZoomChange(Number((e.target as HTMLInputElement).value) / 100)}
-                style={{ touchAction: 'pan-x' }}
-                className="w-20 lg:w-28 accent-sky-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
-              />
-              <span className="font-mono font-bold tabular-nums text-[11px] text-zinc-100 w-10 text-center">
-                {Math.round(zoom * 100)}%
-              </span>
-              <button
-                type="button"
-                onClick={handleZoomIn}
-                className="p-1 rounded-md bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 cursor-pointer"
-                title="Zoom +"
-              >
-                <ZoomIn className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setZoom(calculateFitZoom());
-                  setPan({ x: 0, y: 0 });
-                  const defaultScale =
-                    typeof window !== 'undefined' && window.innerWidth < 768 ? 0.6 : 1.0;
-                  setCalloutScale(defaultScale);
-                }}
-                className="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-zinc-900 hover:bg-zinc-800 text-amber-300 border border-zinc-800 cursor-pointer"
-                title={isDe ? 'Auf Bildschirm einpassen' : 'Fit to screen'}
-              >
-                Fit
-              </button>
-            </div>
-
-            <div className="h-4 w-px bg-zinc-800 shrink-0" />
-
-            {/* Compact Versionsverlauf Button */}
-            <button
-              type="button"
-              onClick={() => setIsHistoryExpanded((p) => !p)}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-bold transition-colors cursor-pointer shrink-0 ${
-                isHistoryExpanded
-                  ? 'bg-amber-500 text-zinc-950 border-amber-400'
-                  : 'bg-zinc-900 border-zinc-700 text-zinc-200 hover:bg-zinc-800 hover:text-white'
-              }`}
-              title={
-                isDe
-                  ? 'Versionsverlauf öffnen/schließen (max. 5 Versionen mit Vorschau)'
-                  : 'Toggle version history (max 5 snapshots)'
-              }
-            >
-              <History className="w-3.5 h-3.5" />
-              <span>{isDe ? 'Verlauf' : 'History'}</span>
-              <span
-                className={`px-1 rounded text-[10px] font-mono tabular-nums ${
-                  isHistoryExpanded ? 'bg-zinc-950/20 text-zinc-950' : 'bg-zinc-800 text-amber-300'
-                }`}
-              >
-                {Math.min(5, snapshots.length)}
-              </span>
-            </button>
-          </div>
-        </div>
+        <TacticalBottomBar
+          lang={lang}
+          showAreas={showAreas}
+          onToggleAreas={() => setShowAreas((a) => !a)}
+          showGrid={showGrid}
+          onToggleGrid={() => setShowGrid((g) => !g)}
+          showCalloutLabels={showCalloutLabels}
+          onToggleLabels={() => setShowCalloutLabels((p) => !p)}
+          calloutScale={calloutScale}
+          onChangeCalloutScale={setCalloutScale}
+          zoom={zoom}
+          onZoomOut={handleZoomOut}
+          onZoomIn={handleZoomIn}
+          onZoomChange={handleZoomChange}
+          onFitView={() => {
+            setZoom(calculateFitZoom());
+            setPan({ x: 0, y: 0 });
+            const defaultScale =
+              typeof window !== 'undefined' && window.innerWidth < 768 ? 0.6 : 1.0;
+            setCalloutScale(defaultScale);
+          }}
+          isHistoryExpanded={isHistoryExpanded}
+          onToggleHistory={() => setIsHistoryExpanded((p) => !p)}
+          snapshotCount={snapshots.length}
+        />
       )}
 
       {/* DESKTOP & TABLET COLLAPSIBLE BOTTOM VERSION HISTORY BAR */}
@@ -5819,1590 +4729,209 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         mapImage={activeImage}
       />
 
-      {/* MOBILE BOTTOM SHEET DRAWER (Ebenen, Eigenschaften, Callout-Info & Verlauf — nur bei explizitem Öffnen) */}
-      {isMobileSheetOpen && !isDrawingPolygonArea && (
-        <div
-          data-no-map-click="true"
-          className="md:hidden fixed inset-0 z-50 flex flex-col justify-end print:hidden"
-        >
-          <div
-            onClick={() => {
-              setIsMobileSheetOpen(false);
-              setSelectedCallout(null);
-            }}
-            className="absolute inset-0 bg-black/65 backdrop-blur-[1px]"
-          />
-          <div className="relative z-10 w-full max-h-[78vh] rounded-t-2xl border-t border-zinc-700 bg-zinc-950 shadow-2xl flex flex-col overflow-hidden">
-            {/* Sheet Drag Handle & Tab Switcher */}
-            <div className="px-3 pt-2 pb-2 border-b border-zinc-800 flex flex-col gap-2 shrink-0 bg-zinc-900/90">
-              <div className="w-10 h-1 rounded-full bg-zinc-700 mx-auto" />
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800">
-                  <button
-                    type="button"
-                    onClick={() => setMobileSheetTab('layers')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold cursor-pointer transition-colors ${
-                      mobileSheetTab === 'layers'
-                        ? 'bg-sky-500/20 text-sky-200 border border-sky-500/40'
-                        : 'text-zinc-400 hover:text-white'
-                    }`}
-                  >
-                    <Layers className="w-3.5 h-3.5" />
-                    <span>{isDe ? 'Ebenen & Info' : 'Layers & Info'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMobileSheetTab('history')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold cursor-pointer transition-colors ${
-                      mobileSheetTab === 'history'
-                        ? 'bg-amber-500/20 text-amber-200 border border-amber-500/40'
-                        : 'text-zinc-400 hover:text-white'
-                    }`}
-                  >
-                    <History className="w-3.5 h-3.5" />
-                    <span>{isDe ? 'Verlauf' : 'History'}</span>
-                  </button>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsMobileSheetOpen(false);
-                    setSelectedCallout(null);
-                  }}
-                  className="w-10 h-10 flex items-center justify-center rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 cursor-pointer"
-                  title={isDe ? 'Schließen' : 'Close'}
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto">
-              {mobileSheetTab === 'layers' ? (
-                <TacticalLayersPanel
-                  lang={lang}
-                  layers={layers}
-                  activeLayerId={activeLayerId}
-                  onSelectLayer={setActiveLayerId}
-                  onToggleLayerVisibility={(id) =>
-                    setLayers((prev) =>
-                      prev.map((l) => (l.id === id ? { ...l, visible: !l.visible } : l))
-                    )
-                  }
-                  onToggleLayerLock={(id) =>
-                    setLayers((prev) =>
-                      prev.map((l) => (l.id === id ? { ...l, locked: !l.locked } : l))
-                    )
-                  }
-                  onToggleLayerExpand={(id) =>
-                    setLayers((prev) =>
-                      prev.map((l) => (l.id === id ? { ...l, isExpanded: !l.isExpanded } : l))
-                    )
-                  }
-                  onAddLayer={(name, color) => {
-                    const nid = `layer_${Date.now()}`;
-                    setLayers((prev) => [
-                      ...prev,
-                      {
-                        id: nid,
-                        name,
-                        color,
-                        visible: true,
-                        locked: false,
-                        opacity: 1,
-                        isExpanded: true,
-                      },
-                    ]);
-                    setActiveLayerId(nid);
-                    setHasChangesInSession(true);
-                  }}
-                  onDeleteLayer={(id) => {
-                    if (layers.length <= 1) return;
-                    setLayers((prev) => prev.filter((l) => l.id !== id));
-                    if (activeLayerId === id) {
-                      const fallback = layers.find((l) => l.id !== id);
-                      if (fallback) setActiveLayerId(fallback.id);
-                    }
-                    setHasChangesInSession(true);
-                  }}
-                  onUpdateLayerProps={(id, patch) => {
-                    setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
-                    if (patch.color !== undefined) {
-                      setDrawings((prev) =>
-                        prev.map((d) => (d.layerId === id ? { ...d, color: patch.color! } : d))
-                      );
-                    }
-                    setHasChangesInSession(true);
-                  }}
-                  drawings={drawings}
-                  utilities={utilities}
-                  players={players}
-                  selectedElementIds={selectedElementIds}
-                  onSelectElements={(ids) => {
-                    setSelectedCallout(null);
-                    setSelectedElementIds(ids);
-                  }}
-                  onUpdateSelectedElementsProps={handleUpdateSelectedElementsProps}
-                  onDeleteElement={(id) => {
-                    setDrawings((prev) =>
-                      prev.filter((d) => !(d.id === id && !d.locked && !isLayerLocked(d.layerId)))
-                    );
-                    setUtilities((prev) =>
-                      prev.filter(
-                        (u) => !(u.id === id && !u.locked && !isLayerLocked(u.layerId || 'layer_util'))
-                      )
-                    );
-                    setPlayers((prev) =>
-                      prev.filter(
-                        (p) =>
-                          !(
-                            p.id === id &&
-                            !p.locked &&
-                            !isLayerLocked(p.layerId || (p.side === 'ct' ? 'layer_ct' : 'layer_t'))
-                          )
-                      )
-                    );
-                    setSelectedElementIds((prev) => prev.filter((sid) => sid !== id));
-                    setHasChangesInSession(true);
-                  }}
-                  showAreas={showAreas}
-                  onToggleShowAreas={() => setShowAreas((p) => !p)}
-                  showCalloutLabels={showCalloutLabels}
-                  onToggleShowCalloutLabels={() => setShowCalloutLabels((p) => !p)}
-                  selectedCallout={selectedCallout}
-                  onCloseCallout={() => setSelectedCallout(null)}
-                  colorMode={colorMode}
-                  getZoneBadgeColor={getZoneBadgeColor}
-                  getDangerBadge={getDangerBadge}
-                />
-              ) : (
-                <TacticalHistoryPanel
-                  lang={lang}
-                  snapshots={snapshots}
-                  isExpanded={true}
-                  onToggleExpand={() => {}}
-                  onSaveSnapshot={handleSaveSnapshot}
-                  onRestoreSnapshot={handleRestoreSnapshot}
-                  onDeleteSnapshot={handleDeleteSnapshot}
-                  onClearHistory={handleClearHistory}
-                  onOpenPngPreview={(snap) => {
-                    setIsMobileSheetOpen(false);
-                    setPreviewSnapshot(snap);
-                    setIsTacticPreviewOpen(true);
-                  }}
-                  drawings={drawings}
-                  utilities={utilities}
-                  players={players}
-                  mapImage={activeImage}
-                  isEmbeddedMobile={true}
-                />
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* MOBILE BOTTOM SHEET DRAWER */}
+      <TacticalMobileSheet
+        isOpen={Boolean(isMobileSheetOpen && !isDrawingPolygonArea)}
+        lang={lang}
+        activeTab={mobileSheetTab}
+        onChangeTab={setMobileSheetTab}
+        onClose={() => {
+          setIsMobileSheetOpen(false);
+          setSelectedCallout(null);
+        }}
+        layers={layers}
+        activeLayerId={activeLayerId}
+        onSelectLayer={setActiveLayerId}
+        onToggleLayerVisibility={(id) =>
+          setLayers((prev) =>
+            prev.map((l) => (l.id === id ? { ...l, visible: !l.visible } : l))
+          )
+        }
+        onToggleLayerLock={(id) =>
+          setLayers((prev) =>
+            prev.map((l) => (l.id === id ? { ...l, locked: !l.locked } : l))
+          )
+        }
+        onToggleLayerExpand={(id) =>
+          setLayers((prev) =>
+            prev.map((l) => (l.id === id ? { ...l, isExpanded: !l.isExpanded } : l))
+          )
+        }
+        onAddLayer={(name, color) => {
+          const nid = `layer_${Date.now()}`;
+          setLayers((prev) => [
+            ...prev,
+            {
+              id: nid,
+              name,
+              color,
+              visible: true,
+              locked: false,
+              opacity: 1,
+              isExpanded: true,
+            },
+          ]);
+          setActiveLayerId(nid);
+          setHasChangesInSession(true);
+        }}
+        onDeleteLayer={(id) => {
+          if (layers.length <= 1) return;
+          setLayers((prev) => prev.filter((l) => l.id !== id));
+          if (activeLayerId === id) {
+            const fallback = layers.find((l) => l.id !== id);
+            if (fallback) setActiveLayerId(fallback.id);
+          }
+          setHasChangesInSession(true);
+        }}
+        onUpdateLayerProps={(id, patch) => {
+          if (patch.color !== undefined) {
+            pushHistorySnapshot();
+          }
+          setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+          if (patch.color !== undefined) {
+            setDrawings((prev) =>
+              prev.map((d) => (d.layerId === id ? { ...d, color: patch.color! } : d))
+            );
+          }
+          setHasChangesInSession(true);
+        }}
+        drawings={drawings}
+        utilities={utilities}
+        players={players}
+        selectedElementIds={selectedElementIds}
+        onSelectElements={(ids) => {
+          setSelectedCallout(null);
+          setSelectedElementIds(ids);
+        }}
+        onUpdateSelectedElementsProps={handleUpdateSelectedElementsProps}
+        onDeleteElement={(id) => {
+          pushHistorySnapshot();
+          setDrawings((prev) =>
+            prev.filter((d) => !(d.id === id && !d.locked && !isLayerLocked(d.layerId)))
+          );
+          setUtilities((prev) =>
+            prev.filter(
+              (u) => !(u.id === id && !u.locked && !isLayerLocked(u.layerId || 'layer_util'))
+            )
+          );
+          setPlayers((prev) =>
+            prev.filter(
+              (p) =>
+                !(
+                  p.id === id &&
+                  !p.locked &&
+                  !isLayerLocked(p.layerId || (p.side === 'ct' ? 'layer_ct' : 'layer_t'))
+                )
+            )
+          );
+          setSelectedElementIds((prev) => prev.filter((sid) => sid !== id));
+          setHasChangesInSession(true);
+        }}
+        showAreas={showAreas}
+        onToggleShowAreas={() => setShowAreas((p) => !p)}
+        showCalloutLabels={showCalloutLabels}
+        onToggleShowCalloutLabels={() => setShowCalloutLabels((p) => !p)}
+        selectedCallout={selectedCallout}
+        onCloseCallout={() => setSelectedCallout(null)}
+        colorMode={colorMode}
+        getZoneBadgeColor={getZoneBadgeColor}
+        getDangerBadge={getDangerBadge}
+        snapshots={snapshots}
+        onSaveSnapshot={handleSaveSnapshot}
+        onRestoreSnapshot={handleRestoreSnapshot}
+        onDeleteSnapshot={handleDeleteSnapshot}
+        onClearHistory={handleClearHistory}
+        onOpenPngPreview={(snap) => {
+          setIsMobileSheetOpen(false);
+          setPreviewSnapshot(snap);
+          setIsTacticPreviewOpen(true);
+        }}
+        activeImage={activeImage}
+      />
 
       {/* 5. KURZHILFE & FARBLEGENDE MODAL */}
-      {showLegend && (
-        <div
-          onClick={() => setShowLegend(false)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 print:hidden"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-2xl max-h-[88vh] overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-900 p-5 sm:p-6 shadow-2xl text-zinc-100"
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-800 mb-4">
-              <div className="flex items-center gap-2">
-                <HelpCircle className="w-5 h-5 text-amber-400" />
-                <h3 className="text-base font-bold text-white">
-                  {isDe ? 'Kurzhilfe & Farblegende' : 'Quick Help & Color Legend'}
-                </h3>
-              </div>
-              <button
-                onClick={() => setShowLegend(false)}
-                className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-5 text-xs">
-              {/* TEIL 1: KURZHILFE ZU DEN FUNKTIONEN */}
-              <div>
-                <h4 className="font-mono uppercase font-bold text-sky-400 mb-2">
-                  {isDe ? 'Funktionen kurz erklärt' : 'Features Overview'}
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div className="p-2.5 rounded-xl bg-zinc-950/75 border border-zinc-800 space-y-1">
-                    <div className="font-bold text-zinc-100">
-                      {isDe ? 'Werkzeuge & Seitenleisten' : 'Tools & Sidebars'}
-                    </div>
-                    <p className="text-[11px] text-zinc-400 leading-relaxed">
-                      {isDe
-                        ? 'Auswählen, Bereich (Rahmen ziehen), Linie, Pfeil, Radierer, Utility (Granaten) und T/CT-Spieler. Leisten lassen sich links & rechts über das Panel-Symbol ein-/ausblenden.'
-                        : 'Select, Area Box, Line, Arrow, Eraser, Utility grenades and T/CT tokens. Sidebars toggle via the panel icons.'}
-                    </p>
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-zinc-950/75 border border-zinc-800 space-y-1">
-                    <div className="font-bold text-zinc-100">
-                      {isDe ? 'Mehrfachauswahl & Rechtsklick' : 'Multi-Select & Right-Click'}
-                    </div>
-                    <p className="text-[11px] text-zinc-400 leading-relaxed">
-                      {isDe
-                        ? 'Mehrere Callouts/Elemente per Strg+Klick oder Bereich-Werkzeug markieren. Rechtsklick öffnet Gruppieren, Duplizieren (Strg+D), Sperren, Umfärben & Löschen.'
-                        : 'Select multiple items with Ctrl+Click or Area Box. Right-click opens Group, Duplicate (Ctrl+D), Lock, Color & Delete.'}
-                    </p>
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-zinc-950/75 border border-zinc-800 space-y-1">
-                    <div className="font-bold text-zinc-100">
-                      {isDe ? 'Callouts bearbeiten (Stift)' : 'Edit Callouts (Pencil)'}
-                    </div>
-                    <p className="text-[11px] text-zinc-400 leading-relaxed">
-                      {isDe
-                        ? 'In „Alle bearbeiten“ bleibt die Leiste versteckt, bis du ein Callout anklickst oder per Rechtsklick drehst, verschiebst, bearbeitest oder löschst.'
-                        : 'In Edit All mode, the action bar stays hidden until you click or right-click a callout.'}
-                    </p>
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-zinc-950/75 border border-zinc-800 space-y-1">
-                    <div className="font-bold text-zinc-100">
-                      {isDe ? 'Ebenen, Verlauf & Vollbild' : 'Layers, History & Fullscreen'}
-                    </div>
-                    <p className="text-[11px] text-zinc-400 leading-relaxed">
-                      {isDe
-                        ? 'Rechts Ebenen & Infos verwalten, unten Bereiche, Raster, Zoom, Fit & den Karten-Verlauf (max. 5 Stände mit PNG-Vorschau) steuern. Vollbild maximiert nur die Karte.'
-                        : 'Manage layers on the right; control Areas, Grid, Zoom, Fit & Map History (last 5 snapshots with PNG preview) at the bottom. Fullscreen maximizes the map only.'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* TEIL 2: FARBLEGENDE */}
-              <div className="pt-3 border-t border-zinc-800 space-y-3">
-                <div className="p-2.5 rounded-xl bg-zinc-950/70 border border-zinc-800 flex flex-wrap items-center justify-between gap-2">
-                  <div className="font-bold text-zinc-200">
-                    {isDe ? 'Aktiver Farbmodus:' : 'Active Color Mode:'}{' '}
-                    <span className="text-amber-400 uppercase font-mono">
-                      {colorMode === 'zone'
-                        ? isDe
-                          ? 'Zonen-Farben (A/B/Mid/Spawns)'
-                          : 'Zone Colors'
-                        : isDe
-                        ? 'Gefahrenstufen (Hoch/Mittel/Gering)'
-                        : 'Danger Levels'}
-                    </span>
-                  </div>
-                  <span className="text-zinc-400 text-[11px]">
-                    {isDe
-                      ? 'Umschaltbar über Palette / Schild oben.'
-                      : 'Switch via Palette / Shield in top bar.'}
-                  </span>
-                </div>
-
-                {/* 1. ZONEN-FARBEN */}
-                <div>
-                  <h4 className="font-mono uppercase font-bold text-zinc-400 mb-2">
-                    {isDe ? '1. Zonen & Bombenplätze (Zonen-Modus)' : '1. Map Zones (Zone Mode)'}
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <div className="flex items-center gap-2.5 p-2 rounded-lg bg-zinc-950/70 border border-zinc-800 col-span-1 sm:col-span-2">
-                      <span
-                        className="w-5 h-5 rounded-sm border border-red-500 shrink-0 shadow-xs"
-                        style={{
-                          background: 'rgba(239, 68, 68, 0.25)',
-                          backgroundImage:
-                            'repeating-linear-gradient(45deg, rgba(239, 68, 68, 0.6) 0px, rgba(239, 68, 68, 0.6) 4px, transparent 4px, transparent 8px)',
-                        }}
-                      />
-                      <div>
-                        <div className="font-bold text-red-300">Bombenplätze (A-Site & B-Site)</div>
-                        <div className="text-zinc-400 text-[10px]">Rote quere Streifen (Spot-Areal für C4)</div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2.5 p-2 rounded-lg bg-zinc-950/70 border border-zinc-800">
-                      <span className="w-3.5 h-3.5 rounded-full bg-emerald-400 border border-black shrink-0" />
-                      <div>
-                        <div className="font-bold text-emerald-300">Middle (Grün)</div>
-                        <div className="text-zinc-400 text-[10px]">Mitte & Rotationskorridore</div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2.5 p-2 rounded-lg bg-zinc-950/70 border border-zinc-800">
-                      <span className="w-3.5 h-3.5 rounded-full bg-amber-800 border border-black shrink-0" />
-                      <div>
-                        <div className="font-bold text-amber-300">T-Spawn (Braun)</div>
-                        <div className="text-zinc-400 text-[10px]">Terroristen-Startbasis</div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2.5 p-2 rounded-lg bg-zinc-950/70 border border-zinc-800">
-                      <span className="w-3.5 h-3.5 rounded-full bg-blue-600 border border-black shrink-0" />
-                      <div>
-                        <div className="font-bold text-blue-300">CT-Spawn (Blau)</div>
-                        <div className="text-zinc-400 text-[10px]">Antiterror-Startbasis</div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2.5 p-2 rounded-lg bg-zinc-950/70 border border-zinc-800">
-                      <span className="w-3.5 h-3.5 rounded-full bg-zinc-200 border border-black shrink-0" />
-                      <div>
-                        <div className="font-bold text-zinc-300">Sonstige (Grau/Weiß)</div>
-                        <div className="text-zinc-400 text-[10px]">Flanken & Außenbereiche</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. GEFAHRENSTUFEN */}
-                <div>
-                  <h4 className="font-mono uppercase font-bold text-zinc-400 mb-2">
-                    {isDe ? '2. Gefahrenstufen (Gefahren-Modus)' : '2. Danger Levels (Danger Mode)'}
-                  </h4>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="p-2.5 rounded-lg bg-red-950/40 border border-red-800/60 text-center">
-                      <span className="inline-block w-2.5 h-2.5 rounded-full bg-red-500 mb-1" />
-                      <div className="font-bold text-red-300 text-[11px]">{isDe ? 'Hoch (Rot)' : 'High (Red)'}</div>
-                      <div className="text-[10px] text-zinc-400">{isDe ? 'Duell-Hotspot' : 'Hotspot duel'}</div>
-                    </div>
-
-                    <div className="p-2.5 rounded-lg bg-amber-950/40 border border-amber-800/60 text-center">
-                      <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-500 mb-1" />
-                      <div className="font-bold text-amber-300 text-[11px]">{isDe ? 'Mittel (Gelb)' : 'Medium'}</div>
-                      <div className="text-[10px] text-zinc-400">{isDe ? 'Flankenroute' : 'Flank lane'}</div>
-                    </div>
-
-                    <div className="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-800/60 text-center">
-                      <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 mb-1" />
-                      <div className="font-bold text-emerald-300 text-[11px]">{isDe ? 'Gering (Grün)' : 'Low'}</div>
-                      <div className="text-[10px] text-zinc-400">{isDe ? 'Sichere Zone' : 'Safe hold'}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setShowLegend(false)}
-              className="mt-5 w-full py-2 text-xs font-bold rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white transition-colors cursor-pointer"
-            >
-              {isDe ? 'Schließen' : 'Close'}
-            </button>
-          </div>
-        </div>
-      )}
+      <TacticalLegendModal
+        isOpen={showLegend}
+        onClose={() => setShowLegend(false)}
+        lang={lang}
+        colorMode={colorMode}
+      />
 
       {/* 6. ADD / EDIT CALLOUT MODAL */}
-      {isAddingCallout && pendingCalloutCoords && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 overflow-y-auto print:hidden">
-          <div className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl text-zinc-100 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-800 mb-4">
-              <h3 className="text-base font-bold text-white">
-                {editingCallout
-                  ? isDe
-                    ? `Callout bearbeiten: ${editingCallout.name.replace(/\n/g, ' ')}`
-                    : `Edit Callout: ${editingCallout.name.replace(/\n/g, ' ')}`
-                  : isDe
-                  ? 'Neuen Callout anlegen'
-                  : 'Create New Callout'}
-              </h3>
-              <button
-                onClick={() => {
-                  setIsAddingCallout(false);
-                  setEditingCallout(null);
-                  setPendingCalloutCoords(null);
-                }}
-                className="text-zinc-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <CalloutEditorModal
+        isOpen={isAddingCallout}
+        lang={lang}
+        hasLowerMap={Boolean(mapData.lowerImage)}
+        editingCallout={editingCallout}
+        pendingCalloutCoords={pendingCalloutCoords}
+        calloutFormName={calloutFormName}
+        onChangeName={setCalloutFormName}
+        calloutFormLevel={calloutFormLevel}
+        onChangeLevel={setCalloutFormLevel}
+        calloutFormZone={calloutFormZone}
+        onChangeZone={setCalloutFormZone}
+        calloutFormDanger={calloutFormDanger}
+        onChangeDanger={setCalloutFormDanger}
+        calloutFormTextRotation={calloutFormTextRotation}
+        onChangeTextRotation={setCalloutFormTextRotation}
+        calloutFormFontSize={calloutFormFontSize}
+        onChangeFontSize={setCalloutFormFontSize}
+        calloutFormFontFamily={calloutFormFontFamily}
+        onChangeFontFamily={setCalloutFormFontFamily}
+        calloutFormDisplayMode={calloutFormDisplayMode}
+        onChangeDisplayMode={setCalloutFormDisplayMode}
+        calloutFormCustomImage={calloutFormCustomImage}
+        onChangeCustomImage={setCalloutFormCustomImage}
+        calloutFormImageSize={calloutFormImageSize}
+        onChangeImageSize={setCalloutFormImageSize}
+        calloutFormHidePin={calloutFormHidePin}
+        onChangeHidePin={setCalloutFormHidePin}
+        calloutFormPinOffsetX={calloutFormPinOffsetX}
+        onChangePinOffsetX={setCalloutFormPinOffsetX}
+        calloutFormPinOffsetY={calloutFormPinOffsetY}
+        onChangePinOffsetY={setCalloutFormPinOffsetY}
+        calloutFormHasArea={calloutFormHasArea}
+        onChangeHasArea={setCalloutFormHasArea}
+        calloutFormAreaShape={calloutFormAreaShape}
+        onChangeAreaShape={setCalloutFormAreaShape}
+        calloutFormAreaPoints={calloutFormAreaPoints}
+        onChangeAreaPoints={setCalloutFormAreaPoints}
+        onChangeAreaX={setCalloutFormAreaX}
+        onChangeAreaY={setCalloutFormAreaY}
+        calloutFormAreaWidth={calloutFormAreaWidth}
+        onChangeAreaWidth={setCalloutFormAreaWidth}
+        calloutFormAreaHeight={calloutFormAreaHeight}
+        onChangeAreaHeight={setCalloutFormAreaHeight}
+        calloutFormDescDe={calloutFormDescDe}
+        onChangeDescDe={setCalloutFormDescDe}
+        calloutFormTipDe={calloutFormTipDe}
+        onChangeTipDe={setCalloutFormTipDe}
+        onStartPolygonDrawing={() => {
+          setCalloutFormHasArea(true);
+          setCalloutFormAreaShape('polygon');
+          setIsAddingCallout(false);
+          setIsDrawingPolygonArea(true);
+        }}
+        onDeleteCallout={handleDeleteCallout}
+        onSave={handleSaveCalloutForm}
+        onClose={() => {
+          setIsAddingCallout(false);
+          setEditingCallout(null);
+          setPendingCalloutCoords(null);
+        }}
+      />
 
-            <form onSubmit={handleSaveCalloutForm} className="space-y-4 text-xs">
-              {/* Callout Name (Strictly max 2 lines, 2nd line only shown upon pressing Enter) */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold uppercase text-zinc-400">
-                    {isDe ? 'Callout-Name (Englisch)' : 'Callout Name (English)'} *
-                  </label>
-                  {calloutFormName.includes('\n') ? (
-                    <span className="text-[10px] font-mono text-amber-400 font-bold px-1.5 py-0.2 rounded bg-amber-500/10 border border-amber-500/30">
-                      2 / 2 {isDe ? 'Zeilen' : 'Lines'}
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-mono text-zinc-500">
-                      {isDe ? 'Enter für 2. Zeile' : 'Enter for 2nd line'}
-                    </span>
-                  )}
-                </div>
-                <textarea
-                  rows={calloutFormName.includes('\n') ? 2 : 1}
-                  required
-                  placeholder={isDe ? "z. B. Bridge, Banana, Quad..." : "e.g. Bridge, Banana, Quad..."}
-                  value={calloutFormName}
-                  onChange={(e) => {
-                    const rawLines = e.target.value.split(/\r?\n/);
-                    // Strictly clamp to at most 2 lines (no 3rd line ever)
-                    const limitedLines = rawLines.slice(0, 2);
-                    const val = limitedLines.join('\n');
-                    setCalloutFormName(val);
-                    const lower = val.toLowerCase();
-                    if (lower.includes('ct spawn') || lower === 'ct') {
-                      setCalloutFormZone('ct_spawn');
-                      setCalloutFormCustomImage('ct.png');
-                      setCalloutFormDisplayMode((prev) => prev === 'text' ? 'image' : prev);
-                      setCalloutFormHidePin(false);
-                    } else if (lower.includes('t spawn') || lower === 't') {
-                      setCalloutFormZone('t_spawn');
-                      setCalloutFormCustomImage('T.png');
-                      setCalloutFormDisplayMode((prev) => prev === 'text' ? 'image' : prev);
-                      setCalloutFormHidePin(false);
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      const hasSecondLine = calloutFormName.includes('\n');
-                      if (hasSecondLine && !e.ctrlKey && !e.metaKey) {
-                        // STRICTLY block any 3rd line from ever being created!
-                        e.preventDefault();
-                        return;
-                      }
-                      if (e.ctrlKey || e.metaKey) {
-                        e.preventDefault();
-                        handleSaveCalloutForm(e);
-                      }
-                    }
-                  }}
-                  className={`w-full px-3 py-2 text-sm rounded-lg border border-zinc-700 bg-zinc-950 text-white focus:outline-hidden focus:border-zinc-400 resize-none font-medium leading-snug transition-all duration-150 ${
-                    calloutFormName.includes('\n')
-                      ? 'h-[62px]'
-                      : 'h-[38px] overflow-hidden'
-                  }`}
-                />
-                <span className="text-[10px] text-zinc-500 font-mono mt-0.5 block">
-                  {calloutFormName.includes('\n')
-                    ? (isDe ? '✓ 2. Zeile aktiv (Keine 3. Zeile möglich) • Strg+Enter zum Speichern' : '✓ 2nd line active (No 3rd line allowed) • Ctrl+Enter to save')
-                    : (isDe ? 'Tipp: Drücke Enter, um eine 2. Zeile hinzuzufügen' : 'Tip: Press Enter to add a 2nd line')}
-                </span>
-              </div>
-
-              {/* DARSTELLUNG: TEXT ODER BILD (MIT FREIER GRÖßENWAHL & 1:1 TATSÄCHLICHER VORSCHAU) */}
-              <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800 space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="font-semibold uppercase text-zinc-200 flex items-center gap-1.5 text-xs">
-                    <ImageIcon className="w-4 h-4 text-amber-400" />
-                    <span>{isDe ? 'Darstellung: Text oder Bild' : 'Display Mode: Text or Image'}</span>
-                  </label>
-                  <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-zinc-800 text-amber-300 border border-zinc-700">
-                    {calloutFormDisplayMode === 'image'
-                      ? (isDe ? 'Nur Bild' : 'Image Only')
-                      : calloutFormDisplayMode === 'both'
-                      ? (isDe ? 'Bild + Text' : 'Image & Text')
-                      : (isDe ? 'Nur Text' : 'Text Only')}
-                  </span>
-                </div>
-
-                {/* Mode Selector Buttons */}
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setCalloutFormDisplayMode('text')}
-                    className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${
-                      calloutFormDisplayMode === 'text'
-                        ? 'bg-amber-400 text-zinc-950 border-amber-400 shadow-md font-bold'
-                        : 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:text-white hover:bg-zinc-800'
-                    }`}
-                  >
-                    <Type className="w-3.5 h-3.5" />
-                    <span>{isDe ? 'Text' : 'Text'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCalloutFormDisplayMode('image');
-                      setCalloutFormHidePin(false);
-                      if (!calloutFormCustomImage) {
-                        const isCT = calloutFormZone === 'ct_spawn' || calloutFormName.toLowerCase().includes('ct');
-                        setCalloutFormCustomImage(isCT ? 'ct.png' : 'T.png');
-                      }
-                    }}
-                    className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${
-                      calloutFormDisplayMode === 'image'
-                        ? 'bg-amber-400 text-zinc-950 border-amber-400 shadow-md font-bold'
-                        : 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:text-white hover:bg-zinc-800'
-                    }`}
-                  >
-                    <ImageIcon className="w-3.5 h-3.5" />
-                    <span>{isDe ? 'Bild (Emblem)' : 'Image (Emblem)'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCalloutFormDisplayMode('both');
-                      setCalloutFormHidePin(false);
-                      if (!calloutFormCustomImage) {
-                        const isCT = calloutFormZone === 'ct_spawn' || calloutFormName.toLowerCase().includes('ct');
-                        setCalloutFormCustomImage(isCT ? 'ct.png' : 'T.png');
-                      }
-                    }}
-                    className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${
-                      calloutFormDisplayMode === 'both'
-                        ? 'bg-amber-400 text-zinc-950 border-amber-400 shadow-md font-bold'
-                        : 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:text-white hover:bg-zinc-800'
-                    }`}
-                  >
-                    <span className="text-[11px]">🖼️+📝</span>
-                    <span>{isDe ? 'Bild + Text' : 'Both'}</span>
-                  </button>
-                </div>
-
-                {/* TOGGLE CALLOUT PIN / EMBLEM DOT VISIBILITY */}
-                <div className="pt-2.5 border-t border-zinc-800/90 flex items-center justify-between">
-                  <div className="flex flex-col">
-                    <span className="text-xs font-semibold text-zinc-200">
-                      {isDe ? 'Callout-Punkt / Emblem anzeigen' : 'Show Callout Pin / Emblem'}
-                    </span>
-                    <span className="text-[10px] text-zinc-400">
-                      {isDe
-                        ? 'Punkt ausblenden, um nur die Beschriftung (Text) auf der Karte anzuzeigen'
-                        : 'Hide pin marker to show text label only on the map'}
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setCalloutFormHidePin((prev) => !prev)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer shrink-0 ${
-                      !calloutFormHidePin ? 'bg-amber-400' : 'bg-zinc-800 border border-zinc-700'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-zinc-950 transition-transform ${
-                        !calloutFormHidePin ? 'translate-x-6' : 'translate-x-1 bg-zinc-400'
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                {/* Image Details (When 'image' or 'both' is selected) */}
-                {(calloutFormDisplayMode === 'image' || calloutFormDisplayMode === 'both') && (
-                  <div className="space-y-3 pt-2.5 border-t border-zinc-800/90 animate-in fade-in-50 duration-150">
-                    {/* Emblem Quick Presets: CT Spawn / T Spawn */}
-                    <div>
-                      <label className="block text-[11px] font-semibold text-zinc-400 mb-1.5">
-                        {isDe ? 'Emblem wählen oder hochladen:' : 'Select or upload emblem:'}
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCalloutFormCustomImage('ct.png');
-                            setCalloutFormDisplayMode((prev) => prev === 'text' ? 'image' : prev);
-                            setCalloutFormHidePin(false);
-                          }}
-                          className={`flex items-center gap-2.5 p-2 rounded-xl border text-left transition-all ${
-                            calloutFormCustomImage === 'ct.png' || calloutFormCustomImage === '/ct.png'
-                              ? 'border-sky-400 bg-sky-950/40 text-white ring-1 ring-sky-400 shadow-md'
-                              : 'border-zinc-800 bg-zinc-900/90 text-zinc-400 hover:text-white hover:bg-zinc-800'
-                          }`}
-                        >
-                          <img
-                            src={resolveAssetPath('ct.png')}
-                            alt="CT Spawn Emblem"
-                            className="w-7 h-7 object-contain rounded-full shadow filter drop-shadow"
-                          />
-                          <div className="leading-tight">
-                            <div className="font-bold text-xs text-sky-300">CT Spawn</div>
-                            <div className="text-[10px] text-zinc-400">ct.png</div>
-                          </div>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCalloutFormCustomImage('T.png');
-                            setCalloutFormDisplayMode((prev) => prev === 'text' ? 'image' : prev);
-                            setCalloutFormHidePin(false);
-                          }}
-                          className={`flex items-center gap-2.5 p-2 rounded-xl border text-left transition-all ${
-                            calloutFormCustomImage === 'T.png' || calloutFormCustomImage === '/T.png'
-                              ? 'border-amber-500 bg-amber-950/40 text-white ring-1 ring-amber-500 shadow-md'
-                              : 'border-zinc-800 bg-zinc-900/90 text-zinc-400 hover:text-white hover:bg-zinc-800'
-                          }`}
-                        >
-                          <img
-                            src={resolveAssetPath('T.png')}
-                            alt="T Spawn Emblem"
-                            className="w-7 h-7 object-contain rounded-full shadow filter drop-shadow"
-                          />
-                          <div className="leading-tight">
-                            <div className="font-bold text-xs text-amber-300">T Spawn</div>
-                            <div className="text-[10px] text-zinc-400">T.png</div>
-                          </div>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Custom Image URL / Upload */}
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={calloutFormCustomImage}
-                        onChange={(e) => setCalloutFormCustomImage(e.target.value)}
-                        placeholder="ct.png, T.png oder Web-URL..."
-                        className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-zinc-700 bg-zinc-950 text-white focus:outline-hidden focus:border-amber-400"
-                      />
-                      <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 cursor-pointer text-xs font-medium shrink-0">
-                        <Upload className="w-3.5 h-3.5 text-amber-400" />
-                        <span>{isDe ? 'Datei' : 'Upload'}</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              const reader = new FileReader();
-                              reader.onload = (evt) => {
-                                if (typeof evt.target?.result === 'string') {
-                                  setCalloutFormCustomImage(evt.target.result);
-                                }
-                              };
-                              reader.readAsDataURL(file);
-                            }
-                          }}
-                        />
-                      </label>
-                    </div>
-
-                    {/* FREIE GRÖßENWAHL FÜR DAS BILD */}
-                    <div className="space-y-2 pt-1">
-                      <div className="flex items-center justify-between">
-                        <label className="font-semibold uppercase text-zinc-300 flex items-center gap-1.5 text-xs">
-                          <span>{isDe ? 'Bildgröße frei bestimmen (Pixel)' : 'Custom Image Size (px)'}</span>
-                        </label>
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono font-bold text-amber-400 text-sm">
-                            {calloutFormImageSize}px
-                          </span>
-                          <span className="text-[10px] text-zinc-400 font-mono">
-                            ({calloutFormImageSize} × {calloutFormImageSize})
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="range"
-                          min="16"
-                          max="96"
-                          step="2"
-                          value={calloutFormImageSize}
-                          onChange={(e) => setCalloutFormImageSize(Number(e.target.value))}
-                          className="flex-1 accent-amber-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
-                        />
-                        <input
-                          type="number"
-                          min="16"
-                          max="120"
-                          value={calloutFormImageSize}
-                          onChange={(e) =>
-                            setCalloutFormImageSize(Math.max(12, Math.min(150, Number(e.target.value) || 36)))
-                          }
-                          className="w-16 px-2 py-1 text-center font-mono font-bold text-xs rounded bg-zinc-950 border border-zinc-700 text-amber-300"
-                        />
-                      </div>
-
-                      {/* Schnell-Auswahl Presets */}
-                      <div className="flex items-center gap-1.5 pt-0.5 flex-wrap">
-                        <span className="text-[10px] text-zinc-500 font-mono">Presets:</span>
-                        {[
-                          { label: '24px (Klein)', val: 24 },
-                          { label: '32px', val: 32 },
-                          { label: '36px (Standard)', val: 36 },
-                          { label: '48px (Mittel)', val: 48 },
-                          { label: '64px (Groß)', val: 64 },
-                          { label: '80px (XXL)', val: 80 },
-                        ].map((p) => (
-                          <button
-                            key={p.val}
-                            type="button"
-                            onClick={() => setCalloutFormImageSize(p.val)}
-                            className={`px-2 py-0.5 rounded text-[10px] font-mono font-semibold ${
-                              calloutFormImageSize === p.val
-                                ? 'bg-amber-400 text-zinc-950 font-bold'
-                                : 'bg-zinc-800 text-zinc-400 hover:text-white'
-                            }`}
-                          >
-                            {p.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* TATSÄCHLICHE GRÖßENANZEIGE & 1:1 LIVE-VORSCHAU */}
-                    <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2">
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="font-semibold text-zinc-200 flex items-center gap-1.5">
-                          <span>🎯</span>
-                          <span>
-                            {isDe
-                              ? 'Tatsächliche Bildgröße auf der Karte'
-                              : 'Actual Rendered Size on Map'}
-                          </span>
-                        </span>
-                        <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold text-[10px] border border-amber-500/30">
-                          {calloutFormImageSize} × {calloutFormImageSize} Pixel
-                        </span>
-                      </div>
-
-                      {/* 1:1 Live Scale Display Container */}
-                      <div className="relative min-h-[120px] py-4 flex flex-col items-center justify-center rounded-lg bg-zinc-950 border border-dashed border-zinc-700/80 overflow-hidden">
-                        {/* Radar grid dots */}
-                        <div
-                          className="absolute inset-0 opacity-15 pointer-events-none"
-                          style={{
-                            backgroundImage: 'radial-gradient(circle, #888 1px, transparent 1px)',
-                            backgroundSize: '16px 16px',
-                          }}
-                        />
-
-                        {calloutFormCustomImage ? (
-                          <div className="relative flex flex-col items-center justify-center z-10">
-                            {/* The emblem rendered 1:1 with measurement frame */}
-                            <div
-                              style={{
-                                width: `${calloutFormImageSize}px`,
-                                height: `${calloutFormImageSize}px`,
-                              }}
-                              className="relative flex items-center justify-center transition-all"
-                            >
-                              <img
-                                src={calloutFormCustomImage}
-                                alt="Vorschau"
-                                style={{
-                                  width: `${calloutFormImageSize}px`,
-                                  height: `${calloutFormImageSize}px`,
-                                  transform: `rotate(${calloutFormTextRotation}deg)`,
-                                }}
-                                className="rounded-full object-contain filter drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] ring-1 ring-white/50"
-                              />
-
-                              {/* Corner calipers to show exact bounding dimension */}
-                              <div className="absolute -top-1 -left-1 w-2 h-2 border-t-2 border-l-2 border-amber-400 pointer-events-none" />
-                              <div className="absolute -top-1 -right-1 w-2 h-2 border-t-2 border-r-2 border-amber-400 pointer-events-none" />
-                              <div className="absolute -bottom-1 -left-1 w-2 h-2 border-b-2 border-l-2 border-amber-400 pointer-events-none" />
-                              <div className="absolute -bottom-1 -right-1 w-2 h-2 border-b-2 border-r-2 border-amber-400 pointer-events-none" />
-                            </div>
-
-                            {/* Optional text underneath when 'both' mode is on */}
-                            {calloutFormDisplayMode === 'both' && (
-                              <div
-                                style={{
-                                  fontSize: `${calloutFormFontSize}px`,
-                                  fontFamily: getFontFamilyStyle(calloutFormFontFamily),
-                                  transform: `rotate(${calloutFormTextRotation}deg)`,
-                                }}
-                                className="mt-3 px-2 py-0.5 rounded bg-zinc-950/90 border border-zinc-700 text-white font-bold whitespace-nowrap text-center leading-tight shadow"
-                              >
-                                {calloutFormName.includes('\n') ? (
-                                  calloutFormName.split('\n').slice(0, 2).map((l, i) => (
-                                    <div key={i} className="whitespace-nowrap leading-tight">{l || '\u00A0'}</div>
-                                  ))
-                                ) : (
-                                  <span>{calloutFormName.trim() || 'Callout-Name'}</span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="text-zinc-500 text-xs italic z-10">
-                            {isDe ? 'Kein Bild ausgewählt' : 'No image selected'}
-                          </div>
-                        )}
-
-                        <div className="mt-2.5 text-[10px] font-mono text-zinc-500 text-center px-4 z-10">
-                          {isDe
-                            ? `Exakter 1:1 Maßstab — genau so groß erscheint das Bild auf der taktischen Karte (bei 100% Zoom).`
-                            : `Exact 1:1 scale — this is how large the image will render on the tactical map (at 100% zoom).`}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* CALLOUT-TEXT POSITION */}
-              <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <label className="font-semibold uppercase text-zinc-300 flex items-center gap-1.5 text-xs">
-                    <Crosshair className="w-3.5 h-3.5 text-amber-400" />
-                    <span>{isDe ? 'Callout-Text Position' : 'Callout Text Position'}</span>
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <label className="flex items-center gap-1.5 text-[11px] text-zinc-400 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={calloutFormHidePin}
-                        onChange={(e) => {
-                          const val = e.target.checked;
-                          setCalloutFormHidePin(val);
-                          if (val) {
-                            setCalloutFormPinOffsetX(0);
-                            setCalloutFormPinOffsetY(0);
-                          }
-                        }}
-                        className="w-3.5 h-3.5 accent-amber-400 rounded cursor-pointer"
-                      />
-                      <span>{isDe ? 'Punkt ausblenden' : 'Hide Pin'}</span>
-                    </label>
-                    <span className="font-mono text-[10px] text-amber-300 font-bold px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800">
-                      X: {calloutFormPinOffsetX} / Y: {calloutFormPinOffsetY}
-                    </span>
-                  </div>
-                </div>
-
-                {!calloutFormHidePin && (
-                  <div className="space-y-2.5 pt-1">
-                    <p className="text-[11px] text-zinc-400 leading-snug">
-                      {isDe
-                        ? 'Bewege das Schriftfeld in der Vorschau frei per Drag & Drop um den fixierten Callout-Punkt herum (oder nutze Presets & Regler).'
-                        : 'Drag the text box freely around the fixed callout pin in the preview box (or use presets & sliders).'}
-                    </p>
-
-                    {/* Interactive 2D Drag Preview Box */}
-                    <div
-                      ref={previewBoxRef}
-                      onMouseDown={(e) => {
-                        setIsDraggingPinPreview(true);
-                        handlePreviewPointerMove(e);
-                      }}
-                      onMouseMove={(e) => {
-                        if (isDraggingPinPreview || e.buttons === 1) {
-                          handlePreviewPointerMove(e);
-                        }
-                      }}
-                      onMouseUp={() => setIsDraggingPinPreview(false)}
-                      onTouchStart={(e) => {
-                        setIsDraggingPinPreview(true);
-                        handlePreviewPointerMove(e);
-                      }}
-                      onTouchMove={(e) => {
-                        if (isDraggingPinPreview) {
-                          handlePreviewPointerMove(e);
-                        }
-                      }}
-                      onTouchEnd={() => setIsDraggingPinPreview(false)}
-                      className="relative h-64 w-full bg-zinc-900/90 rounded-xl border border-zinc-700/80 overflow-hidden cursor-crosshair select-none flex items-center justify-center shadow-inner group"
-                    >
-                      {/* Subtle grid lines */}
-                      <div className="absolute inset-0 bg-[radial-gradient(#3f3f46_1px,transparent_1px)] [background-size:12px_12px] opacity-40 pointer-events-none" />
-                      <div className="absolute w-full h-[1px] bg-zinc-800 pointer-events-none" />
-                      <div className="absolute h-full w-[1px] bg-zinc-800 pointer-events-none" />
-
-                      {/* FIXED Callout Pin Dot in Center (0,0) */}
-                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 w-4 h-4 rounded-full bg-amber-400 border-2 border-zinc-950 shadow-[0_0_10px_rgba(251,191,36,0.8)] pointer-events-none flex items-center justify-center">
-                        <div className="w-1.5 h-1.5 rounded-full bg-zinc-950" />
-                      </div>
-
-                      {/* MOVABLE Text Label Box relative to fixed center dot */}
-                      <div
-                        style={{
-                          transform: `translate(${calloutFormPinOffsetX}px, ${calloutFormPinOffsetY}px) rotate(${calloutFormTextRotation}deg)`,
-                          fontSize: `${calloutFormFontSize}px`,
-                          fontFamily: getFontFamilyStyle(calloutFormFontFamily),
-                        }}
-                        className="relative z-20 px-2.5 py-1 rounded bg-zinc-950 border border-sky-400 text-sky-200 font-bold shadow-lg pointer-events-none whitespace-nowrap text-center leading-tight transition-transform duration-75"
-                      >
-                        {calloutFormName.includes('\n') ? (
-                          calloutFormName.split('\n').slice(0, 2).map((l, i) => (
-                            <div key={i} className="whitespace-nowrap leading-tight">{l || '\u00A0'}</div>
-                          ))
-                        ) : (
-                          <span>{calloutFormName.trim() || 'Schriftfeld'}</span>
-                        )}
-                      </div>
-
-                      <span className="absolute bottom-1.5 right-2 text-[9px] font-mono text-zinc-500 pointer-events-none">
-                        {isDe ? 'Schriftfeld ziehen' : 'Drag Text Label'}
-                      </span>
-                    </div>
-
-                    {/* Quick Offset Presets */}
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[10px] text-zinc-500 font-mono">Presets:</span>
-                      {[
-                        { label: 'Zentriert (Mid)', x: 0, y: 0 },
-                        { label: 'Unten (Standard)', x: 0, y: 25 },
-                        { label: 'Oben', x: 0, y: -25 },
-                      ].map((p, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => {
-                            setCalloutFormPinOffsetX(p.x);
-                            setCalloutFormPinOffsetY(p.y);
-                          }}
-                          className={`px-2 py-0.5 rounded text-[10px] font-mono font-semibold cursor-pointer transition-colors ${
-                            calloutFormPinOffsetX === p.x && calloutFormPinOffsetY === p.y
-                              ? 'bg-amber-400 text-zinc-950 font-bold'
-                              : 'bg-zinc-800 text-zinc-400 hover:text-white'
-                          }`}
-                        >
-                          {p.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Fine-Tuning Sliders */}
-                    <div className="grid grid-cols-2 gap-3 pt-1">
-                      <div>
-                        <div className="flex justify-between text-[10px] font-mono text-zinc-400 mb-0.5">
-                          <span>X-Offset ({calloutFormPinOffsetX}px):</span>
-                        </div>
-                        <input
-                          type="range"
-                          min="-120"
-                          max="120"
-                          step="1"
-                          value={calloutFormPinOffsetX}
-                          onChange={(e) => setCalloutFormPinOffsetX(Number(e.target.value))}
-                          className="w-full accent-amber-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
-                        />
-                      </div>
-                      <div>
-                        <div className="flex justify-between text-[10px] font-mono text-zinc-400 mb-0.5">
-                          <span>Y-Offset ({calloutFormPinOffsetY}px):</span>
-                        </div>
-                        <input
-                          type="range"
-                          min="-120"
-                          max="120"
-                          step="1"
-                          value={calloutFormPinOffsetY}
-                          onChange={(e) => setCalloutFormPinOffsetY(Number(e.target.value))}
-                          className="w-full accent-amber-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* SCHRIFT-DREHUNG */}
-              <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="font-semibold uppercase text-zinc-300 flex items-center gap-1.5 text-xs">
-                    <RotateCw className="w-3.5 h-3.5 text-sky-400" />
-                    <span>{isDe ? 'Schrift-Drehung' : 'Text Label Rotation'}</span>
-                  </label>
-                  <span className="font-mono font-bold text-sky-300">
-                    {calloutFormTextRotation}°
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min="-180"
-                    max="180"
-                    step="5"
-                    value={calloutFormTextRotation}
-                    onChange={(e) => setCalloutFormTextRotation(Number(e.target.value))}
-                    className="flex-1 accent-sky-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
-                  />
-                </div>
-
-                {/* Quick Presets */}
-                <div className="flex items-center gap-1.5 pt-1">
-                  <span className="text-[10px] text-zinc-500 font-mono">Presets:</span>
-                  {[
-                    { label: '0°', val: 0 },
-                    { label: '45°', val: 45 },
-                    { label: '90°', val: 90 },
-                    { label: '-45°', val: -45 },
-                    { label: '-90°', val: -90 },
-                  ].map((p) => (
-                    <button
-                      key={p.val}
-                      type="button"
-                      onClick={() => setCalloutFormTextRotation(p.val)}
-                      className={`px-2 py-0.5 rounded text-[10px] font-mono font-semibold ${
-                        calloutFormTextRotation === p.val
-                          ? 'bg-sky-400 text-zinc-950 font-bold'
-                          : 'bg-zinc-800 text-zinc-400 hover:text-white'
-                      }`}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Rotation preview */}
-                <div className="min-h-[44px] py-2 px-3 flex items-center justify-center bg-zinc-900 rounded-lg border border-zinc-800 overflow-hidden">
-                  <div
-                    style={{
-                      transform: `rotate(${calloutFormTextRotation}deg)`,
-                      fontSize: `${calloutFormFontSize}px`,
-                      fontFamily: getFontFamilyStyle(calloutFormFontFamily),
-                    }}
-                    className="px-2.5 py-1 rounded bg-zinc-950 border border-zinc-700 text-white font-bold transition-all whitespace-nowrap text-center leading-tight"
-                  >
-                    {calloutFormName.includes('\n') ? (
-                      calloutFormName.split('\n').slice(0, 2).map((l, i) => (
-                        <div key={i} className="whitespace-nowrap leading-tight">{l || '\u00A0'}</div>
-                      ))
-                    ) : (
-                      <span>{calloutFormName.trim() || 'Vorschau-Callout'}</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* INDIVIDUAL CALLOUT FONT SIZE */}
-              <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="font-semibold uppercase text-zinc-300 flex items-center gap-1.5">
-                    <Type className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>{isDe ? 'Eigene Schriftgröße (px)' : 'Individual Font Size (px)'}</span>
-                  </label>
-                  <span className="font-mono font-bold text-emerald-300">
-                    {calloutFormFontSize}px
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min="10"
-                    max="40"
-                    step="0.5"
-                    value={calloutFormFontSize}
-                    onChange={(e) => setCalloutFormFontSize(Number(e.target.value))}
-                    className="flex-1 accent-emerald-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
-                  />
-                </div>
-
-                {/* Font size quick presets */}
-                <div className="flex items-center gap-1.5 pt-1 flex-wrap">
-                  <span className="text-[10px] text-zinc-500 font-mono">Presets:</span>
-                  {[
-                    { label: '10px', val: 10 },
-                    { label: '12px', val: 12 },
-                    { label: '14px', val: 14 },
-                    { label: '16px', val: 16 },
-                    { label: '18px', val: 18 },
-                    { label: '22px', val: 22 },
-                    { label: '28px', val: 28 },
-                  ].map((p) => (
-                    <button
-                      key={p.val}
-                      type="button"
-                      onClick={() => setCalloutFormFontSize(p.val)}
-                      className={`px-2 py-0.5 rounded text-[10px] font-mono font-semibold ${
-                        Math.round(calloutFormFontSize) === p.val
-                          ? 'bg-emerald-400 text-zinc-950 font-bold'
-                          : 'bg-zinc-800 text-zinc-400 hover:text-white'
-                      }`}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* SCHRIFTART (FONT FAMILY) WÄHLEN */}
-              <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="font-semibold uppercase text-zinc-300 flex items-center gap-1.5 text-xs">
-                    <Type className="w-3.5 h-3.5 text-amber-400" />
-                    <span>{isDe ? 'Schriftart (Font) wählen' : 'Select Font Family'}</span>
-                  </label>
-                  <span className="font-mono text-[10px] text-amber-300 font-bold uppercase px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800">
-                    {calloutFormFontFamily}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
-                  {[
-                    { id: 'mono', label: 'Taktisch (Mono)', style: "ui-monospace, SFMono-Regular, monospace" },
-                    { id: 'rajdhani', label: 'Rajdhani (Esport)', style: "'Rajdhani', sans-serif" },
-                    { id: 'orbitron', label: 'Orbitron (Sci-Fi)', style: "'Orbitron', sans-serif" },
-                    { id: 'russo', label: 'Russo (Impact)', style: "'Russo One', sans-serif" },
-                    { id: 'teko', label: 'Teko (Sharp)', style: "'Teko', sans-serif" },
-                    { id: 'sans', label: 'Modern (Sans)', style: "'Inter', sans-serif" },
-                    { id: 'serif', label: 'Serif (Klassisch)', style: "'Georgia', serif" },
-                  ].map((font) => (
-                    <button
-                      key={font.id}
-                      type="button"
-                      onClick={() => setCalloutFormFontFamily(font.id)}
-                      className={`flex flex-col items-center justify-center p-2 rounded-lg border text-center transition-all cursor-pointer ${
-                        calloutFormFontFamily === font.id
-                          ? 'bg-amber-400 text-zinc-950 border-amber-400 font-bold shadow-md ring-1 ring-amber-400'
-                          : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800'
-                      }`}
-                    >
-                      <span className="text-xs truncate w-full" style={{ fontFamily: font.style }}>
-                        {calloutFormName.trim() || 'Callout'}
-                      </span>
-                      <span className="text-[9px] opacity-75 font-mono mt-0.5">
-                        {font.label}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* TOTALCSGO-STYLE AREA (RECTANGLE OR CUSTOM DRAWN POLYGON) */}
-              <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800 space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="font-semibold uppercase text-zinc-300 flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={calloutFormHasArea}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setCalloutFormHasArea(checked);
-                        if (checked && pendingCalloutCoords && !editingCallout?.area) {
-                          setCalloutFormAreaX(
-                            Math.round((pendingCalloutCoords.x - calloutFormAreaWidth / 2) * 10) / 10
-                          );
-                          setCalloutFormAreaY(
-                            Math.round((pendingCalloutCoords.y - calloutFormAreaHeight / 2) * 10) / 10
-                          );
-                        }
-                      }}
-                      className="w-4 h-4 accent-amber-400 rounded"
-                    />
-                    <Square className="w-3.5 h-3.5 text-sky-400" />
-                    <span>{isDe ? 'Zonenbereich (TotalCSGO-Stil)' : 'Zone Area Box / Polygon'}</span>
-                  </label>
-                  <span className="text-[10px] font-mono text-zinc-400">
-                    {calloutFormHasArea ? (isDe ? 'Aktiviert' : 'Active') : (isDe ? 'Kein Bereich' : 'None')}
-                  </span>
-                </div>
-
-                {calloutFormHasArea && (
-                  <div className="pt-2.5 space-y-3 border-t border-zinc-800 animate-in fade-in-50 duration-150">
-                    {/* Shape Selector: Rechteck vs Linien zeichnen */}
-                    <div>
-                      <label className="block text-[11px] font-semibold uppercase text-zinc-400 mb-1.5">
-                        {isDe ? 'Bereichs-Typ:' : 'Area Type:'}
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setCalloutFormAreaShape('rect')}
-                          className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg border text-xs font-semibold transition-all ${
-                            calloutFormAreaShape === 'rect'
-                              ? 'bg-sky-500/20 text-sky-300 border-sky-400 shadow-sm font-bold'
-                              : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
-                          }`}
-                        >
-                          <Square className="w-3.5 h-3.5" />
-                          <span>{isDe ? 'Rechteck' : 'Rectangle'}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setCalloutFormAreaShape('polygon')}
-                          className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg border text-xs font-semibold transition-all ${
-                            calloutFormAreaShape === 'polygon'
-                              ? 'bg-amber-500/20 text-amber-300 border-amber-400 shadow-sm font-bold'
-                              : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
-                          }`}
-                        >
-                          <Activity className="w-3.5 h-3.5" />
-                          <span>{isDe ? 'Linien zeichnen' : 'Draw Polygon'}</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {calloutFormAreaShape === 'rect' ? (
-                      /* RECTANGLE CONTROLS (WITHOUT CLAMPING NEGATIVE COORDINATES) */
-                      <div className="space-y-2.5">
-                        <p className="text-[11px] text-zinc-400">
-                          {isDe
-                            ? 'Rechteck-Bereich. Position wird exakt beibehalten und springt nicht zurück.'
-                            : 'Rectangular boundary. Coordinates stay fixed without jumping.'}
-                        </p>
-
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <div className="flex justify-between text-[11px] text-zinc-400 mb-1">
-                              <span>{isDe ? 'Breite:' : 'Width:'}</span>
-                              <span className="font-mono text-white">{calloutFormAreaWidth}%</span>
-                            </div>
-                            <input
-                              type="range"
-                              min="3"
-                              max="35"
-                              step="1"
-                              value={calloutFormAreaWidth}
-                              onChange={(e) => {
-                                const newW = Number(e.target.value);
-                                setCalloutFormAreaWidth(newW);
-                              }}
-                              className="w-full accent-sky-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
-                            />
-                          </div>
-                          <div>
-                            <div className="flex justify-between text-[11px] text-zinc-400 mb-1">
-                              <span>{isDe ? 'Höhe:' : 'Height:'}</span>
-                              <span className="font-mono text-white">{calloutFormAreaHeight}%</span>
-                            </div>
-                            <input
-                              type="range"
-                              min="3"
-                              max="35"
-                              step="1"
-                              value={calloutFormAreaHeight}
-                              onChange={(e) => {
-                                const newH = Number(e.target.value);
-                                setCalloutFormAreaHeight(newH);
-                              }}
-                              className="w-full accent-sky-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      /* CUSTOM DRAWN POLYGON LINE-SEGMENTS CONTROLS */
-                      <div className="space-y-2.5 p-2.5 rounded-lg bg-zinc-900 border border-zinc-800">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-semibold text-zinc-200">
-                            {isDe ? 'Freie Liniensegmente' : 'Custom Line Segments'}
-                          </span>
-                          <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold ${
-                            calloutFormAreaPoints.length >= 3
-                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                              : 'bg-zinc-800 text-zinc-400'
-                          }`}>
-                            {calloutFormAreaPoints.length >= 3
-                              ? (isDe ? `✓ ${calloutFormAreaPoints.length} Punkte (Geschlossen)` : `✓ ${calloutFormAreaPoints.length} points`)
-                              : (isDe ? `${calloutFormAreaPoints.length} Punkte` : `${calloutFormAreaPoints.length} points`)}
-                          </span>
-                        </div>
-
-                        <p className="text-[11px] text-zinc-400 leading-snug">
-                          {isDe
-                            ? 'Zeichne Eckpunkte mit Linien auf der Karte. Wenn die Linien verbunden werden, wird daraus ein Zonenbereich.'
-                            : 'Draw vertices with lines on map. When lines connect, it forms a closed zone area.'}
-                        </p>
-
-                        <div className="flex flex-wrap items-center gap-2 pt-1">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCalloutFormHasArea(true);
-                              setCalloutFormAreaShape('polygon');
-                              setIsAddingCallout(false);
-                              setIsDrawingPolygonArea(true);
-                            }}
-                            className="flex-1 min-w-[140px] flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-sky-500 hover:bg-sky-400 text-zinc-950 font-bold text-xs shadow-md transition-colors"
-                          >
-                            <PenTool className="w-3.5 h-3.5" />
-                            <span>{isDe ? 'Linien auf Karte zeichnen' : 'Draw Lines on Map'}</span>
-                          </button>
-
-                          {calloutFormAreaPoints.length > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => setCalloutFormAreaPoints((prev) => prev.slice(0, -1))}
-                              className="px-2.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-semibold transition-colors"
-                              title={isDe ? 'Letzten Punkt entfernen' : 'Undo last point'}
-                            >
-                              ↶ {isDe ? 'Rückgängig' : 'Undo'}
-                            </button>
-                          )}
-
-                          {calloutFormAreaPoints.length > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => setCalloutFormAreaPoints([])}
-                              className="px-2.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-red-400 hover:text-red-300 text-xs font-semibold transition-colors"
-                              title={isDe ? 'Alle Punkte löschen' : 'Clear points'}
-                            >
-                              🗑️
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Level Selector (nur wenn Karte zwei Ebenen O/U hat) */}
-              {mapData.lowerImage && (
-                <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="font-semibold uppercase text-zinc-300 flex items-center gap-1.5 text-xs">
-                      <span>{isDe ? 'Kartenebene / Stockwerk' : 'Floor / Level'}</span>
-                    </label>
-                    <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-zinc-900 border border-purple-500/50 text-purple-300">
-                      {calloutFormLevel === 'upper'
-                        ? isDe ? 'O (Oben)' : 'Upper (O)'
-                        : calloutFormLevel === 'lower'
-                        ? isDe ? 'U (Unten)' : 'Lower (U)'
-                        : isDe ? 'O + U (Beide)' : 'Both (O + U)'}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => setCalloutFormLevel('upper')}
-                      className={`py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${
-                        calloutFormLevel === 'upper'
-                          ? 'bg-zinc-100 text-zinc-950 border-zinc-100 font-bold shadow-md'
-                          : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800'
-                      }`}
-                    >
-                      {isDe ? 'O (Oben)' : 'Upper (O)'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCalloutFormLevel('lower')}
-                      className={`py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${
-                        calloutFormLevel === 'lower'
-                          ? 'bg-purple-600 text-white border-purple-500 font-bold shadow-md'
-                          : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800'
-                      }`}
-                    >
-                      {isDe ? 'U (Unten)' : 'Lower (U)'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCalloutFormLevel('both')}
-                      className={`py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${
-                        calloutFormLevel === 'both'
-                          ? 'bg-purple-600 text-white border-purple-500 font-bold shadow-md'
-                          : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800'
-                      }`}
-                    >
-                      {isDe ? 'Beide (O + U)' : 'Both (O + U)'}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Zone / Pin Color Selection: T-SPAWN BRAUN, CT-SPAWN BLAU */}
-              <div>
-                <label className="block text-xs font-semibold uppercase text-zinc-400 mb-1">
-                  {isDe ? 'Zone (A/B/Mid/Spawns)' : 'Map Zone'}
-                </label>
-                <select
-                  value={calloutFormZone}
-                  onChange={(e) => {
-                    const newZone = e.target.value as ZoneType;
-                    setCalloutFormZone(newZone);
-                    if (newZone === 'ct_spawn') {
-                      setCalloutFormCustomImage('ct.png');
-                      setCalloutFormDisplayMode((prev) => prev === 'text' ? 'image' : prev);
-                      setCalloutFormHidePin(false);
-                    } else if (newZone === 't_spawn') {
-                      setCalloutFormCustomImage('T.png');
-                      setCalloutFormDisplayMode((prev) => prev === 'text' ? 'image' : prev);
-                      setCalloutFormHidePin(false);
-                    }
-                  }}
-                  className="w-full px-2.5 py-2 rounded-lg border border-zinc-700 bg-zinc-950 text-white"
-                >
-                  <option value="a_site">🟠 A-Site (Orange — Bombenplatz A)</option>
-                  <option value="b_site">🔵 B-Site (Blau/Cyan — Bombenplatz B)</option>
-                  <option value="mid">🟢 Middle (Grün — Mitte & Mid-Lanes)</option>
-                  <option value="t_spawn">🟤 T-Spawn (Braun — Terroristen-Basis)</option>
-                  <option value="ct_spawn">🔵 CT-Spawn (Blau — Antiterrorteam-Basis)</option>
-                  <option value="other">⚪ Sonstige (Weiß/Grau — Außenflanken)</option>
-                </select>
-              </div>
-
-              {/* Danger Level Selection */}
-              <div>
-                <label className="block text-xs font-semibold uppercase text-zinc-400 mb-1">
-                  {isDe ? 'Gefahrenstufe' : 'Danger Level'}
-                </label>
-                <select
-                  value={calloutFormDanger}
-                  onChange={(e) => setCalloutFormDanger(e.target.value as DangerLevel)}
-                  className="w-full px-2.5 py-2 rounded-lg border border-zinc-700 bg-zinc-950 text-white"
-                >
-                  <option value="high">🔴 Hoch (Rot — Duell-Hotspots & Granaten-Brennpunkte)</option>
-                  <option value="medium">🟡 Mittel (Gelb — Flankenrouten & Deckungswinkel)</option>
-                  <option value="low">🟢 Gering (Grün — Sichere Rückzugszonen)</option>
-                </select>
-              </div>
-
-              {/* Description & Tactical Tip */}
-              <div>
-                <label className="block text-xs font-semibold uppercase text-zinc-400 mb-1">
-                  {isDe ? 'Positionsbeschreibung (Deutsch)' : 'Description (German)'}
-                </label>
-                <textarea
-                  rows={2}
-                  value={calloutFormDescDe}
-                  onChange={(e) => setCalloutFormDescDe(e.target.value)}
-                  placeholder="Genaue taktische Lagebeschreibung..."
-                  className="w-full px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-950 text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase text-zinc-400 mb-1">
-                  {isDe ? 'Taktischer Tipp' : 'Tactical Tip'}
-                </label>
-                <textarea
-                  rows={2}
-                  value={calloutFormTipDe}
-                  onChange={(e) => setCalloutFormTipDe(e.target.value)}
-                  placeholder="z. B. Molotov werfen, vor Peeken flashen..."
-                  className="w-full px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-950 text-white"
-                />
-              </div>
-
-              <div className="pt-3 border-t border-zinc-800 flex items-center justify-between">
-                {editingCallout ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (editingCallout) {
-                        handleDeleteCallout(editingCallout.id);
-                        setIsAddingCallout(false);
-                        setEditingCallout(null);
-                        setPendingCalloutCoords(null);
-                      }
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 transition-colors"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>{isDe ? 'Callout löschen' : 'Delete Callout'}</span>
-                  </button>
-                ) : (
-                  <span className="text-[11px] font-mono text-zinc-500">
-                    Position: {pendingCalloutCoords.x} / {pendingCalloutCoords.y}
-                  </span>
-                )}
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAddingCallout(false);
-                      setEditingCallout(null);
-                      setPendingCalloutCoords(null);
-                    }}
-                    className="px-3.5 py-1.5 text-xs font-medium rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                  >
-                    {isDe ? 'Abbrechen' : 'Cancel'}
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-1.5 text-xs font-bold rounded-lg bg-white text-zinc-950 hover:bg-zinc-200"
-                  >
-                    {isDe ? 'Speichern' : 'Save'}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
       {/* SYNC CHANGES CONFIRMATION MODAL */}
-      {showSyncPrompt && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in-50 print:hidden">
-          <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl text-zinc-100 scale-in-95 animate-in">
-            <div className="flex items-center gap-3 pb-3 border-b border-zinc-800 mb-4">
-              <div className="p-2 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400">
-                <Upload className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-base font-black text-white uppercase tracking-tight">
-                  {isDe ? 'Änderungen synchronisieren?' : 'Sync Changes?'}
-                </h3>
-                <p className="text-[11px] text-zinc-400">
-                  {isDe ? 'Du hast Änderungen an dieser Karte vorgenommen.' : 'You have made changes to this map.'}
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-4 mb-6">
-              <p className="text-xs text-zinc-300 leading-relaxed">
-                {isDe 
-                  ? 'Möchtest du diese Änderungen jetzt mit deinem Google-Konto synchronisieren (Cloud), damit sie auch auf anderen Geräten verfügbar sind, oder nur lokal auf diesem Gerät speichern?' 
-                  : 'Would you like to sync these changes with your Google account (Cloud) now so they are available on other devices, or only save them locally on this device?'}
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              {currentUser ? (
-                <button
-                  onClick={() => handleConfirmSync(true)}
-                  disabled={isSyncing}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-400 text-zinc-950 font-bold hover:bg-amber-300 transition-all cursor-pointer shadow-md disabled:opacity-50"
-                >
-                  <Upload className="w-4 h-4" />
-                  <span>{isDe ? 'In die Cloud synchronisieren' : 'Sync to Cloud'}</span>
-                </button>
-              ) : (
-                <button
-                  onClick={async () => {
-                    setIsSyncing(true);
-                    try {
-                      const res = await loginWithGoogle();
-                      if (res?.user) {
-                        await handleConfirmSync(true, res.user);
-                      }
-                    } catch (err) {
-                      console.error('Login error:', err);
-                    } finally {
-                      setIsSyncing(false);
-                    }
-                  }}
-                  disabled={isSyncing}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-400 text-zinc-950 font-bold hover:bg-amber-300 transition-all cursor-pointer shadow-md disabled:opacity-50"
-                >
-                  <Upload className="w-4 h-4" />
-                  <span>{isDe ? 'Mit Google anmelden & synchronisieren' : 'Sign in with Google & Sync'}</span>
-                </button>
-              )}
-              
-              <button
-                onClick={() => handleConfirmSync(false)}
-                disabled={isSyncing}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold border border-zinc-700 disabled:opacity-50 transition-colors"
-              >
-                <Check className="w-3.5 h-3.5 text-emerald-400" />
-                <span>{isDe ? 'Nur lokal auf diesem Gerät speichern' : 'Save Locally Only'}</span>
-              </button>
-
-              <div className="grid grid-cols-2 gap-2 mt-1">
-                <button
-                  onClick={handleDiscardAndExit}
-                  disabled={isSyncing}
-                  className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-300 text-xs font-semibold border border-red-800/60 transition-colors disabled:opacity-50"
-                  title={isDe ? 'Änderungen dieser Sitzung verwerfen' : 'Discard session changes'}
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>{isDe ? 'Ohne zu speichern verlassen' : 'Discard & Exit'}</span>
-                </button>
-                <button
-                  onClick={() => setShowSyncPrompt(false)}
-                  disabled={isSyncing}
-                  className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-transparent hover:bg-zinc-800 text-zinc-400 text-xs font-semibold disabled:opacity-50 transition-colors"
-                >
-                  {isDe ? 'Abbrechen' : 'Cancel'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <SyncPromptModal
+        isOpen={showSyncPrompt}
+        lang={lang}
+        currentUser={currentUser}
+        isSyncing={isSyncing}
+        onSetIsSyncing={setIsSyncing}
+        onConfirmSync={handleConfirmSync}
+        onDiscardAndExit={handleDiscardAndExit}
+        onClose={() => setShowSyncPrompt(false)}
+      />
 
       {/* CLOUD CONFLICT RESOLUTION MODAL */}
       <CloudConflictModal
@@ -7450,6 +4979,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           }
         }}
         onLoadTacticState={(loadedState) => {
+          pushHistorySnapshot();
           setDrawings(loadedState.drawings || []);
           setUtilities(loadedState.utilities || []);
           setPlayers(loadedState.players || []);
@@ -7458,550 +4988,95 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             setLayers(stateWithLayers.layers);
           }
           setSelectedElementIds([]);
-          setDrawingsRedoStack([]);
+          setSelectedCalloutIds([]);
           setHasChangesInSession(true);
         }}
         lang={lang}
       />
 
-      {/* EDIT MODE OPTIONS SELECTION MODAL (3 CHOICES) */}
-      {isEditOptionsModalOpen && (
-        <div
-          data-no-map-click="true"
-          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-150 overflow-y-auto"
-          onClick={() => setIsEditOptionsModalOpen(false)}
-        >
-          <div
-            className="w-full max-w-lg bg-zinc-900 border border-zinc-700/80 rounded-2xl p-5 sm:p-6 shadow-2xl text-zinc-100 relative my-auto max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="flex items-start justify-between pb-3 border-b border-zinc-800 mb-4">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <Move className="w-5 h-5 text-amber-400" />
-                  <h3 className="text-lg font-black text-white">
-                    {isDe ? 'Bearbeitungs-Modus' : 'Edit Mode Options'}
-                  </h3>
-                </div>
-                <p className="text-xs text-zinc-400">
-                  {isDe
-                    ? 'Wähle, wie du die Karte oder Callouts anpassen möchtest:'
-                    : 'Choose how you want to edit map callouts:'}
-                </p>
-              </div>
-              <button
-                onClick={() => setIsEditOptionsModalOpen(false)}
-                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {/* TACTIC PRESETS LIBRARY MODAL (per map, persistent + cloud synced) */}
+      <TacticPresetsModal
+        isOpen={isPresetsModalOpen}
+        onClose={() => setIsPresetsModalOpen(false)}
+        lang={lang}
+        mapData={mapData}
+        activeImage={activeImage}
+        presets={tacticPresets}
+        currentDrawings={drawings}
+        currentUtilities={utilities}
+        currentPlayers={players}
+        currentLayers={layers}
+        onSavePreset={handleSavePreset}
+        onLoadPreset={handleLoadPreset}
+        onRenamePreset={handleRenamePreset}
+        onOverwritePreset={handleOverwritePreset}
+        onDeletePreset={handleDeletePreset}
+        onOpenPngPreview={(preset) => {
+          setIsPresetsModalOpen(false);
+          setPreviewSnapshot({
+            id: preset.id,
+            timestamp: preset.updatedAt,
+            label: preset.name,
+            changedCount:
+              (preset.drawings?.length || 0) +
+              (preset.utilities?.length || 0) +
+              (preset.players?.length || 0),
+            callouts: mapData.callouts,
+            drawings: preset.drawings,
+            utilities: preset.utilities,
+            players: preset.players,
+          });
+          setIsTacticPreviewOpen(true);
+        }}
+      />
 
-            <div className="space-y-3">
-              {/* OPTION 1: ALLES BEARBEITEN */}
-              <button
-                type="button"
-                onClick={() => {
-                  setSingleEditCalloutId(null);
-                  setSelectedCallout(null);
-                  setSelectedCalloutIds([]);
-                  setHighlightedCalloutId(undefined);
-                  setContextMenu(null);
-                  setIsEditMode(true);
-                  setIsEditOptionsModalOpen(false);
-                }}
-                className="w-full text-left p-4 rounded-xl bg-zinc-950/80 hover:bg-zinc-800/80 border border-zinc-800 hover:border-amber-500/60 transition-all group cursor-pointer flex items-start gap-3.5"
-              >
-                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 group-hover:scale-105 transition-transform shrink-0">
-                  <Move className="w-5 h-5" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-0.5">
-                    <span className="font-extrabold text-sm text-white group-hover:text-amber-300 transition-colors">
-                      {isDe ? '1. Alles Bearbeiten (Global)' : '1. Edit All Callouts (Global)'}
-                    </span>
-                    <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                      {mapData.callouts.length} Callouts
-                    </span>
-                  </div>
-                  <p className="text-xs text-zinc-400 leading-relaxed">
-                    {isDe
-                      ? 'Schaltet alle Callouts auf der Karte in den Bearbeitungsmodus.'
-                      : 'Switches all callouts on the map into edit mode.'}
-                  </p>
-                </div>
-              </button>
+      {/* EDIT MODE OPTIONS SELECTION MODAL */}
+      <EditOptionsModal
+        isOpen={isEditOptionsModalOpen}
+        onClose={() => setIsEditOptionsModalOpen(false)}
+        lang={lang}
+        callouts={mapData.callouts}
+        singleEditCalloutId={singleEditCalloutId}
+        singleEditSearchQuery={singleEditSearchQuery}
+        onChangeSearchQuery={setSingleEditSearchQuery}
+        customSelectedCount={customSelectedCalloutIds.length}
+        getZoneBadgeColor={getZoneBadgeColor}
+        onEnableGlobalEdit={() => {
+          setSingleEditCalloutId(null);
+          setSelectedCallout(null);
+          setSelectedCalloutIds([]);
+          setHighlightedCalloutId(undefined);
+          setContextMenu(null);
+          setIsEditMode(true);
+          setIsEditOptionsModalOpen(false);
+        }}
+        onEnableSingleEdit={(calloutId) => {
+          setSingleEditCalloutId(calloutId);
+          setIsEditMode(true);
+          setIsEditOptionsModalOpen(false);
+        }}
+        onOpenNewCallout={() => {
+          setIsEditOptionsModalOpen(false);
+          handleOpenAddNewCalloutModal();
+        }}
+        onOpenCustomSelection={handleOpenCustomSelectionModal}
+      />
 
-              {/* OPTION 2: EINZEL-BEARBEITUNG */}
-              <div className="p-4 rounded-xl bg-zinc-950/80 border border-zinc-800 space-y-2.5">
-                <div className="flex items-start gap-3.5">
-                  <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-400 shrink-0">
-                    <Crosshair className="w-5 h-5" />
-                  </div>
-                  <div className="flex-1">
-                    <span className="font-extrabold text-sm text-white block mb-0.5">
-                      {isDe ? '2. Einzel-Bearbeitung (Fokussiert)' : '2. Single Callout Edit'}
-                    </span>
-                    <p className="text-xs text-zinc-400 leading-relaxed">
-                      {isDe
-                        ? 'Wähle ein Callout aus. Alle anderen werden ausgeblendet.'
-                        : 'Select a callout. All others will be hidden.'}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Search & Selector List */}
-                <div className="pt-2 border-t border-zinc-800/80 space-y-2">
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={singleEditSearchQuery}
-                      onChange={(e) => setSingleEditSearchQuery(e.target.value)}
-                      placeholder={isDe ? 'Callout suchen...' : 'Search callout...'}
-                      className="w-full bg-zinc-900 border border-zinc-700/80 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-sky-400"
-                    />
-                    <Crosshair className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-2.5" />
-                  </div>
-
-                  <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
-                    {mapData.callouts
-                      .filter((c) =>
-                        c.name.toLowerCase().includes(singleEditSearchQuery.toLowerCase()) ||
-                        c.zone.toLowerCase().includes(singleEditSearchQuery.toLowerCase())
-                      )
-                      .map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => {
-                            setSingleEditCalloutId(c.id);
-                            setIsEditMode(true);
-                            setIsEditOptionsModalOpen(false);
-                          }}
-                          className={`w-full flex items-center justify-between p-2 rounded-lg text-left transition-all text-xs cursor-pointer ${
-                            singleEditCalloutId === c.id
-                              ? 'bg-sky-500/20 border border-sky-400 text-sky-200'
-                              : 'bg-zinc-900/90 hover:bg-zinc-800 text-zinc-200 border border-zinc-800'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 truncate">
-                            <span className="font-bold truncate">{c.name}</span>
-                            <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase ${getZoneBadgeColor(c.zone)}`}>
-                              {c.zone.replace('_', ' ')}
-                            </span>
-                          </div>
-                          <span className="text-[10px] text-sky-400 font-semibold shrink-0">
-                            {isDe ? 'Bearbeiten →' : 'Edit →'}
-                          </span>
-                        </button>
-                      ))}
-                    {mapData.callouts.filter((c) =>
-                      c.name.toLowerCase().includes(singleEditSearchQuery.toLowerCase()) ||
-                      c.zone.toLowerCase().includes(singleEditSearchQuery.toLowerCase())
-                    ).length === 0 && (
-                      <div className="p-3 text-center text-xs text-zinc-500">
-                        {isDe ? 'Kein Callout gefunden.' : 'No callout found.'}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* OPTION 3: NEUEN CALLOUT ERSTELLEN */}
-              <button
-                type="button"
-                onClick={() => {
-                  setIsEditOptionsModalOpen(false);
-                  handleOpenAddNewCalloutModal();
-                }}
-                className="w-full text-left p-4 rounded-xl bg-zinc-950/80 hover:bg-zinc-800/80 border border-zinc-800 hover:border-emerald-500/60 transition-all group cursor-pointer flex items-start gap-3.5"
-              >
-                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 group-hover:scale-105 transition-transform shrink-0">
-                  <Plus className="w-5 h-5" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-0.5">
-                    <span className="font-extrabold text-sm text-white group-hover:text-emerald-300 transition-colors">
-                      {isDe ? '3. Neues Callout erstellen' : '3. Create New Callout'}
-                    </span>
-                    <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                      +Neu
-                    </span>
-                  </div>
-                  <p className="text-xs text-zinc-400 leading-relaxed">
-                    {isDe
-                      ? 'Füge ein neuen Callout / Bereich auf der Karte hinzu.'
-                      : 'Add a new callout / area to the map.'}
-                  </p>
-                </div>
-              </button>
-
-              {/* OPTION 4: MEINE CALLOUT AUSWAHL */}
-              <button
-                type="button"
-                onClick={handleOpenCustomSelectionModal}
-                className="w-full text-left p-4 rounded-xl bg-zinc-950/80 hover:bg-zinc-800/80 border border-zinc-800 hover:border-indigo-500/60 transition-all group cursor-pointer flex items-start gap-3.5"
-              >
-                <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 group-hover:scale-105 transition-transform shrink-0">
-                  <ListFilter className="w-5 h-5" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-0.5">
-                    <span className="font-extrabold text-sm text-white group-hover:text-indigo-300 transition-colors">
-                      {isDe ? '4. Meine Callout Auswahl' : '4. My Callout Selection'}
-                    </span>
-                    <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
-                      {customSelectedCalloutIds.length > 0
-                        ? `${customSelectedCalloutIds.length} ausgewählt`
-                        : (isDe ? 'Auswahl' : 'Select')}
-                    </span>
-                  </div>
-                  <p className="text-xs text-zinc-400 leading-relaxed">
-                    {isDe
-                      ? 'Wähle aus welche Callouts du angezeigt haben möchtest.'
-                      : 'Choose which callouts you want to display.'}
-                  </p>
-                </div>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MEINE CALLOUT AUSWAHL MODAL (DESKTOP SPLIT VIEW & MOBILE TABS) */}
-      {isCustomSelectionModalOpen && (
-        <div
-          data-no-map-click="true"
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/85 backdrop-blur-sm p-2 sm:p-4 animate-in fade-in duration-150 overflow-y-auto"
-          onClick={() => setIsCustomSelectionModalOpen(false)}
-        >
-          <div
-            className="w-full max-w-4xl bg-zinc-900 border border-zinc-700/80 rounded-2xl p-4 sm:p-6 shadow-2xl text-zinc-100 relative my-auto max-h-[92vh] flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="flex items-start justify-between pb-3 border-b border-zinc-800 mb-3 shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 shrink-0">
-                  <ListFilter className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
-                    <span>{isDe ? 'Meine Callout Auswahl' : 'My Callout Selection'}</span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
-                      {tempSelectedCalloutIds.length} / {mapData.callouts.length}
-                    </span>
-                  </h3>
-                  <p className="text-xs text-zinc-400">
-                    {isDe
-                      ? 'Wähle aus welche Callouts du angezeigt haben möchtest.'
-                      : 'Choose which callouts you want to display on this map.'}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsCustomSelectionModalOpen(false)}
-                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Mobile Tab Switcher (< md screens) */}
-            <div className="flex md:hidden items-center p-1 rounded-xl bg-zinc-950 border border-zinc-800 mb-3 gap-1 shrink-0">
-              <button
-                type="button"
-                onClick={() => setCustomSelectionTab('all')}
-                className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  customSelectionTab === 'all'
-                    ? 'bg-zinc-800 text-white shadow-sm'
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                <span>{isDe ? 'Alle Callouts' : 'All Callouts'}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-900 text-zinc-300 font-mono">
-                  {mapData.callouts.length}
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setCustomSelectionTab('selected')}
-                className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  customSelectionTab === 'selected'
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                <span>{isDe ? 'Meine Auswahl' : 'My Selection'}</span>
-                <span
-                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold ${
-                    tempSelectedCalloutIds.length > 0 ? 'bg-white text-indigo-900' : 'bg-zinc-900 text-zinc-400'
-                  }`}
-                >
-                  {tempSelectedCalloutIds.length}
-                </span>
-              </button>
-            </div>
-
-            {/* Main Selection Area: Responsive 2-column or tabbed view */}
-            <div className="flex-1 min-h-0 overflow-y-auto">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full">
-                {/* LEFT COLUMN: ALLE CALLOUTS (links bleiben immer alle erhalten) */}
-                <div
-                  className={`flex flex-col bg-zinc-950/70 border border-zinc-800/80 rounded-xl p-3 sm:p-3.5 ${
-                    customSelectionTab !== 'all' ? 'hidden md:flex' : 'flex'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-zinc-800 shrink-0">
-                    <div>
-                      <span className="text-xs font-extrabold uppercase tracking-wider text-zinc-200">
-                        {isDe ? 'Alle Callouts' : 'All Callouts'}
-                      </span>
-                      <span className="ml-1.5 text-[10px] font-mono text-zinc-500">
-                        ({mapData.callouts.length})
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const allIds = mapData.callouts.map((c) => c.id);
-                          setTempSelectedCalloutIds(allIds);
-                        }}
-                        className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer"
-                      >
-                        {isDe ? 'Alle hinzufügen' : 'Add all'}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Search filter for all callouts */}
-                  <div className="relative mb-2.5 shrink-0">
-                    <input
-                      type="text"
-                      value={customSelectionSearch}
-                      onChange={(e) => setCustomSelectionSearch(e.target.value)}
-                      placeholder={isDe ? 'Callouts durchsuchen...' : 'Search callouts...'}
-                      className="w-full bg-zinc-900 border border-zinc-700/80 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-indigo-400"
-                    />
-                    <Crosshair className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-2.5" />
-                    {customSelectionSearch && (
-                      <button
-                        type="button"
-                        onClick={() => setCustomSelectionSearch('')}
-                        className="absolute right-2.5 top-2 text-zinc-400 hover:text-white"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Scrollable list of all callouts */}
-                  <div className="flex-1 overflow-y-auto max-h-[46vh] sm:max-h-[50vh] space-y-1.5 pr-1">
-                    {mapData.callouts
-                      .filter(
-                        (c) =>
-                          c.name.toLowerCase().includes(customSelectionSearch.toLowerCase()) ||
-                          c.zone.toLowerCase().includes(customSelectionSearch.toLowerCase())
-                      )
-                      .map((c) => {
-                        const isAdded = tempSelectedCalloutIds.includes(c.id);
-                        return (
-                          <div
-                            key={c.id}
-                            onClick={() => {
-                              if (isAdded) {
-                                setTempSelectedCalloutIds((prev) => prev.filter((id) => id !== c.id));
-                              } else {
-                                setTempSelectedCalloutIds((prev) => [...prev, c.id]);
-                              }
-                            }}
-                            className={`flex items-center justify-between p-2 sm:p-2.5 rounded-xl border transition-all cursor-pointer ${
-                              isAdded
-                                ? 'bg-indigo-950/40 border-indigo-500/50 text-indigo-100 hover:bg-indigo-950/60'
-                                : 'bg-zinc-900/80 border-zinc-800 text-zinc-200 hover:bg-zinc-850 hover:border-zinc-700'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 truncate">
-                              <span
-                                className={`w-2 h-2 rounded-full shrink-0 ${
-                                  isAdded ? 'bg-indigo-400 ring-2 ring-indigo-400/30' : 'bg-zinc-600'
-                                }`}
-                              />
-                              <div className="truncate">
-                                <span className="text-xs font-bold block truncate">{c.name}</span>
-                                <span
-                                  className={`text-[9px] font-mono px-1 py-0.2 rounded border uppercase ${getZoneBadgeColor(
-                                    c.zone
-                                  )}`}
-                                >
-                                  {c.zone.replace('_', ' ')}
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="shrink-0 ml-2">
-                              {isAdded ? (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setTempSelectedCalloutIds((prev) => prev.filter((id) => id !== c.id));
-                                  }}
-                                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[11px] font-bold hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/40 transition-colors"
-                                  title={isDe ? 'Aus Auswahl entfernen' : 'Remove from selection'}
-                                >
-                                  <Check className="w-3 h-3" />
-                                  <span>{isDe ? 'Ausgewählt' : 'Selected'}</span>
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setTempSelectedCalloutIds((prev) => [...prev, c.id]);
-                                  }}
-                                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-zinc-800 hover:bg-indigo-600 text-zinc-300 hover:text-white transition-colors text-[11px] font-semibold cursor-pointer"
-                                >
-                                  <Plus className="w-3 h-3" />
-                                  <span>{isDe ? 'Hinzufügen' : 'Add'}</span>
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-
-                    {mapData.callouts.filter(
-                      (c) =>
-                        c.name.toLowerCase().includes(customSelectionSearch.toLowerCase()) ||
-                        c.zone.toLowerCase().includes(customSelectionSearch.toLowerCase())
-                    ).length === 0 && (
-                      <div className="p-4 text-center text-xs text-zinc-500">
-                        {isDe ? 'Kein Callout gefunden.' : 'No callout found.'}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* RIGHT COLUMN: MEINE AUSWAHL */}
-                <div
-                  className={`flex flex-col bg-zinc-950/70 border border-indigo-900/40 rounded-xl p-3 sm:p-3.5 ${
-                    customSelectionTab !== 'selected' ? 'hidden md:flex' : 'flex'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-zinc-800 shrink-0">
-                    <div className="flex items-center gap-1.5">
-                      <ListFilter className="w-3.5 h-3.5 text-indigo-400" />
-                      <span className="text-xs font-extrabold uppercase tracking-wider text-indigo-300">
-                        {isDe ? 'Meine Auswahl' : 'My Selection'}
-                      </span>
-                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                        {tempSelectedCalloutIds.length}
-                      </span>
-                    </div>
-                    {tempSelectedCalloutIds.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setTempSelectedCalloutIds([])}
-                        className="text-[11px] font-semibold text-red-400 hover:text-red-300 transition-colors cursor-pointer"
-                      >
-                        {isDe ? 'Alle entfernen' : 'Clear all'}
-                      </button>
-                    )}
-                  </div>
-
-                  {tempSelectedCalloutIds.length === 0 ? (
-                    <div className="flex-1 flex flex-col items-center justify-center text-center p-6 rounded-xl border border-dashed border-zinc-800 bg-zinc-950/40 text-zinc-500 min-h-[200px]">
-                      <ListFilter className="w-8 h-8 text-zinc-600 mb-2 stroke-[1.5]" />
-                      <p className="text-xs font-bold text-zinc-300 mb-1">
-                        {isDe ? 'Noch keine Callouts in deiner Auswahl' : 'No callouts selected yet'}
-                      </p>
-                      <p className="text-[11px] text-zinc-400 max-w-xs mb-3">
-                        {isDe
-                          ? 'Klicke auf Callouts aus der linken Liste, um sie zu deiner eigenen Anzeige hinzuzufügen.'
-                          : 'Click callouts from the left list to add them to your custom display.'}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const allIds = mapData.callouts.map((c) => c.id);
-                          setTempSelectedCalloutIds(allIds);
-                        }}
-                        className="px-3 py-1.5 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/50 text-indigo-200 text-xs font-bold transition-colors cursor-pointer"
-                      >
-                        {isDe ? 'Alle Callouts übernehmen' : 'Add all callouts'}
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex-1 overflow-y-auto max-h-[50vh] sm:max-h-[55vh] space-y-1.5 pr-1">
-                      {tempSelectedCalloutIds.map((id) => {
-                        const callout = mapData.callouts.find((c) => c.id === id);
-                        if (!callout) return null;
-                        return (
-                          <div
-                            key={id}
-                            className="flex items-center justify-between p-2 sm:p-2.5 rounded-xl bg-zinc-900/90 border border-indigo-500/30 text-zinc-100 hover:border-indigo-400 transition-all"
-                          >
-                            <div className="flex items-center gap-2 truncate">
-                              <span className="text-xs font-bold truncate">{callout.name}</span>
-                              <span
-                                className={`text-[9px] font-mono px-1 py-0.2 rounded border uppercase ${getZoneBadgeColor(
-                                  callout.zone
-                                )}`}
-                              >
-                                {callout.zone.replace('_', ' ')}
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setTempSelectedCalloutIds((prev) => prev.filter((item) => item !== id))}
-                              className="p-1 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
-                              title={isDe ? 'Entfernen' : 'Remove'}
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="pt-3.5 border-t border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-3 mt-3 shrink-0">
-              <div className="text-xs text-zinc-400 w-full sm:w-auto text-center sm:text-left">
-                <span className="font-extrabold text-white">{tempSelectedCalloutIds.length}</span>{' '}
-                {isDe
-                  ? `von ${mapData.callouts.length} Callouts in deiner Auswahl`
-                  : `of ${mapData.callouts.length} callouts selected`}
-              </div>
-
-              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                <button
-                  type="button"
-                  onClick={() => setIsCustomSelectionModalOpen(false)}
-                  className="flex-1 sm:flex-none px-4 py-2 text-xs font-semibold rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors cursor-pointer"
-                >
-                  {isDe ? 'Abbrechen' : 'Cancel'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSaveCustomSelection(tempSelectedCalloutIds, true)}
-                  className="flex-1 sm:flex-none px-4 py-2 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  <span>{isDe ? 'Auswahl anwenden & anzeigen' : 'Apply & Show Selection'}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* MEINE CALLOUT AUSWAHL MODAL */}
+      <CustomSelectionModal
+        isOpen={isCustomSelectionModalOpen}
+        onClose={() => setIsCustomSelectionModalOpen(false)}
+        lang={lang}
+        callouts={mapData.callouts}
+        tempSelectedCalloutIds={tempSelectedCalloutIds}
+        onChangeTempSelectedIds={setTempSelectedCalloutIds}
+        customSelectionTab={customSelectionTab}
+        onChangeTab={setCustomSelectionTab}
+        customSelectionSearch={customSelectionSearch}
+        onChangeSearch={setCustomSelectionSearch}
+        getZoneBadgeColor={getZoneBadgeColor}
+        onApply={(ids) => handleSaveCustomSelection(ids, true)}
+      />
 
       {/* Scroll to Top Floating Button inside TacticalMapView */}
       {showTacticalScrollTop && (
@@ -8050,18 +5125,9 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             : mapData
         }
         tacticState={{
-          drawings:
-            previewSnapshot?.drawings && previewSnapshot.drawings.length > 0
-              ? previewSnapshot.drawings
-              : drawings,
-          utilities:
-            previewSnapshot?.utilities && previewSnapshot.utilities.length > 0
-              ? previewSnapshot.utilities
-              : utilities,
-          players:
-            previewSnapshot?.players && previewSnapshot.players.length > 0
-              ? previewSnapshot.players
-              : players,
+          drawings: previewSnapshot ? (previewSnapshot.drawings ?? []) : drawings,
+          utilities: previewSnapshot ? (previewSnapshot.utilities ?? []) : utilities,
+          players: previewSnapshot ? (previewSnapshot.players ?? []) : players,
         }}
         tacticTitle={
           previewSnapshot

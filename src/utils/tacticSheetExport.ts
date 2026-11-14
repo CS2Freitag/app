@@ -1,5 +1,6 @@
 import { MapData, TacticalDrawingLine, UtilityMarker, PlayerToken, Callout } from '../types';
 import { resolveAssetPath } from './assets';
+import { getThrowGeometry, THROW_TYPE_META } from './utilityThrowGeometry';
 
 async function loadImage(src: string): Promise<HTMLImageElement | null> {
   if (!src) return null;
@@ -277,9 +278,89 @@ export async function generateTacticSheetPng(
   }
 
   // ==========================================
-  // STEP 5: DRAW UTILITY MARKERS
+  // STEP 5: DRAW UTILITY THROW CURVES & MARKERS
   // ==========================================
   if (tacticState.utilities && Array.isArray(tacticState.utilities)) {
+    // Pass 5a: Throw trajectories underneath landing icons
+    for (const u of tacticState.utilities) {
+      if (!u.throwFrom) continue;
+      const color =
+        u.type === 'flash'
+          ? '#fcd34d'
+          : u.type === 'molotov'
+          ? '#f97316'
+          : u.type === 'he'
+          ? '#dc2626'
+          : u.type === 'decoy'
+          ? '#9333ea'
+          : '#0ea5e9';
+
+      const geom = getThrowGeometry(u.throwFrom, u, u.curveBend);
+      const fx = ((geom.from.x + 50) / 100) * size;
+      const fy = ((geom.from.y + 50) / 100) * size;
+      const cpx = ((geom.cp.x + 50) / 100) * size;
+      const cpy = ((geom.cp.y + 50) / 100) * size;
+      const ux = ((u.x + 50) / 100) * size;
+      const uy = ((u.y + 50) / 100) * size;
+
+      ctx.save();
+      ctx.lineCap = 'round';
+
+      // Dark outer casing for crisp legibility on bright maps
+      ctx.beginPath();
+      ctx.moveTo(fx, fy);
+      ctx.quadraticCurveTo(cpx, cpy, ux, uy);
+      ctx.strokeStyle = 'rgba(9,9,11,0.82)';
+      ctx.lineWidth = 13;
+      ctx.stroke();
+
+      // Colored dashed flight arc
+      ctx.beginPath();
+      ctx.moveTo(fx, fy);
+      ctx.quadraticCurveTo(cpx, cpy, ux, uy);
+      ctx.setLineDash([16, 11]);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 7;
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Origin anchor dot (1. Abwurfpunkt)
+      ctx.beginPath();
+      ctx.arc(fx, fy, 15, 0, Math.PI * 2);
+      ctx.fillStyle = '#09090b';
+      ctx.fill();
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = color;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(fx, fy, 5.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+
+      // Optional throw type pill near throw origin (e.g. JT / R / L+R)
+      if (u.throwType && u.throwType !== 'left') {
+        const badgeText = THROW_TYPE_META[u.throwType]?.short || '';
+        if (badgeText) {
+          ctx.font = '900 18px sans-serif';
+          const tw = ctx.measureText(badgeText).width + 14;
+          const bx = fx - tw / 2;
+          const by = fy - 38;
+          ctx.fillStyle = 'rgba(9,9,11,0.92)';
+          ctx.fillRect(bx, by, tw, 24);
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2;
+          ctx.strokeRect(bx, by, tw, 24);
+          ctx.fillStyle = '#ffffff';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(badgeText, fx, by + 12);
+        }
+      }
+      ctx.restore();
+    }
+
+    // Pass 5b: Utility landing icons & optional notes
     for (const u of tacticState.utilities) {
       const ux = ((u.x + 50) / 100) * size;
       const uy = ((u.y + 50) / 100) * size;

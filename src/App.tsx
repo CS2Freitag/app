@@ -74,6 +74,23 @@ export default function App() {
   const [selectedMap, setSelectedMap] = useState<MapData | null>(null);
   const [highlightedCalloutId, setHighlightedCalloutId] = useState<string | undefined>(undefined);
 
+  // Prevent background page scroll & stale scroll offset on mobile when TacticalMapView is open
+  useEffect(() => {
+    if (!selectedMap) return;
+    window.scrollTo(0, 0);
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevOverscroll = document.documentElement.style.overscrollBehavior;
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overscrollBehavior = 'none';
+    return () => {
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overscrollBehavior = prevOverscroll;
+    };
+  }, [selectedMap?.id]);
+
   // Modals
   const [isEditorOpen, setIsEditorOpen] = useState<boolean>(false);
   const [mapToEdit, setMapToEdit] = useState<MapData | null>(null);
@@ -1042,7 +1059,7 @@ export default function App() {
 
   return (
     <div
-      className={`min-h-screen transition-colors duration-200 ${
+      className={`${selectedMap ? 'h-dvh overflow-hidden' : 'min-h-dvh'} transition-colors duration-200 ${
         theme === 'dark' ? 'bg-zinc-950 text-zinc-100' : 'bg-zinc-50 text-zinc-900'
       }`}
     >
@@ -1068,7 +1085,7 @@ export default function App() {
 
       {/* Main Fullscreen Tactical Map View if a map is selected */}
       {selectedMap ? (
-        <div className="relative w-full h-full">
+        <div className="relative w-full h-dvh overflow-hidden">
           {/* Incoming Shared Tactic Notification Banner */}
           {sharedTacticNotification && (
             <div className="absolute top-16 left-1/2 -translate-x-1/2 z-[80] flex items-center gap-3 px-4 py-2.5 rounded-xl bg-zinc-950/95 border-2 border-sky-400 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-3 duration-200">
@@ -1120,7 +1137,7 @@ export default function App() {
         </div>
       ) : (
         /* Home Page / Overview */
-        <div className="flex flex-col min-h-screen">
+        <div className="flex flex-col min-h-dvh">
           {/* Header */}
           <Header
             lang={lang}

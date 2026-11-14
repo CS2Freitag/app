@@ -9,6 +9,7 @@ import {
   UtilityMarker,
 } from '../types';
 import { resolveAssetPath } from '../utils/assets';
+import { getThrowGeometry } from '../utils/utilityThrowGeometry';
 
 export const isAusgangsversion = (s: TacticSnapshot): boolean =>
   s.id.includes('init') ||
@@ -152,18 +153,43 @@ const SnapshotMiniRadarPreview: React.FC<{
           );
         })}
 
-        {/* Utility Markers */}
-        {utilities.map((u) => (
-          <circle
-            key={`util_${u.id}`}
-            cx={u.x}
-            cy={u.y}
-            r={2.2}
-            fill={getUtilityHex(u.type)}
-            stroke="#09090b"
-            strokeWidth={0.6}
-          />
-        ))}
+        {/* Utility Throw Arcs & Markers */}
+        {utilities.map((u) => {
+          const color = getUtilityHex(u.type);
+          const geom = u.throwFrom ? getThrowGeometry(u.throwFrom, u, u.curveBend) : null;
+          return (
+            <g key={`util_${u.id}`}>
+              {geom && (
+                <>
+                  <path
+                    d={`M ${geom.from.x} ${geom.from.y} Q ${geom.cp.x} ${geom.cp.y} ${u.x} ${u.y}`}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth={1.2}
+                    strokeDasharray="2,1.4"
+                    strokeOpacity={0.85}
+                  />
+                  <circle
+                    cx={geom.from.x}
+                    cy={geom.from.y}
+                    r={1.2}
+                    fill="#09090b"
+                    stroke={color}
+                    strokeWidth={0.7}
+                  />
+                </>
+              )}
+              <circle
+                cx={u.x}
+                cy={u.y}
+                r={2.2}
+                fill={color}
+                stroke="#09090b"
+                strokeWidth={0.6}
+              />
+            </g>
+          );
+        })}
 
         {/* Player Tokens */}
         {players.map((p) => (

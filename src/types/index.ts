@@ -72,11 +72,24 @@ export interface TacticSnapshot {
   players?: PlayerToken[];
 }
 
+export interface TacticPreset {
+  id: string;
+  name: string;
+  notes?: string;
+  createdAt: number;
+  updatedAt: number;
+  drawings: TacticalDrawingLine[];
+  utilities: UtilityMarker[];
+  players: PlayerToken[];
+  layers?: TacticLayer[];
+}
+
 export interface TacticalState {
   drawings: TacticalDrawingLine[];
   utilities: UtilityMarker[];
   players: PlayerToken[];
   layers?: TacticLayer[];
+  presets?: TacticPreset[];
 }
 
 export interface MapData {
@@ -97,12 +110,17 @@ export interface MapData {
 }
 
 export type UtilityType = 'smoke' | 'flash' | 'molotov' | 'he' | 'decoy';
+export type UtilityThrowType = 'left' | 'right' | 'both' | 'jump' | 'run_jump';
+export type UtilityPlacementMode = 'point' | 'throw';
 
 export interface UtilityMarker {
   id: string;
   type: UtilityType;
   x: number;
   y: number;
+  throwFrom?: { x: number; y: number };
+  curveBend?: number;
+  throwType?: UtilityThrowType;
   label?: string;
   layerId?: string;
   groupId?: string;

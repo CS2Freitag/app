@@ -18,6 +18,8 @@ import {
   Type,
   Check,
   PanelRightClose,
+  Spline,
+  RotateCcw,
 } from 'lucide-react';
 import {
   Callout,
@@ -28,9 +30,23 @@ import {
   TacticLayer,
   TacticalDrawingLine,
   UtilityMarker,
+  UtilityThrowType,
   ZoneType,
 } from '../types';
 import { playTTS } from '../utils/tts';
+import { THROW_TYPE_META, UTILITY_THROW_TYPES, formatThrowTypeFull } from '../utils/utilityThrowGeometry';
+
+export interface SelectedElementsPatch {
+  color?: string;
+  opacity?: number;
+  locked?: boolean;
+  throwType?: UtilityThrowType;
+  label?: string;
+  curveBend?: number;
+  removeThrowFrom?: boolean;
+  addDefaultThrowFrom?: boolean;
+  resetCurve?: boolean;
+}
 
 interface TacticalLayersPanelProps {
   lang: Language;
@@ -49,7 +65,7 @@ interface TacticalLayersPanelProps {
   players: PlayerToken[];
   selectedElementIds: string[];
   onSelectElements: (ids: string[]) => void;
-  onUpdateSelectedElementsProps: (patch: { color?: string; opacity?: number; locked?: boolean }) => void;
+  onUpdateSelectedElementsProps: (patch: SelectedElementsPatch) => void;
   onDeleteElement: (id: string) => void;
   // Callouts visibility & inspector
   showAreas: boolean;
@@ -144,9 +160,11 @@ export const TacticalLayersPanel: React.FC<TacticalLayersPanelProps> = ({
     });
     utilities.forEach((u) => {
       if ((u.layerId || 'layer_util') === layerId) {
+        const prefix = u.type.toUpperCase();
+        const suffix = u.label ? ` · ${u.label}` : u.throwFrom ? (isDe ? ' (Wurflinie)' : ' (Throw)') : '';
         items.push({
           id: u.id,
-          label: u.type.toUpperCase(),
+          label: `${prefix}${suffix}`,
           kind: 'util',
           color: u.type === 'smoke' ? '#38bdf8' : u.type === 'flash' ? '#facc15' : u.type === 'molotov' ? '#f97316' : u.type === 'he' ? '#ef4444' : '#a855f7',
           locked: u.locked,
@@ -629,6 +647,105 @@ export const TacticalLayersPanel: React.FC<TacticalLayersPanelProps> = ({
                 ))}
               </div>
             </div>
+            {/* Single Selected Utility Throw-Line & Lineup Controls */}
+            {selectedUtilities.length === 1 &&
+              selectedDrawings.length === 0 &&
+              selectedPlayers.length === 0 && (() => {
+                const su = selectedUtilities[0];
+                const hasThrow = Boolean(su.throwFrom);
+                return (
+                  <div className="pt-2 border-t border-zinc-800/80 space-y-2">
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className="text-[11px] font-semibold text-emerald-300 flex items-center gap-1">
+                        <Spline className="w-3.5 h-3.5" />
+                        <span>{isDe ? 'Wurflinie' : 'Throw Curve'}</span>
+                      </span>
+                      <div className="flex items-center gap-1">
+                        {hasThrow && su.curveBend !== undefined && (
+                          <button
+                            type="button"
+                            onClick={() => onUpdateSelectedElementsProps({ resetCurve: true })}
+                            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-700 cursor-pointer"
+                            title={isDe ? 'Bogen auf Standard zurücksetzen' : 'Reset curve arc'}
+                          >
+                            <RotateCcw className="w-2.5 h-2.5" />
+                            <span>Reset</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onUpdateSelectedElementsProps(
+                              hasThrow ? { removeThrowFrom: true } : { addDefaultThrowFrom: true }
+                            )
+                          }
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer transition-colors ${
+                            hasThrow
+                              ? 'bg-red-500/15 text-red-300 border-red-500/40 hover:bg-red-500/25'
+                              : 'bg-emerald-500/20 text-emerald-200 border-emerald-500/50 hover:bg-emerald-500/30'
+                          }`}
+                        >
+                          {hasThrow
+                            ? isDe
+                              ? 'Entfernen'
+                              : 'Remove'
+                            : isDe
+                            ? '+ Hinzufügen'
+                            : '+ Add Line'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {hasThrow && (
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[10px] text-zinc-400">
+                            {isDe ? 'Wurfart' : 'Throw Type'}
+                          </span>
+                          <span className="text-[10px] font-semibold text-sky-300 truncate">
+                            {formatThrowTypeFull(su.throwType || 'left', lang)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {UTILITY_THROW_TYPES.map((tt) => {
+                            const meta = THROW_TYPE_META[tt];
+                            const active = (su.throwType || 'left') === tt;
+                            return (
+                              <button
+                                key={tt}
+                                type="button"
+                                onClick={() => onUpdateSelectedElementsProps({ throwType: tt })}
+                                className={`flex-1 py-1 rounded text-[10px] font-mono font-bold border cursor-pointer transition-colors ${
+                                  active
+                                    ? 'bg-sky-500/25 text-sky-200 border-sky-400'
+                                    : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white'
+                                }`}
+                                title={formatThrowTypeFull(tt, lang)}
+                              >
+                                {meta.short}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-zinc-400">
+                        {isDe ? 'Lineup-Notiz' : 'Lineup Note'}
+                      </span>
+                      <input
+                        type="text"
+                        maxLength={28}
+                        value={su.label || ''}
+                        onChange={(e) => onUpdateSelectedElementsProps({ label: e.target.value })}
+                        placeholder={isDe ? 'z.B. T-Spawn → CT' : 'e.g. T Spawn → CT'}
+                        className="w-full px-2 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-sky-500"
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
           </div>
         </div>
       )}
