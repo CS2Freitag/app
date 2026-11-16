@@ -7,7 +7,7 @@
 
 Flexibly customize, create, and easily share map callouts.
 
-* **➔ Open App in Browser:** [cs2freitag.github.io/app/](https://github.io)
+* **➔ Open App in Browser:** [cs2freitag.github.io/app/](https://cs2freitag.github.io/app/)
 
 ---
 

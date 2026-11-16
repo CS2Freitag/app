@@ -1,12 +1,13 @@
 {
-  "version": "3.98",
+  "version": "3.99",
   "major": 3,
-  "patch": 98,
-  "releaseDate": "2026-11-14",
-  "title": "Update v3.98: Live-Klartext-Wurfarten & Hook-Modularisierung",
-  "description": "Direkte Klartext-Anzeige der gewählten Wurfart (L, R, L+R, JT, R+JT) in allen Leisten, Menüs und in der 2-Punkt-Wurf-Führung sowie ausgelagerte Taktik-Hooks.",
+  "patch": 99,
+  "releaseDate": "2026-11-16",
+  "title": "Update v3.99: Google-Suche & SEO-Optimierung",
+  "description": "Google Search Console Verifizierung, Sitemap, robots.txt sowie optimierte Meta-Tags, OpenGraph-Vorschaukarten und Schema.org-Daten für bessere Auffindbarkeit.",
   "changes": [
-    "Klartext-Wurfarten live sichtbar: Aktive Wurfart (z. B. L · Linksklick, JT · Jumpthrow) erscheint direkt in Sidebar, Mobil-Leiste, Ebenen-Inspektor, Auswahlleiste, Kontextmenü und 2-Punkt-Hinweis",
-    "Code-Modularisierung fortgesetzt: Presets, einheitliches Undo/Redo inkl. Versions-Snapshots sowie Auswahl-/Gruppenaktionen sauber in eigene Custom Hooks ausgelagert"
+    "Google Search Console Verifizierungsdatei korrekt im public/-Stammverzeichnis hinterlegt",
+    "robots.txt & sitemap.xml für GitHub Pages (cs2freitag.github.io/app/) hinzugefügt",
+    "SEO-Titel, Beschreibung, Keywords, OpenGraph/Twitter-Vorschaukarten und Schema.org JSON-LD in index.html ergänzt"
   ]
 }
