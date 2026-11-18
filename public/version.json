@@ -1,18 +1,24 @@
 {
-  "version": "3.110",
+  "version": "3.111",
   "major": 3,
-  "patch": 110,
+  "patch": 111,
   "releaseDate": "2026-11-18",
-  "title": "Update v3.110: Zweizeilige Callouts, Editor-Feinschliff & Cobblestone-Update",
-  "description": "Zweizeilige Callouts erscheinen nun korrekt untereinander auf der Karte, „Bearbeiten“ steht hervorgehoben ganz vorn und die Standard-Kartenauswahl enthält die aktualisierte Cobblestone-Karte.",
+  "title": "Update v3.111: Dauerhafte Favoriten-Speicherung & Cloud-Abgleich",
+  "description": "Favoriten werden nun sofort und dauerhaft im lokalen Speicher gesichert und beim Cloud-Abgleich intelligent zusammengeführt, sodass neu hinzugefügte Karten nach einem Seiten-Reload nicht mehr verloren gehen.",
   "changes": [
-    "Zweizeilige Callout-Namen werden jetzt auf der Karte und im PNG-Export korrekt zweizeilig übereinander dargestellt",
-    "„Bearbeiten“ in der oberen Leiste nach vorn vor „Teilen“ und „Vorlagen“ verschoben und visuell hervorgehoben",
-    "Darstellung wechselt beim Tippen von „T“ oder „CT“ im Callout-Namen nicht mehr automatisch auf Bild (nur noch manuell)",
-    "Beim Anlegen eines neuen Callouts wird auf PC und Tablet automatisch das Namensfeld fokussiert",
-    "Standard-Kartenauswahl mit dem aktualisierten Backup inkl. neuer Cobblestone-Karte (23 Callouts) und Favorit aktualisiert"
+    "Favoriten werden ab sofort sofort und unabhängig von Cloud-Synchronisation oder Autosave dauerhaft im lokalen Speicher gesichert",
+    "Beim Laden und bei der Anmeldung erfolgt ein intelligenter Abgleich von lokalen und Cloud-Favoriten, damit neu hinzugefügte Karten erhalten bleiben"
   ],
   "history": [
+    {
+      "version": "3.111",
+      "releaseDate": "2026-11-18",
+      "title": "Dauerhafte Favoriten-Speicherung & Cloud-Abgleich",
+      "changes": [
+        "Favoriten werden ab sofort sofort und unabhängig von Cloud-Synchronisation oder Autosave dauerhaft im lokalen Speicher gesichert",
+        "Beim Laden und bei der Anmeldung erfolgt ein intelligenter Abgleich von lokalen und Cloud-Favoriten, damit neu hinzugefügte Karten erhalten bleiben"
+      ]
+    },
     {
       "version": "3.110",
       "releaseDate": "2026-11-18",

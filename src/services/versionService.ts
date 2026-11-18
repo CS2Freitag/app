@@ -11,7 +11,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
-export const CURRENT_BUILD_VERSION = '3.110';
+export const CURRENT_BUILD_VERSION = '3.111';
 export const VERSION_STORAGE_KEY = 'cs2_installed_version';
 export const PREVIOUS_VERSION_STORAGE_KEY = 'cs2_previous_version';
 export const SIMULATED_VERSION_KEY = 'cs2_simulated_version';
