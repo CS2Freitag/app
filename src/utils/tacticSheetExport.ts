@@ -491,14 +491,11 @@ export async function generateTacticSheetPng(
     }
   }
 
-  // Preload all callout custom images in parallel
+  // Preload all callout custom images in parallel (only when image mode is enabled)
   const calloutImgPromises = callouts.map((c) => {
-    const name = (c.name || '').toLowerCase();
-    const zone = c.zone || '';
-    const isCT = zone === 'ct_spawn' || name.includes('ct spawn');
-    const isT = zone === 't_spawn' || name.includes('t spawn');
-
-    const imgSrc = c.customImage || (isCT ? 'ct.png' : isT ? 'T.png' : '');
+    const wantsImage = c.displayMode === 'image' || c.displayMode === 'both' || (!c.displayMode && Boolean(c.customImage));
+    if (!wantsImage) return Promise.resolve(null);
+    const imgSrc = c.customImage || '';
     return imgSrc ? loadImage(imgSrc) : Promise.resolve(null);
   });
   const calloutImages = await Promise.all(calloutImgPromises);
@@ -519,7 +516,7 @@ export async function generateTacticSheetPng(
     const isT = zoneLower === 't_spawn' || nameLower.includes('t spawn');
 
     // Draw Custom Image Emblem in a clean cropped circle if present & enabled
-    if ((displayMode === 'image' || displayMode === 'both' || calloutImg) && calloutImg) {
+    if ((displayMode === 'image' || displayMode === 'both') && calloutImg) {
       ctx.save();
       const imgRadius = Math.max(22, Math.round(((c.imageSize || 36) * (size / 800)) / 2));
 
@@ -544,12 +541,13 @@ export async function generateTacticSheetPng(
       ctx.save();
       const fontSize = Math.max(18, Math.round((c.fontSize || 16) * (size / 750)));
       ctx.font = `900 ${fontSize}px sans-serif`;
-      const nameText = (c.name || '').replace(/\n/g, ' ');
-      const textMetrics = ctx.measureText(nameText);
+      const lines = (c.name || '').split(/\r?\n/).slice(0, 2);
+      const maxLineWidth = Math.max(...lines.map((line) => ctx.measureText(line).width), 0);
+      const lineHeight = Math.round(fontSize * 1.18);
       const padX = 12;
       const padY = 8;
-      const boxW = textMetrics.width + padX * 2;
-      const boxH = fontSize + padY * 2;
+      const boxW = maxLineWidth + padX * 2;
+      const boxH = lines.length > 1 ? lineHeight * lines.length + padY * 2 : fontSize + padY * 2;
 
       const offsetY = displayMode === 'both' && calloutImg ? (c.imageSize || 36) * (size / 800) * 0.6 : 0;
       const rx = -boxW / 2;
@@ -577,7 +575,14 @@ export async function generateTacticSheetPng(
       ctx.fillStyle = '#ffffff';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(nameText, 0, 0);
+      if (lines.length > 1) {
+        const startY = -((lines.length - 1) * lineHeight) / 2;
+        lines.forEach((line, idx) => {
+          ctx.fillText(line, 0, startY + idx * lineHeight);
+        });
+      } else {
+        ctx.fillText(lines[0] || '', 0, 0);
+      }
       ctx.restore();
     }
   }

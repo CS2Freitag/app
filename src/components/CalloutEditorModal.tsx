@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   X,
   Image as ImageIcon,
@@ -135,7 +135,17 @@ export const CalloutEditorModal: React.FC<CalloutEditorModalProps> = ({
 }) => {
   const isDe = lang === 'de';
   const previewBoxRef = useRef<HTMLDivElement | null>(null);
+  const nameInputRef = useRef<HTMLTextAreaElement | null>(null);
   const [isDraggingPinPreview, setIsDraggingPinPreview] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || !pendingCalloutCoords || editingCallout) return;
+    if (typeof window === 'undefined' || window.innerWidth < 768) return;
+    const timer = window.setTimeout(() => {
+      nameInputRef.current?.focus();
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, [isOpen, pendingCalloutCoords, editingCallout]);
 
   if (!isOpen || !pendingCalloutCoords) return null;
 
@@ -194,6 +204,7 @@ export const CalloutEditorModal: React.FC<CalloutEditorModalProps> = ({
               )}
             </div>
             <textarea
+              ref={nameInputRef}
               rows={calloutFormName.includes('\n') ? 2 : 1}
               required
               placeholder={isDe ? 'z. B. Bridge, Banana, Quad...' : 'e.g. Bridge, Banana, Quad...'}
@@ -203,18 +214,6 @@ export const CalloutEditorModal: React.FC<CalloutEditorModalProps> = ({
                 const limitedLines = rawLines.slice(0, 2);
                 const val = limitedLines.join('\n');
                 onChangeName(val);
-                const lower = val.toLowerCase();
-                if (lower.includes('ct spawn') || lower === 'ct') {
-                  onChangeZone('ct_spawn');
-                  onChangeCustomImage('ct.png');
-                  onChangeDisplayMode((prev) => (prev === 'text' ? 'image' : prev));
-                  onChangeHidePin(false);
-                } else if (lower.includes('t spawn') || lower === 't') {
-                  onChangeZone('t_spawn');
-                  onChangeCustomImage('T.png');
-                  onChangeDisplayMode((prev) => (prev === 'text' ? 'image' : prev));
-                  onChangeHidePin(false);
-                }
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
@@ -1136,15 +1135,6 @@ export const CalloutEditorModal: React.FC<CalloutEditorModalProps> = ({
               onChange={(e) => {
                 const newZone = e.target.value as ZoneType;
                 onChangeZone(newZone);
-                if (newZone === 'ct_spawn') {
-                  onChangeCustomImage('ct.png');
-                  onChangeDisplayMode((prev) => (prev === 'text' ? 'image' : prev));
-                  onChangeHidePin(false);
-                } else if (newZone === 't_spawn') {
-                  onChangeCustomImage('T.png');
-                  onChangeDisplayMode((prev) => (prev === 'text' ? 'image' : prev));
-                  onChangeHidePin(false);
-                }
               }}
               className="w-full px-2.5 py-2 rounded-lg border border-zinc-700 bg-zinc-950 text-white"
             >

@@ -246,39 +246,13 @@ export const TacticalHeaderBar: React.FC<TacticalHeaderBarProps> = ({
           )}
         </div>
 
-        {/* Tactic Presets Library Button */}
-        <button
-          type="button"
-          onClick={onOpenPresets}
-          className="relative p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg border border-amber-500/40 bg-amber-950/40 hover:bg-amber-900/60 text-amber-300 hover:text-white transition-all cursor-pointer flex items-center gap-1.5"
-          title={isDe ? 'Taktik-Vorlagen verwalten (pro Map)' : 'Manage Tactic Presets (per map)'}
-        >
-          <Bookmark className="w-4 h-4 text-amber-400" />
-          <span className="text-xs font-bold hidden md:inline">{isDe ? 'Vorlagen' : 'Presets'}</span>
-          {presetCount > 0 && (
-            <span className="min-w-[16px] h-[16px] px-1 text-[9px] font-mono font-bold rounded-full flex items-center justify-center bg-amber-500 text-zinc-950">
-              {presetCount}
-            </span>
-          )}
-        </button>
-
-        {/* Share / Export */}
-        <button
-          onClick={onShare}
-          className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg border border-sky-500/40 bg-sky-950/60 hover:bg-sky-900/80 text-sky-300 hover:text-white transition-all cursor-pointer flex items-center gap-1.5"
-          title={isDe ? 'Taktik teilen & exportieren' : 'Share & export tactic'}
-        >
-          <Share2 className="w-4 h-4 text-sky-400" />
-          <span className="text-xs font-bold hidden md:inline">{isDe ? 'Teilen' : 'Share'}</span>
-        </button>
-
         {/* Bearbeiten / Fertig */}
         <button
           onClick={onEditAction}
-          className={`flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
+          className={`flex items-center gap-1.5 p-1.5 sm:px-3 sm:py-1.5 text-xs font-extrabold rounded-lg border transition-all cursor-pointer ${
             isEditActive
-              ? 'border-amber-400 bg-amber-400 text-zinc-950 shadow-md'
-              : 'border-zinc-800 bg-zinc-900 text-zinc-200 hover:text-white hover:bg-zinc-800'
+              ? 'border-amber-400 bg-amber-400 text-zinc-950 shadow-md ring-2 ring-amber-400/40'
+              : 'border-amber-500/80 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 hover:text-white ring-1 ring-amber-500/35 shadow-sm'
           }`}
           title={isDe ? 'Callouts bearbeiten' : 'Edit callouts'}
         >
@@ -289,9 +263,35 @@ export const TacticalHeaderBar: React.FC<TacticalHeaderBarProps> = ({
             </>
           ) : (
             <>
-              <Edit3 className="w-4 h-4 text-amber-400" />
+              <Edit3 className="w-4 h-4 text-amber-300" />
               <span className="hidden sm:inline">{isDe ? 'Bearbeiten' : 'Edit'}</span>
             </>
+          )}
+        </button>
+
+        {/* Share / Export */}
+        <button
+          onClick={onShare}
+          className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-all cursor-pointer flex items-center gap-1.5"
+          title={isDe ? 'Taktik teilen & exportieren' : 'Share & export tactic'}
+        >
+          <Share2 className="w-4 h-4 text-sky-400/90" />
+          <span className="text-xs font-semibold hidden md:inline">{isDe ? 'Teilen' : 'Share'}</span>
+        </button>
+
+        {/* Tactic Presets Library Button */}
+        <button
+          type="button"
+          onClick={onOpenPresets}
+          className="relative p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-all cursor-pointer flex items-center gap-1.5"
+          title={isDe ? 'Taktik-Vorlagen verwalten (pro Map)' : 'Manage Tactic Presets (per map)'}
+        >
+          <Bookmark className="w-4 h-4 text-amber-400/90" />
+          <span className="text-xs font-semibold hidden md:inline">{isDe ? 'Vorlagen' : 'Presets'}</span>
+          {presetCount > 0 && (
+            <span className="min-w-[16px] h-[16px] px-1 text-[9px] font-mono font-bold rounded-full flex items-center justify-center bg-amber-500/85 text-zinc-950">
+              {presetCount}
+            </span>
           )}
         </button>
 

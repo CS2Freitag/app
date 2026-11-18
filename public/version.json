@@ -1,16 +1,30 @@
 {
-  "version": "3.109",
+  "version": "3.110",
   "major": 3,
-  "patch": 109,
+  "patch": 110,
   "releaseDate": "2026-11-18",
-  "title": "Update v3.109: Vollständiger Änderungsverlauf bei Updates",
-  "description": "„Was ist neu“ zeigt ab sofort alle Änderungen aller Versionen seit deiner installierten Version (mit Scrollbalken auf der linken Seite bei längeren Listen).",
+  "title": "Update v3.110: Zweizeilige Callouts, Editor-Feinschliff & Cobblestone-Update",
+  "description": "Zweizeilige Callouts erscheinen nun korrekt untereinander auf der Karte, „Bearbeiten“ steht hervorgehoben ganz vorn und die Standard-Kartenauswahl enthält die aktualisierte Cobblestone-Karte.",
   "changes": [
-    "„Was ist neu“ fasst ab sofort sämtliche Änderungen aller übersprungenen Versionen seit deinem letzten Stand zusammen",
-    "Längere Änderungslisten erhalten automatisch einen Scrollbalken auf der linken Seite",
-    "Der vollständige Versionsverlauf bleibt auch nach Abschluss des Updates jederzeit einsehbar"
+    "Zweizeilige Callout-Namen werden jetzt auf der Karte und im PNG-Export korrekt zweizeilig übereinander dargestellt",
+    "„Bearbeiten“ in der oberen Leiste nach vorn vor „Teilen“ und „Vorlagen“ verschoben und visuell hervorgehoben",
+    "Darstellung wechselt beim Tippen von „T“ oder „CT“ im Callout-Namen nicht mehr automatisch auf Bild (nur noch manuell)",
+    "Beim Anlegen eines neuen Callouts wird auf PC und Tablet automatisch das Namensfeld fokussiert",
+    "Standard-Kartenauswahl mit dem aktualisierten Backup inkl. neuer Cobblestone-Karte (23 Callouts) und Favorit aktualisiert"
   ],
   "history": [
+    {
+      "version": "3.110",
+      "releaseDate": "2026-11-18",
+      "title": "Zweizeilige Callouts, Editor-Feinschliff & Cobblestone-Update",
+      "changes": [
+        "Zweizeilige Callout-Namen werden jetzt auf der Karte und im PNG-Export korrekt zweizeilig übereinander dargestellt",
+        "„Bearbeiten“ in der oberen Leiste nach vorn vor „Teilen“ und „Vorlagen“ verschoben und visuell hervorgehoben",
+        "Darstellung wechselt beim Tippen von „T“ oder „CT“ im Callout-Namen nicht mehr automatisch auf Bild (nur noch manuell)",
+        "Beim Anlegen eines neuen Callouts wird auf PC und Tablet automatisch das Namensfeld fokussiert",
+        "Standard-Kartenauswahl mit dem aktualisierten Backup inkl. neuer Cobblestone-Karte (23 Callouts) und Favorit aktualisiert"
+      ]
+    },
     {
       "version": "3.109",
       "releaseDate": "2026-11-18",

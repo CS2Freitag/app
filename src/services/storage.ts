@@ -112,28 +112,30 @@ function applyDefaultSpawnImages(maps: MapData[]): MapData[] {
           (updated as any).__shifted = true;
         }
       }
-      const name = (updated.name || '').toLowerCase();
+      const name = (updated.name || '').trim().toLowerCase();
       const id = updated.id || '';
-      const zone = updated.zone || '';
+      const isExplicitTextMode = updated.displayMode === 'text';
       const isCT =
-        zone === 'ct_spawn' ||
         id.endsWith('_ct_spawn') ||
-        name.includes('ct spawn') ||
-        name === 'ct-spawn';
+        name === 'ct spawn' ||
+        name === 'ct-spawn' ||
+        name.startsWith('ct spawn ') ||
+        name === 'ct';
       const isT =
-        zone === 't_spawn' ||
         id.endsWith('_t_spawn') ||
-        name.includes('t spawn') ||
-        name === 't-spawn';
+        name === 't spawn' ||
+        name === 't-spawn' ||
+        name.startsWith('t spawn ') ||
+        name === 't';
 
-      if (isCT) {
+      if (!isExplicitTextMode && isCT) {
         if (!updated.customImage || updated.customImage === '/ct.png' || updated.customImage === 'ct.png' || updated.customImage.startsWith('/ct.png')) {
           updated.displayMode = updated.displayMode || 'image';
           updated.customImage = 'ct.png';
           updated.imageSize = updated.imageSize || 36;
         }
       }
-      if (isT) {
+      if (!isExplicitTextMode && isT) {
         if (!updated.customImage || updated.customImage === '/T.png' || updated.customImage === '/t.png' || updated.customImage === 'T.png' || updated.customImage === 't.png' || updated.customImage.startsWith('/T.png') || updated.customImage.startsWith('/t.png')) {
           updated.displayMode = updated.displayMode || 'image';
           updated.customImage = 'T.png';
@@ -186,6 +188,29 @@ export function loadStoredMaps(): MapData[] {
         // Merge missing default callouts from INITIAL_MAPS into standard maps while preserving user custom edits
         parsed = parsed.map((m) => {
           const defaultVersion = initialMapMap.get(m.id);
+          // Upgrade outdated Cobblestone default map to the v3.110 radar + 23 callouts
+          if (
+            m.id === 'cobblestone' &&
+            defaultVersion &&
+            ((m.updatedAt || 0) < (defaultVersion.updatedAt || 0) ||
+              !m.image?.startsWith('data:image/jpeg') ||
+              (m.callouts || []).some((c) => c.id === 'cbble_sniper_tower'))
+          ) {
+            const existingPresets = m.tacticData?.presets;
+            return {
+              ...defaultVersion,
+              tacticData: {
+                drawings: defaultVersion.tacticData?.drawings || [],
+                utilities: defaultVersion.tacticData?.utilities || [],
+                players: defaultVersion.tacticData?.players || [],
+                layers: defaultVersion.tacticData?.layers || m.tacticData?.layers,
+                presets:
+                  existingPresets && existingPresets.length > 0
+                    ? existingPresets
+                    : defaultVersion.tacticData?.presets || [],
+              },
+            };
+          }
           const merged = defaultVersion ? mergeDefaultCallouts(m, defaultVersion) : m;
           return {
             ...merged,
@@ -270,14 +295,24 @@ export function saveStoredMaps(maps: MapData[]): void {
   }
 }
 
+const FAV_MIGRATION_KEY_V3110 = 'cs2freitag_fav_cobblestone_v3110';
+
 export function loadFavorites(): string[] {
-  const defaultFavorites = INITIAL_SETTINGS.favorites || ['inferno', 'cache', 'ancient', 'dust2', 'nuke', 'train', 'anubis'];
+  const defaultFavorites = INITIAL_SETTINGS.favorites || ['inferno', 'cache', 'ancient', 'dust2', 'nuke', 'train', 'anubis', 'cobblestone'];
   if (!isBrowser) return defaultFavorites;
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.FAVORITES) || localStorage.getItem('cs2freitag_favorites_v5_backup');
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
+        if (!localStorage.getItem(FAV_MIGRATION_KEY_V3110)) {
+          localStorage.setItem(FAV_MIGRATION_KEY_V3110, '1');
+          if (!parsed.includes('cobblestone')) {
+            const next = [...parsed, 'cobblestone'];
+            saveFavorites(next);
+            return next;
+          }
+        }
         return parsed;
       }
     }

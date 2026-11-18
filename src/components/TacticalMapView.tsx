@@ -2166,10 +2166,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     setCalloutFormFontSize(callout.fontSize || 12);
     setCalloutFormFontFamily(callout.fontFamily || 'mono');
 
-    const isCT = callout.zone === 'ct_spawn' || callout.name.toLowerCase().includes('ct spawn');
-    const isT = callout.zone === 't_spawn' || callout.name.toLowerCase().includes('t spawn');
-    const defaultMode = callout.displayMode || (callout.customImage ? 'image' : (isCT || isT ? 'image' : 'text'));
-    const defaultImage = callout.customImage || (isCT ? 'ct.png' : isT ? 'T.png' : '');
+    const defaultMode = callout.displayMode || (callout.customImage ? 'image' : 'text');
+    const defaultImage = callout.customImage || '';
 
     setCalloutFormDisplayMode(defaultMode);
     setCalloutFormCustomImage(defaultImage);
@@ -4149,11 +4147,13 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                     }`}
                   >
                     {callout.name.includes('\n') ? (
-                      callout.name.split('\n').slice(0, 2).map((line, idx) => (
-                        <div key={idx} className="whitespace-nowrap leading-tight">
-                          {line}
-                        </div>
-                      ))
+                      <div className="flex flex-col items-center leading-tight">
+                        {callout.name.split(/\r?\n/).slice(0, 2).map((line, idx) => (
+                          <div key={idx} className="whitespace-nowrap leading-tight">
+                            {line || '\u00A0'}
+                          </div>
+                        ))}
+                      </div>
                     ) : (
                       <span className="whitespace-nowrap">{callout.name}</span>
                     )}
