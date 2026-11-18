@@ -156,8 +156,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       )
     : allVersionHistory;
 
-  const displayedChangelogEntries =
-    pendingChangelogEntries.length > 0 ? pendingChangelogEntries : [allVersionHistory[0]];
+  const updatedChangelogEntries = !hasUpdate && previousVersion
+    ? allVersionHistory.filter(
+        (entry) =>
+          compareVersions(entry.version, previousVersion) > 0 &&
+          compareVersions(entry.version, installedVersion) <= 0
+      )
+    : [];
+
+  const displayedChangelogEntries = hasUpdate
+    ? (pendingChangelogEntries.length > 0 ? pendingChangelogEntries : [allVersionHistory[0]])
+    : (updatedChangelogEntries.length > 0
+        ? updatedChangelogEntries
+        : [allVersionHistory.find((e) => e.version === installedVersion) || allVersionHistory[0]]);
 
   const handlePerformUpdate = async () => {
     try {
@@ -619,11 +630,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <span>
                         {previousVersion && compareVersions(installedVersion, previousVersion) > 0
                           ? isDe
-                            ? `Alle Neuerungen (Update von v${previousVersion} auf v${installedVersion} & Verlauf):`
-                            : `All Changes (Updated v${previousVersion} → v${installedVersion} & History):`
+                            ? `Alle Neuerungen (Update von v${previousVersion} auf v${installedVersion}):`
+                            : `All Changes (Updated v${previousVersion} → v${installedVersion}):`
                           : isDe
-                          ? `Alle Neuerungen & Versionsverlauf (bis v${installedVersion}):`
-                          : `All Changes & Version History (up to v${installedVersion}):`}
+                          ? `Neuerungen in Version ${installedVersion}:`
+                          : `Changes in Version ${installedVersion}:`}
                       </span>
                     </div>
 
