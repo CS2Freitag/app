@@ -1,6 +1,106 @@
-import React, { useState } from 'react';
-import { X, Upload, Trash2, Image as ImageIcon, Plus, Check, FolderCog, Layers, Shield, Crosshair, Users, Zap, Sparkles } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { X, Upload, Trash2, Image as ImageIcon, Plus, Check, FolderCog, Layers, Shield, Crosshair, Users, Zap, Sparkles, AlertTriangle, Info, CheckCircle2 } from 'lucide-react';
 import { MapData, MapCategory, Language } from '../types';
+
+const FIRESTORE_SAFE_DOC_LIMIT_BYTES = 980 * 1024; // ~980 KB (leaving headroom below Firestore's 1 MiB / 1,048,576 byte hard limit)
+const FIRESTORE_WARN_DOC_LIMIT_BYTES = 750 * 1024; // ~750 KB warning threshold
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+async function optimizeImagePreservingQuality(
+  dataUrl: string,
+  targetMaxBytes: number
+): Promise<{ dataUrl: string; beforeBytes: number; afterBytes: number; wasOptimized: boolean }> {
+  const beforeBytes = dataUrl.length;
+
+  // Skip SVGs or images that already fit comfortably within the target size
+  if (dataUrl.startsWith('data:image/svg+xml') || beforeBytes <= targetMaxBytes) {
+    return { dataUrl, beforeBytes, afterBytes: beforeBytes, wasOptimized: false };
+  }
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const origW = img.naturalWidth || img.width;
+        const origH = img.naturalHeight || img.height;
+        if (!origW || !origH) {
+          resolve({ dataUrl, beforeBytes, afterBytes: beforeBytes, wasOptimized: false });
+          return;
+        }
+
+        // Gentle steps: preserve crisp radar quality (never drop below quality 0.82 or 1024px unless original is smaller)
+        const attempts: Array<{ maxDim: number; quality: number }> = [
+          { maxDim: 1600, quality: 0.92 },
+          { maxDim: 1600, quality: 0.86 },
+          { maxDim: 1280, quality: 0.88 },
+          { maxDim: 1280, quality: 0.82 },
+          { maxDim: 1024, quality: 0.84 },
+        ];
+
+        let bestUrl = dataUrl;
+        let bestBytes = beforeBytes;
+
+        for (const attempt of attempts) {
+          const scale = Math.min(1, attempt.maxDim / Math.max(origW, origH));
+          const targetW = Math.max(1, Math.round(origW * scale));
+          const targetH = Math.max(1, Math.round(origH * scale));
+
+          const canvas = document.createElement('canvas');
+          canvas.width = targetW;
+          canvas.height = targetH;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) continue;
+
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img, 0, 0, targetW, targetH);
+
+          let candidate = canvas.toDataURL('image/webp', attempt.quality);
+          if (!candidate.startsWith('data:image/webp')) {
+            // Fallback to JPEG if browser lacks WebP canvas encoding
+            const jpgCanvas = document.createElement('canvas');
+            jpgCanvas.width = targetW;
+            jpgCanvas.height = targetH;
+            const jpgCtx = jpgCanvas.getContext('2d');
+            if (jpgCtx) {
+              jpgCtx.fillStyle = '#09090b';
+              jpgCtx.fillRect(0, 0, targetW, targetH);
+              jpgCtx.drawImage(img, 0, 0, targetW, targetH);
+              candidate = jpgCanvas.toDataURL('image/jpeg', attempt.quality);
+            }
+          }
+
+          if (candidate.length < bestBytes) {
+            bestUrl = candidate;
+            bestBytes = candidate.length;
+          }
+
+          if (bestBytes <= targetMaxBytes) {
+            break;
+          }
+        }
+
+        resolve({
+          dataUrl: bestUrl,
+          beforeBytes,
+          afterBytes: bestBytes,
+          wasOptimized: bestUrl !== dataUrl && bestBytes < beforeBytes,
+        });
+      } catch {
+        resolve({ dataUrl, beforeBytes, afterBytes: beforeBytes, wasOptimized: false });
+      }
+    };
+    img.onerror = () => {
+      resolve({ dataUrl, beforeBytes, afterBytes: beforeBytes, wasOptimized: false });
+    };
+    img.src = dataUrl;
+  });
+}
 
 interface MapEditorModalProps {
   isOpen: boolean;
@@ -40,6 +140,11 @@ export const MapEditorModal: React.FC<MapEditorModalProps> = ({
   const [lowerPreviewError, setLowerPreviewError] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [groupError, setGroupError] = useState<string | null>(null);
+  const [upperRawFileSize, setUpperRawFileSize] = useState<number | null>(null);
+  const [lowerRawFileSize, setLowerRawFileSize] = useState<number | null>(null);
+  const [upperOptInfo, setUpperOptInfo] = useState<{ before: number; after: number } | null>(null);
+  const [lowerOptInfo, setLowerOptInfo] = useState<{ before: number; after: number } | null>(null);
+  const [isOptimizing, setIsOptimizing] = useState<boolean>(false);
 
   // Sync state if mapToEdit changes
   React.useEffect(() => {
@@ -62,21 +167,109 @@ export const MapEditorModal: React.FC<MapEditorModalProps> = ({
     }
     setPreviewError(false);
     setLowerPreviewError(false);
+    setUpperRawFileSize(null);
+    setLowerRawFileSize(null);
+    setUpperOptInfo(null);
+    setLowerOptInfo(null);
+    setIsOptimizing(false);
   }, [mapToEdit, isOpen]);
 
+  const sizeMetrics = useMemo(() => {
+    const encoder = new TextEncoder();
+    const upperDataBytes = imageUrl.startsWith('data:') ? encoder.encode(imageUrl).length : 0;
+    const lowerDataBytes =
+      hasLowerImage && lowerImageUrl && lowerImageUrl.startsWith('data:')
+        ? encoder.encode(lowerImageUrl).length
+        : 0;
+    const totalImagesBytes = upperDataBytes + lowerDataBytes;
+
+    let estimatedDocBytes = totalImagesBytes;
+    try {
+      const simulatedDoc = {
+        id: mapToEdit?.id || 'custom_preview',
+        name: name.trim() || 'Map',
+        slug: mapToEdit?.slug || 'map',
+        category,
+        image: imageUrl,
+        lowerImage: hasLowerImage && lowerImageUrl ? lowerImageUrl : undefined,
+        descriptionDe: descriptionDe.trim(),
+        descriptionEn: descriptionEn.trim(),
+        callouts: mapToEdit?.callouts || [],
+        tacticData: mapToEdit?.tacticData,
+        isCustom: mapToEdit ? mapToEdit.isCustom : true,
+      };
+      estimatedDocBytes = encoder.encode(JSON.stringify(simulatedDoc)).length;
+    } catch {
+      // Fallback to image size only
+    }
+
+    const isOverLimit = estimatedDocBytes > FIRESTORE_SAFE_DOC_LIMIT_BYTES;
+    const isNearLimit = !isOverLimit && estimatedDocBytes > FIRESTORE_WARN_DOC_LIMIT_BYTES;
+
+    return {
+      upperDataBytes,
+      lowerDataBytes,
+      totalImagesBytes,
+      estimatedDocBytes,
+      isOverLimit,
+      isNearLimit,
+    };
+  }, [imageUrl, lowerImageUrl, hasLowerImage, mapToEdit, name, category, descriptionDe, descriptionEn]);
+
   if (!isOpen) return null;
+
+  const getImageByteBudget = (forFloor: 'upper' | 'lower') => {
+    const encoder = new TextEncoder();
+    let nonImageBytes = 4096;
+    try {
+      nonImageBytes = encoder.encode(
+        JSON.stringify({
+          id: mapToEdit?.id || 'custom_preview',
+          name: name.trim() || 'Map',
+          slug: mapToEdit?.slug || 'map',
+          category,
+          descriptionDe: descriptionDe.trim(),
+          descriptionEn: descriptionEn.trim(),
+          callouts: mapToEdit?.callouts || [],
+          tacticData: mapToEdit?.tacticData,
+        })
+      ).length;
+    } catch {
+      // Fallback
+    }
+    const otherFloorBytes =
+      forFloor === 'upper'
+        ? hasLowerImage && lowerImageUrl?.startsWith('data:')
+          ? lowerImageUrl.length
+          : 0
+        : imageUrl.startsWith('data:')
+        ? imageUrl.length
+        : 0;
+
+    const available = FIRESTORE_SAFE_DOC_LIMIT_BYTES - nonImageBytes - otherFloorBytes - 30 * 1024;
+    return Math.max(250 * 1024, available);
+  };
 
   // Handle local file upload (Upper / Main)
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setUpperRawFileSize(file.size);
+    setUpperOptInfo(null);
     const reader = new FileReader();
-    reader.onload = (loadEvent) => {
+    reader.onload = async (loadEvent) => {
       const result = loadEvent.target?.result as string;
       if (result) {
-        setImageUrl(result);
+        setIsOptimizing(true);
+        const budget = getImageByteBudget('upper');
+        const optimized = await optimizeImagePreservingQuality(result, budget);
+        setImageUrl(optimized.dataUrl);
+        if (optimized.wasOptimized) {
+          setUpperOptInfo({ before: optimized.beforeBytes, after: optimized.afterBytes });
+        }
         setPreviewError(false);
+        setIsOptimizing(false);
       }
     };
     reader.readAsDataURL(file);
@@ -87,16 +280,50 @@ export const MapEditorModal: React.FC<MapEditorModalProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setLowerRawFileSize(file.size);
+    setLowerOptInfo(null);
     const reader = new FileReader();
-    reader.onload = (loadEvent) => {
+    reader.onload = async (loadEvent) => {
       const result = loadEvent.target?.result as string;
       if (result) {
-        setLowerImageUrl(result);
+        setIsOptimizing(true);
+        const budget = getImageByteBudget('lower');
+        const optimized = await optimizeImagePreservingQuality(result, budget);
+        setLowerImageUrl(optimized.dataUrl);
+        if (optimized.wasOptimized) {
+          setLowerOptInfo({ before: optimized.beforeBytes, after: optimized.afterBytes });
+        }
         setHasLowerImage(true);
         setLowerPreviewError(false);
+        setIsOptimizing(false);
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  // Optimize already-saved oversized data URLs on demand
+  const handleOptimizeExistingImages = async () => {
+    setIsOptimizing(true);
+    try {
+      if (imageUrl.startsWith('data:')) {
+        const budget = getImageByteBudget('upper');
+        const optUpper = await optimizeImagePreservingQuality(imageUrl, budget);
+        if (optUpper.wasOptimized) {
+          setImageUrl(optUpper.dataUrl);
+          setUpperOptInfo({ before: optUpper.beforeBytes, after: optUpper.afterBytes });
+        }
+      }
+      if (hasLowerImage && lowerImageUrl && lowerImageUrl.startsWith('data:')) {
+        const budget = getImageByteBudget('lower');
+        const optLower = await optimizeImagePreservingQuality(lowerImageUrl, budget);
+        if (optLower.wasOptimized) {
+          setLowerImageUrl(optLower.dataUrl);
+          setLowerOptInfo({ before: optLower.beforeBytes, after: optLower.afterBytes });
+        }
+      }
+    } finally {
+      setIsOptimizing(false);
+    }
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -121,16 +348,16 @@ export const MapEditorModal: React.FC<MapEditorModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl text-zinc-100 my-8">
-        {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-3 sm:p-4">
+      <div className="w-full max-w-lg max-h-[92dvh] flex flex-col rounded-2xl border border-zinc-800 bg-zinc-900 shadow-2xl text-zinc-100 overflow-hidden">
+        {/* Header (always visible, never clipped) */}
+        <div className="flex items-center justify-between px-5 sm:px-6 pt-5 pb-4 border-b border-zinc-800 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0">
               <ImageIcon className="w-4 h-4 text-zinc-200" />
             </div>
-            <div>
-              <h3 className="text-base font-bold text-white">
+            <div className="min-w-0">
+              <h3 className="text-base font-bold text-white truncate">
                 {mapToEdit
                   ? isDe
                     ? `Karte bearbeiten: ${mapToEdit.name}`
@@ -139,7 +366,7 @@ export const MapEditorModal: React.FC<MapEditorModalProps> = ({
                   ? 'Neue CS2 Karte anlegen'
                   : 'Add New CS2 Map'}
               </h3>
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-zinc-400 truncate">
                 {isDe
                   ? 'Namen anpassen, Bild hochladen oder Kategorie ändern'
                   : 'Customize title, upload custom radar image, or change category'}
@@ -147,15 +374,17 @@ export const MapEditorModal: React.FC<MapEditorModalProps> = ({
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
+            className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors shrink-0 ml-2"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSave} className="mt-4 space-y-4">
+        {/* Form with scrollable body and fixed footer */}
+        <form onSubmit={handleSave} className="flex flex-col flex-1 min-h-0">
+          <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-4 space-y-4">
           <div>
             <label className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-1.5">
               {isDe ? 'Kartenname' : 'Map Name'} *
@@ -310,13 +539,45 @@ export const MapEditorModal: React.FC<MapEditorModalProps> = ({
 
           {/* 1. Hauptkarte / Obere Ebene (O) Radar */}
           <div className="space-y-2">
-            <label className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider">
-              {isDe ? 'Hauptkarte / Obere Ebene (O) Radar *' : 'Main Radar Map / Upper Floor (O) *'}
-            </label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider">
+                {isDe ? 'Hauptkarte / Obere Ebene (O) Radar *' : 'Main Radar Map / Upper Floor (O) *'}
+              </label>
+              {sizeMetrics.upperDataBytes > 0 && (
+                <span
+                  className={`text-[10px] font-mono px-2 py-0.5 rounded border font-semibold ${
+                    sizeMetrics.isOverLimit
+                      ? 'bg-red-500/15 border-red-500/40 text-red-300'
+                      : sizeMetrics.isNearLimit
+                      ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                      : 'bg-zinc-800 border-zinc-700 text-zinc-300'
+                  }`}
+                >
+                  {upperRawFileSize !== null
+                    ? `${isDe ? 'Datei' : 'File'}: ${formatBytes(upperRawFileSize)} · Base64: ${formatBytes(sizeMetrics.upperDataBytes)}`
+                    : `Base64: ${formatBytes(sizeMetrics.upperDataBytes)}`}
+                </span>
+              )}
+            </div>
+
+            {/* Kurzer Firestore 1 MB Hinweis direkt beim Bildupload */}
+            <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-sky-500/10 border border-sky-500/25 text-[11px] text-sky-200/90 leading-snug">
+              <Info className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+              <span>
+                {isDe
+                  ? 'Hinweis: 1 MB maximale Größe pro Karte (Cloud-Sync). Große Bilder werden automatisch verlustarm optimiert.'
+                  : 'Note: 1 MB maximum size per map (Cloud Sync). Large images are automatically optimized cleanly.'}
+              </span>
+            </div>
+
             <div className="flex items-center gap-3">
               <label className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-dashed border-zinc-700 bg-zinc-950 hover:bg-zinc-800 hover:border-zinc-500 cursor-pointer transition-colors text-xs text-zinc-300 font-medium">
                 <Upload className="w-4 h-4 text-zinc-400" />
-                <span>{isDe ? 'Bild für Ebene O (Oben) wählen...' : 'Choose image for Upper level (O)...'}</span>
+                <span>
+                  {isOptimizing
+                    ? isDe ? 'Optimiere Bild...' : 'Optimizing image...'
+                    : isDe ? 'Bild für Ebene O (Oben) wählen...' : 'Choose image for Upper level (O)...'}
+                </span>
                 <input
                   type="file"
                   accept="image/png, image/jpeg, image/webp, image/svg+xml"
@@ -325,6 +586,68 @@ export const MapEditorModal: React.FC<MapEditorModalProps> = ({
                 />
               </label>
             </div>
+
+            {/* Erfolgsmeldung nach automatischer Optimierung */}
+            {upperOptInfo && !sizeMetrics.isOverLimit && (
+              <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-[11px] text-emerald-300">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>
+                  {isDe
+                    ? `Automatisch verlustarm optimiert: ${formatBytes(upperOptInfo.before)} → ${formatBytes(upperOptInfo.after)} (Base64)`
+                    : `Automatically optimized cleanly: ${formatBytes(upperOptInfo.before)} → ${formatBytes(upperOptInfo.after)} (Base64)`}
+                </span>
+              </div>
+            )}
+
+            {/* Warnung / Fehlermeldung bei Überschreitung des 1 MB Limits */}
+            {sizeMetrics.isOverLimit && (
+              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-red-500/15 border border-red-500/50 text-red-200 text-xs leading-relaxed">
+                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <div className="space-y-2 flex-1">
+                  <div className="space-y-1">
+                    <p className="font-bold text-red-300">
+                      {isDe
+                        ? `Cloud-Sync Limit überschritten (${formatBytes(sizeMetrics.estimatedDocBytes)} / max. 1 MB)!`
+                        : `Cloud Sync limit exceeded (${formatBytes(sizeMetrics.estimatedDocBytes)} / max. 1 MB)!`}
+                    </p>
+                    <p className="text-[11px] text-red-200/90">
+                      {isDe
+                        ? 'Trotz Qualitätserhalt überschreitet diese Karte 1 MB (inkl. Base64 & Callouts). Lokal speicherbar, aber Cloud-Sync schlägt fehl. Bitte Bild vorher etwas stärker verkleinern.'
+                        : 'Even while preserving quality, this map exceeds 1 MB (incl. Base64 & callouts). Local save works, but Cloud Sync will fail. Please resize the image slightly beforehand.'}
+                    </p>
+                  </div>
+                  {(imageUrl.startsWith('data:') || (hasLowerImage && lowerImageUrl?.startsWith('data:'))) && !upperOptInfo && (
+                    <button
+                      type="button"
+                      onClick={handleOptimizeExistingImages}
+                      disabled={isOptimizing}
+                      className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-red-500/25 hover:bg-red-500/40 border border-red-400/50 text-red-100 transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      {isOptimizing
+                        ? isDe ? 'Optimiere...' : 'Optimizing...'
+                        : isDe ? 'Bild jetzt verlustarm optimieren' : 'Optimize image cleanly now'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {sizeMetrics.isNearLimit && (
+              <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-200 text-[11px] leading-snug">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-amber-300">
+                    {isDe
+                      ? `Nahe am 1-MB-Limit (${formatBytes(sizeMetrics.estimatedDocBytes)}):`
+                      : `Close to 1 MB limit (${formatBytes(sizeMetrics.estimatedDocBytes)}):`}
+                  </span>{' '}
+                  {isDe
+                    ? 'Viele weitere Callouts oder Taktiken könnten das Cloud-Sync-Limit überschreiten.'
+                    : 'Adding many more callouts or tactics may exceed the Cloud Sync limit.'}
+                </div>
+              </div>
+            )}
+
             {/* Vorschau Ebene O */}
             <div className="relative aspect-video w-full rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950 flex items-center justify-center">
               {!previewError ? (
@@ -352,7 +675,10 @@ export const MapEditorModal: React.FC<MapEditorModalProps> = ({
                   onChange={(e) => {
                     const checked = e.target.checked;
                     setHasLowerImage(checked);
-                    if (!checked) setLowerImageUrl(undefined);
+                    if (!checked) {
+                      setLowerImageUrl(undefined);
+                      setLowerRawFileSize(null);
+                    }
                   }}
                   className="w-4 h-4 accent-purple-500 rounded cursor-pointer"
                 />
@@ -366,16 +692,29 @@ export const MapEditorModal: React.FC<MapEditorModalProps> = ({
 
             {hasLowerImage && (
               <div className="pt-2 space-y-3 border-t border-zinc-800 animate-in fade-in-50">
-                <p className="text-[11px] text-zinc-400 leading-snug">
-                  {isDe
-                    ? 'Lade ein separates Radarbild für das untere Stockwerk (U) hoch (z. B. Keller bei Nuke oder Untergeschoss bei Vertigo).'
-                    : 'Upload a separate radar image for the lower floor (U) (e.g. basement in Nuke or lower floor in Vertigo).'}
-                </p>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-[11px] text-zinc-400 leading-snug">
+                    {isDe
+                      ? 'Separates Radarbild für Ebene Unten (U). Das 1-MB-Limit gilt für Ebene O + U zusammen.'
+                      : 'Separate radar image for Lower Floor (U). The 1 MB limit applies to Floor O + U combined.'}
+                  </p>
+                  {sizeMetrics.lowerDataBytes > 0 && (
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-purple-500/30 bg-purple-500/10 text-purple-300 shrink-0">
+                      {lowerRawFileSize !== null
+                        ? `${formatBytes(lowerRawFileSize)} · Base64: ${formatBytes(sizeMetrics.lowerDataBytes)}`
+                        : `Base64: ${formatBytes(sizeMetrics.lowerDataBytes)}`}
+                    </span>
+                  )}
+                </div>
 
                 <div className="flex items-center gap-2">
                   <label className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-dashed border-purple-500/40 bg-purple-950/20 hover:bg-purple-950/40 hover:border-purple-400 cursor-pointer transition-colors text-xs text-purple-200 font-medium">
                     <Upload className="w-4 h-4 text-purple-400" />
-                    <span>{isDe ? 'Bild für Ebene U (Unten) wählen...' : 'Choose image for Lower level (U)...'}</span>
+                    <span>
+                      {isOptimizing
+                        ? isDe ? 'Optimiere Bild...' : 'Optimizing image...'
+                        : isDe ? 'Bild für Ebene U (Unten) wählen...' : 'Choose image for Lower level (U)...'}
+                    </span>
                     <input
                       type="file"
                       accept="image/png, image/jpeg, image/webp, image/svg+xml"
@@ -389,6 +728,8 @@ export const MapEditorModal: React.FC<MapEditorModalProps> = ({
                       onClick={() => {
                         setLowerImageUrl(undefined);
                         setHasLowerImage(false);
+                        setLowerRawFileSize(null);
+                        setLowerOptInfo(null);
                       }}
                       className="p-2.5 text-red-400 hover:text-red-300 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 transition-colors text-xs flex items-center gap-1"
                       title={isDe ? 'Ebene U entfernen' : 'Remove Floor U'}
@@ -398,6 +739,36 @@ export const MapEditorModal: React.FC<MapEditorModalProps> = ({
                     </button>
                   )}
                 </div>
+
+                {lowerOptInfo && !sizeMetrics.isOverLimit && (
+                  <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-[11px] text-emerald-300">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>
+                      {isDe
+                        ? `Automatisch verlustarm optimiert: ${formatBytes(lowerOptInfo.before)} → ${formatBytes(lowerOptInfo.after)} (Base64)`
+                        : `Automatically optimized cleanly: ${formatBytes(lowerOptInfo.before)} → ${formatBytes(lowerOptInfo.after)} (Base64)`}
+                    </span>
+                  </div>
+                )}
+
+                {/* Warnung bei Überschreitung durch Ebene O + U */}
+                {sizeMetrics.lowerDataBytes > 0 && sizeMetrics.isOverLimit && (
+                  <div className="flex items-start gap-2.5 p-3 rounded-xl bg-red-500/15 border border-red-500/50 text-red-200 text-xs leading-relaxed">
+                    <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <p className="font-bold text-red-300">
+                        {isDe
+                          ? `Gesamtgröße überschreitet 1-MB-Cloud-Limit (${formatBytes(sizeMetrics.estimatedDocBytes)})!`
+                          : `Combined size exceeds 1 MB Cloud limit (${formatBytes(sizeMetrics.estimatedDocBytes)})!`}
+                      </p>
+                      <p className="text-[11px] text-red-200/90">
+                        {isDe
+                          ? 'Beide Bilder (Ebene O + U) plus Callouts dürfen zusammen max. 1 MB nicht überschreiten, sonst schlägt der Cloud-Sync fehl.'
+                          : 'Both images (Floor O + U) plus callouts must not exceed 1 MB combined, otherwise Cloud Sync will fail.'}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Vorschau Ebene U */}
                 {lowerImageUrl ? (
@@ -451,9 +822,10 @@ export const MapEditorModal: React.FC<MapEditorModalProps> = ({
               className="w-full px-3 py-2 text-xs rounded-lg border border-zinc-700 bg-zinc-950 text-white focus:outline-hidden focus:border-zinc-400"
             />
           </div>
+          </div>
 
-          {/* Footer Actions */}
-          <div className="pt-4 border-t border-zinc-800 flex items-center justify-between gap-3">
+          {/* Footer Actions (fixed at bottom of modal, never clipped) */}
+          <div className="px-5 sm:px-6 py-4 border-t border-zinc-800 bg-zinc-900 shrink-0 flex items-center justify-between gap-3">
             {mapToEdit && onDeleteMap ? (
               <button
                 type="button"

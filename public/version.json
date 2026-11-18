@@ -1,13 +1,13 @@
 {
-  "version": "3.99",
+  "version": "3.102",
   "major": 3,
-  "patch": 99,
-  "releaseDate": "2026-11-16",
-  "title": "Update v3.99: Google-Suche & SEO-Optimierung",
-  "description": "Google Search Console Verifizierung, Sitemap, robots.txt sowie optimierte Meta-Tags, OpenGraph-Vorschaukarten und Schema.org-Daten für bessere Auffindbarkeit.",
+  "patch": 102,
+  "releaseDate": "2026-11-18",
+  "title": "Update v3.102: Karten-Editor & Cloud-Sync Bildoptimierung",
+  "description": "Automatische, qualitätsschonende Bildkomprimierung für den Cloud-Sync, Hinweis & Warnung zum 1-MB-Limit sowie optimiertes Editor-Fenster ohne Abschneiden.",
   "changes": [
-    "Google Search Console Verifizierungsdatei korrekt im public/-Stammverzeichnis hinterlegt",
-    "robots.txt & sitemap.xml für GitHub Pages (cs2freitag.github.io/app/) hinzugefügt",
-    "SEO-Titel, Beschreibung, Keywords, OpenGraph/Twitter-Vorschaukarten und Schema.org JSON-LD in index.html ergänzt"
+    "Automatische, verlustarme Bildoptimierung (WebP) beim Bildupload für zuverlässigen Cloud-Sync unter 1 MB",
+    "Hinweis zum 1-MB-Limit und Warnung/Fehlermeldung bei Größenüberschreitung im Karten-Editor ergänzt",
+    "Karten-Editor-Fenster für kleinere Bildschirme angepasst (scrollbarer Mittelteil, fixierte Kopf- und Fußzeile)"
   ]
 }
