@@ -280,14 +280,14 @@ export const FavoritesSection: React.FC<FavoritesSectionProps> = ({
                     onSelectMap(map);
                   }
                 }}
-                className={`group relative cursor-pointer overflow-hidden rounded-xl border transition-all shadow-md p-3 text-left select-none ${
+                className={`map-card group relative cursor-pointer overflow-hidden rounded-xl border transition-all shadow-md p-3 text-left select-none ${
                   isDraggingThis
                     ? 'opacity-40 border-amber-400 scale-95 ring-2 ring-amber-400/50'
                     : isDragOverThis
                     ? 'border-amber-400 bg-amber-400/10 scale-102 ring-2 ring-amber-400'
                     : isSortingMode
                     ? 'border-amber-400/60 bg-zinc-900/90 light:bg-zinc-100 animate-pulse cursor-grab active:cursor-grabbing'
-                    : 'border-zinc-800 light:border-zinc-300 bg-zinc-900/60 light:bg-white hover:bg-zinc-800/80 light:hover:bg-zinc-100 hover:border-zinc-600'
+                    : 'border-zinc-800 light:border-zinc-300 bg-zinc-900/60 light:bg-white hover:bg-zinc-800/80 light:hover:bg-zinc-100 hover:border-amber-400/60 active:scale-[0.97] active:brightness-90 active:border-amber-400'
                 }`}
               >
                 {/* Top row: Grip handle when sorting / Name & Favorite Star */}

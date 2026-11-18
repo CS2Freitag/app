@@ -171,10 +171,10 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={() => setIsTooltipOpen((prev) => !prev)}
-              className={`w-9 h-9 rounded-lg border flex items-center justify-center transition-all duration-200 cursor-pointer select-none ${
+              className={`w-9 h-9 rounded-lg border flex items-center justify-center transition-all duration-100 cursor-pointer select-none active:scale-90 active:brightness-75 active:border-amber-400 active:ring-2 active:ring-amber-400/60 ${
                 isTooltipOpen
                   ? 'border-amber-400 text-amber-400 bg-amber-400/20 ring-2 ring-amber-400/40 shadow-[0_0_16px_rgba(251,191,36,0.35)]'
-                  : 'bg-zinc-900 border-zinc-700 text-white hover:text-amber-400 hover:border-amber-400 hover:bg-amber-400/10 hover:shadow-[0_0_12px_rgba(251,191,36,0.25)] active:text-amber-400 active:border-amber-400 active:bg-amber-400/20'
+                  : 'bg-zinc-900 border-zinc-700 text-white hover:text-amber-400 hover:border-amber-400 hover:bg-amber-400/10 hover:shadow-[0_0_12px_rgba(251,191,36,0.25)]'
               }`}
               title={isDe ? 'Taktik-Info anzeigen' : 'Show tactical info'}
               aria-label={isDe ? 'Informationen zu Callouts und Karten' : 'Information about callouts and maps'}
@@ -205,7 +205,7 @@ export const Header: React.FC<HeaderProps> = ({
                         e.stopPropagation();
                         setIsTooltipOpen(false);
                       }}
-                      className="sm:hidden text-zinc-400 hover:text-white p-0.5 rounded text-[11px]"
+                      className="sm:hidden text-zinc-400 hover:text-white p-0.5 rounded text-[11px] active:scale-90"
                       aria-label="Schließen"
                     >
                       ✕
@@ -260,7 +260,7 @@ export const Header: React.FC<HeaderProps> = ({
           {onStartQuiz && (
             <button
               onClick={onStartQuiz}
-              className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-md text-xs font-semibold border border-amber-500/40 bg-amber-500/10 text-amber-300 hover:text-white hover:bg-amber-500/20 transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-md text-xs font-semibold border border-amber-500/40 bg-amber-500/10 text-amber-300 hover:text-white hover:bg-amber-500/20 active:scale-90 active:brightness-75 active:bg-amber-500/30 active:border-amber-400 active:ring-2 active:ring-amber-400/60 transition-all duration-75 cursor-pointer"
               title={isDe ? 'Callout-Trainer / Lern-Quiz' : 'Callout Trainer / Quiz'}
             >
               <Gamepad2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
@@ -272,7 +272,7 @@ export const Header: React.FC<HeaderProps> = ({
           {onOpenHelp && (
             <button
               onClick={onOpenHelp}
-              className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-md text-xs font-semibold border border-sky-500/40 bg-sky-500/10 text-sky-300 hover:text-white hover:bg-sky-500/20 transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-md text-xs font-semibold border border-sky-500/40 bg-sky-500/10 text-sky-300 hover:text-white hover:bg-sky-500/20 active:scale-90 active:brightness-75 active:bg-sky-500/30 active:border-sky-400 active:ring-2 active:ring-sky-400/60 transition-all duration-75 cursor-pointer"
               title={isDe ? 'Hilfe & App-Erklärungen' : 'Help & App Guide'}
             >
               <HelpCircle className="w-3.5 h-3.5 text-sky-400 shrink-0" />
@@ -284,7 +284,7 @@ export const Header: React.FC<HeaderProps> = ({
           {onOpenSettings && (
             <button
               onClick={onOpenSettings}
-              className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-md text-xs font-semibold border border-zinc-800 bg-zinc-900/80 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-md text-xs font-semibold border border-zinc-800 bg-zinc-900/80 text-zinc-300 hover:text-white hover:bg-zinc-800 active:scale-90 active:brightness-75 active:bg-zinc-700 active:border-amber-400 active:ring-2 active:ring-amber-400/60 transition-all duration-75 cursor-pointer"
               title={isDe ? 'Einstellungen & Backup' : 'Settings & Backup'}
             >
               <Settings className="w-3.5 h-3.5 text-amber-400 shrink-0" />
@@ -295,7 +295,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Language Toggle */}
           <button
             onClick={onToggleLanguage}
-            className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-md text-xs font-medium border border-zinc-800 bg-zinc-900/80 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-md text-xs font-medium border border-zinc-800 bg-zinc-900/80 text-zinc-300 hover:text-white hover:bg-zinc-800 active:scale-90 active:brightness-75 active:bg-zinc-700 active:border-zinc-400 active:ring-2 active:ring-zinc-400/60 transition-all duration-75 cursor-pointer"
             title={isDe ? 'Sprache wechseln (DE / EN)' : 'Switch language (EN / DE)'}
             aria-label="Toggle language"
           >

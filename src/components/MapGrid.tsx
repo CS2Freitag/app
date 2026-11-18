@@ -37,7 +37,16 @@ export const MapGrid: React.FC<MapGridProps> = ({
   filterQuery,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>('all');
+  const [pressedMapId, setPressedMapId] = useState<string | null>(null);
   const isDe = lang === 'de';
+
+  const handleCardClick = (map: MapData) => {
+    setPressedMapId(map.id);
+    setTimeout(() => {
+      onSelectMap(map);
+      setPressedMapId(null);
+    }, 120);
+  };
 
   // Filter and sort: prioritizing map name in search results
   const filteredAndSortedMaps = useMemo(() => {
@@ -262,23 +271,28 @@ export const MapGrid: React.FC<MapGridProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredAndSortedMaps.map((map) => {
             const isFav = favorites.includes(map.id);
+            const isPressed = pressedMapId === map.id;
             return (
               <div
                 key={map.id}
-                className="group relative flex flex-col justify-between rounded-xl border border-zinc-800/90 light:border-zinc-300 bg-zinc-900/50 light:bg-white hover:bg-zinc-900 light:hover:bg-zinc-50 hover:border-zinc-600 light:hover:border-zinc-400 transition-all duration-200 overflow-hidden shadow-sm"
+                onClick={() => handleCardClick(map)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleCardClick(map);
+                  }
+                }}
+                className={`map-card group relative flex flex-col justify-between rounded-xl border bg-zinc-900/50 light:bg-white hover:bg-zinc-900 light:hover:bg-zinc-50 transition-all duration-100 overflow-hidden shadow-sm cursor-pointer select-none active:scale-[0.96] active:brightness-75 active:border-amber-400 active:ring-2 active:ring-amber-400/80 ${
+                  isPressed
+                    ? 'scale-[0.96] brightness-75 border-amber-400 ring-2 ring-amber-400/80 shadow-inner'
+                    : 'border-zinc-800/90 light:border-zinc-300 hover:border-amber-400/60'
+                }`}
               >
                 {/* Top preview & banner */}
                 <div
-                  onClick={() => onSelectMap(map)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      onSelectMap(map);
-                    }
-                  }}
-                  className="relative aspect-video w-full overflow-hidden bg-zinc-950 light:bg-zinc-200 cursor-pointer"
+                  className="relative aspect-video w-full overflow-hidden bg-zinc-950 light:bg-zinc-200"
                 >
                   <img
                     src={resolveAssetPath(map.image)}
@@ -376,8 +390,11 @@ export const MapGrid: React.FC<MapGridProps> = ({
                     </span>
                     <button
                       type="button"
-                      onClick={() => onSelectMap(map)}
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg bg-zinc-100 light:bg-zinc-900 text-zinc-950 light:text-white hover:bg-white light:hover:bg-zinc-800 transition-all shadow-xs group-hover:ring-2 group-hover:ring-zinc-400"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCardClick(map);
+                      }}
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg bg-zinc-100 light:bg-zinc-900 text-zinc-950 light:text-white hover:bg-white light:hover:bg-zinc-800 active:scale-90 active:brightness-75 active:ring-2 active:ring-amber-400/60 transition-all duration-75 shadow-xs cursor-pointer group-hover:ring-2 group-hover:ring-zinc-400"
                     >
                       <span>{isDe ? 'Callouts Vollbild' : 'Fullscreen'}</span>
                       <ChevronRight className="w-3 h-3" />

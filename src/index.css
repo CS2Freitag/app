@@ -180,3 +180,53 @@
 .scrollbar-left::-webkit-scrollbar-thumb:hover {
   background: rgba(245, 158, 11, 0.75);
 }
+
+/* ========================================================
+   UNIVERSAL TACTILE INTERACTIVE FEEDBACK (CLICK & TOUCH)
+   Applies to ALL buttons, map cards, tools & editor controls
+   ======================================================== */
+button,
+[role="button"],
+.cursor-pointer:not(input):not(textarea):not(select):not(svg):not(svg *):not(.no-press),
+.map-card,
+.interactive-card,
+label.cursor-pointer,
+input[type="button"],
+input[type="submit"],
+input[type="reset"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.1s cubic-bezier(0.2, 0, 0, 1),
+              filter 0.1s ease-out,
+              box-shadow 0.1s ease-out,
+              background-color 0.15s ease,
+              border-color 0.15s ease;
+  user-select: none;
+}
+
+button:active:not(:disabled),
+[role="button"]:active:not([aria-disabled="true"]):not([role="switch"]):not(.map-card),
+.cursor-pointer:active:not(input):not(textarea):not(select):not(svg):not(svg *):not([role="switch"]):not(.map-card):not(.no-press),
+label.cursor-pointer:active,
+input[type="button"]:active:not(:disabled),
+input[type="submit"]:active:not(:disabled),
+input[type="reset"]:active:not(:disabled) {
+  transform: scale(0.95) translateY(1.5px) !important;
+  filter: brightness(0.85) contrast(1.15) !important;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25), inset 0 2px 4px rgba(0, 0, 0, 0.45) !important;
+}
+
+/* Switch toggle tactile feedback */
+[role="switch"]:active {
+  transform: scale(0.94) !important;
+  filter: brightness(0.9) !important;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Map cards tactile compression (smoother scale for large cards) */
+.map-card:active {
+  transform: scale(0.98) translateY(2px) !important;
+  filter: brightness(0.9) contrast(1.1) !important;
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.5), inset 0 2px 8px rgba(0, 0, 0, 0.5) !important;
+}
+

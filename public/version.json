@@ -1,16 +1,36 @@
 {
-  "version": "3.114",
+  "version": "3.116",
   "major": 3,
-  "patch": 114,
+  "patch": 116,
   "releaseDate": "2026-11-18",
-  "title": "Update v3.114: Einstellungen vollständig wiederhergestellt",
-  "description": "Die Steuerungen für App-Version, Updates, Changelog sowie die automatische Speicherung (Autosave-Schalter, Zeitstempel, Dateiverknüpfung und Windows-Launcher) wurden in den Einstellungen vollständig wiederhergestellt. Quiz und Hilfe bleiben separat in der oberen Leiste.",
+  "title": "Update v3.116: Taktiles Klick-Feedback bei Kartenauswahl & Editor",
+  "description": "Das visuelle Feedback beim Drücken wurde nun auch auf die Kartenauswahl (Kartenkarten in der Übersicht & Favoriten) sowie die gesamte Kartenbearbeitung und Werkzeugleisten erweitert.",
   "changes": [
-    "App-Version & Manuelle Update-Steuerung mit Versionsverlauf und Update-Prüfung in den Einstellungen wiederhergestellt",
-    "Automatische Speicherung mit Ein-/Ausschalter, Speicher-Zeitstempel, Dateiverknüpfung und Windows-Launcher-Download wiederhergestellt",
-    "Quiz und Hilfe verbleiben direkt links neben den Einstellungen in der oberen Menüleiste"
+    "Kartenkarten in der Übersicht und den Favoriten federn beim Anklicken/Antippen haptisch ein und heben sich mit goldenem Rahmen hervor",
+    "Visuelles Feedback für sämtliche Bedienelemente in der Karten- und Callout-Bearbeitung (Gruppen-Auswahl, Bildupload-Felder, Werkzeuge & Leisten)",
+    "Flüssige taktile Reaktion auf Mobilgeräten und Desktops"
   ],
   "history": [
+    {
+      "version": "3.116",
+      "releaseDate": "2026-11-18",
+      "title": "Taktiles Klick-Feedback bei Kartenauswahl & Editor",
+      "changes": [
+        "Kartenkarten in der Übersicht und den Favoriten federn beim Anklicken/Antippen haptisch ein und heben sich mit goldenem Rahmen hervor",
+        "Visuelles Feedback für sämtliche Bedienelemente in der Karten- und Callout-Bearbeitung (Gruppen-Auswahl, Bildupload-Felder, Werkzeuge & Leisten)",
+        "Flüssige taktile Reaktion auf Mobilgeräten und Desktops"
+      ]
+    },
+    {
+      "version": "3.115",
+      "releaseDate": "2026-11-18",
+      "title": "Taktiles Klick- & Touch-Feedback für alle Buttons",
+      "changes": [
+        "Visuelles Klick- und Touch-Feedback (taktiles Hineindrücken, Abdunklung & innerer Schatten) für sämtliche Tasten und Buttons in der App",
+        "Speziell für die Einstellungen und Navigationsleisten optimiert, inklusive Schalter-Animation",
+        "Sofortige Touch-Rückmeldung auf Smartphones & Tablets ohne Verzögerung aktiviert"
+      ]
+    },
     {
       "version": "3.114",
       "releaseDate": "2026-11-18",
