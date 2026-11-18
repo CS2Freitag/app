@@ -1,5 +1,5 @@
 import React from 'react';
-import { Globe, Crosshair, Settings, Cloud, CloudOff, Smartphone, CheckCircle2, ArrowUpCircle } from 'lucide-react';
+import { Globe, Crosshair, Settings, Cloud, CloudOff, Smartphone, CheckCircle2, ArrowUpCircle, Gamepad2, HelpCircle } from 'lucide-react';
 import { Language, Theme } from '../types';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { usePWAInstall } from '../hooks/usePWAInstall';
@@ -14,6 +14,8 @@ interface HeaderProps {
   totalCalloutsCount: number;
   onOpenSettings?: () => void;
   onOpenTacticsHelp?: () => void;
+  onStartQuiz?: () => void;
+  onOpenHelp?: () => void;
   isLoggedIn?: boolean;
   isAutoCloudSyncEnabled?: boolean;
   installedVersion?: string;
@@ -27,6 +29,8 @@ export const Header: React.FC<HeaderProps> = ({
   totalMapsCount,
   totalCalloutsCount,
   onOpenSettings,
+  onStartQuiz,
+  onOpenHelp,
   isLoggedIn = false,
   isAutoCloudSyncEnabled = true,
   installedVersion: propInstalledVersion,
@@ -111,14 +115,56 @@ export const Header: React.FC<HeaderProps> = ({
     };
   }, [isTooltipOpen]);
 
+  const renderStatusIcons = () => (
+    <div className="inline-flex items-center gap-1 shrink-0">
+      <button
+        type="button"
+        onClick={onOpenSettings}
+        title={cloudTooltip}
+        aria-label={cloudTooltip}
+        className={`w-4 h-4 sm:w-[19px] sm:h-[19px] rounded-full border flex items-center justify-center transition-all duration-150 cursor-pointer shadow-xs active:scale-90 ${cloudColorClasses}`}
+      >
+        {isLoggedIn ? (
+          <Cloud className="w-2.5 h-2.5 sm:w-3 sm:h-3" strokeWidth={2.2} />
+        ) : (
+          <CloudOff className="w-2.5 h-2.5 sm:w-3 sm:h-3" strokeWidth={2.2} />
+        )}
+      </button>
+
+      <button
+        type="button"
+        onClick={onOpenSettings}
+        title={installTooltip}
+        aria-label={installTooltip}
+        className={`w-4 h-4 sm:w-[19px] sm:h-[19px] rounded-full border flex items-center justify-center transition-all duration-150 cursor-pointer shadow-xs active:scale-90 ${installColorClasses}`}
+      >
+        <Smartphone className="w-2.5 h-2.5 sm:w-3 sm:h-3" strokeWidth={2.2} />
+      </button>
+
+      <button
+        type="button"
+        onClick={onOpenSettings}
+        title={versionTooltip}
+        aria-label={versionTooltip}
+        className={`w-4 h-4 sm:w-[19px] sm:h-[19px] rounded-full border flex items-center justify-center transition-all duration-150 cursor-pointer shadow-xs active:scale-90 ${versionColorClasses}`}
+      >
+        {curHasUpdate ? (
+          <ArrowUpCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" strokeWidth={2.4} />
+        ) : (
+          <CheckCircle2 className="w-2.5 h-2.5 sm:w-3 sm:h-3" strokeWidth={2.4} />
+        )}
+      </button>
+    </div>
+  );
+
   return (
     <header className="sticky top-0 z-40 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur-md">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-1.5 sm:gap-4">
         {/* Brand / Logo combined with interactive Info Trigger */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 shrink min-w-0">
           <div
             ref={infoRef}
-            className="relative"
+            className="relative shrink-0"
             onMouseEnter={() => setIsTooltipOpen(true)}
             onMouseLeave={() => setIsTooltipOpen(false)}
           >
@@ -177,92 +223,84 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-extrabold tracking-wider text-base uppercase text-white">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2.5">
+              <span className="font-extrabold tracking-wider text-sm sm:text-base uppercase text-white whitespace-nowrap">
                 CS2<span className="text-zinc-400 font-light">Freitag</span>
               </span>
+
+              {/* Status-Symbole auf Mobilgeräten ganz oben direkt neben CS2Freitag */}
+              <div className="inline-flex sm:hidden">
+                {renderStatusIcons()}
+              </div>
+
               {/* Tactical PWA badge: hidden on mobile, visible on desktop */}
-              <span className="hidden sm:inline-flex text-[10px] uppercase font-mono px-1.5 py-0.5 rounded border border-zinc-800 text-zinc-400 items-center gap-1.5">
+              <span className="hidden sm:inline-flex text-[10px] uppercase font-mono px-1.5 py-0.5 rounded border border-zinc-800 text-zinc-400 items-center gap-1.5 whitespace-nowrap">
                 Tactical PWA
               </span>
             </div>
-            <div className="text-[10px] sm:text-[11px] text-zinc-400 flex items-center gap-1.5 sm:gap-2 flex-wrap sm:flex-nowrap">
+
+            <div className="text-[10px] sm:text-[11px] text-zinc-400 flex items-center gap-1.5 sm:gap-2 whitespace-nowrap">
               <span>{totalMapsCount} {isDe ? 'Karten' : 'Maps'}</span>
-              <span aria-hidden="true" className="text-zinc-600">·</span>
+              <span aria-hidden="true" className="text-zinc-600 font-bold">|</span>
               <span>{totalCalloutsCount}+ Callouts</span>
-              <span aria-hidden="true" className="text-zinc-600">·</span>
 
-              {/* Individual Status Icons: Cloud-Sync & App Installation (no text, compact to match text size) */}
-              <div className="inline-flex items-center gap-1 ml-0.5">
-                {/* 1. Cloud-Sync Symbol (Online: Grün / Offline: Orange) */}
-                <button
-                  type="button"
-                  onClick={onOpenSettings}
-                  title={cloudTooltip}
-                  aria-label={cloudTooltip}
-                  className={`w-4.5 h-4.5 sm:w-[19px] sm:h-[19px] rounded-full border flex items-center justify-center transition-all duration-150 cursor-pointer shadow-xs active:scale-90 ${cloudColorClasses}`}
-                >
-                  {isLoggedIn ? (
-                    <Cloud className="w-2.5 h-2.5 sm:w-3 sm:h-3" strokeWidth={2.2} />
-                  ) : (
-                    <CloudOff className="w-2.5 h-2.5 sm:w-3 sm:h-3" strokeWidth={2.2} />
-                  )}
-                </button>
-
-                {/* 2. App Installation Symbol (Installiert: Grün / Nicht installiert: Orange) */}
-                <button
-                  type="button"
-                  onClick={onOpenSettings}
-                  title={installTooltip}
-                  aria-label={installTooltip}
-                  className={`w-4.5 h-4.5 sm:w-[19px] sm:h-[19px] rounded-full border flex items-center justify-center transition-all duration-150 cursor-pointer shadow-xs active:scale-90 ${installColorClasses}`}
-                >
-                  <Smartphone className="w-2.5 h-2.5 sm:w-3 sm:h-3" strokeWidth={2.2} />
-                </button>
-
-                {/* 3. App-Version / Update-Status Symbol (Grün = Aktuell / Orange = Update verfügbar) */}
-                <button
-                  type="button"
-                  onClick={onOpenSettings}
-                  title={versionTooltip}
-                  aria-label={versionTooltip}
-                  className={`w-4.5 h-4.5 sm:w-[19px] sm:h-[19px] rounded-full border flex items-center justify-center transition-all duration-150 cursor-pointer shadow-xs active:scale-90 ${versionColorClasses}`}
-                >
-                  {curHasUpdate ? (
-                    <ArrowUpCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" strokeWidth={2.4} />
-                  ) : (
-                    <CheckCircle2 className="w-2.5 h-2.5 sm:w-3 sm:h-3" strokeWidth={2.4} />
-                  )}
-                </button>
+              {/* Status-Symbole ab Tablet/Desktop (sm) in der 2. Zeile */}
+              <div className="hidden sm:inline-flex items-center gap-1 ml-0.5">
+                <span aria-hidden="true" className="text-zinc-600 mr-0.5">·</span>
+                {renderStatusIcons()}
               </div>
             </div>
           </div>
         </div>
 
         {/* Right Action Controls */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          {/* Quiz Button: Controller icon on mobile, icon + "Quiz" on tablet/PC */}
+          {onStartQuiz && (
+            <button
+              onClick={onStartQuiz}
+              className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-md text-xs font-semibold border border-amber-500/40 bg-amber-500/10 text-amber-300 hover:text-white hover:bg-amber-500/20 transition-colors cursor-pointer"
+              title={isDe ? 'Callout-Trainer / Lern-Quiz' : 'Callout Trainer / Quiz'}
+            >
+              <Gamepad2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span className="hidden sm:inline">{isDe ? 'Quiz' : 'Quiz'}</span>
+            </button>
+          )}
+
+          {/* Help Button: Question icon on mobile, icon + "Hilfe" on tablet/PC */}
+          {onOpenHelp && (
+            <button
+              onClick={onOpenHelp}
+              className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-md text-xs font-semibold border border-sky-500/40 bg-sky-500/10 text-sky-300 hover:text-white hover:bg-sky-500/20 transition-colors cursor-pointer"
+              title={isDe ? 'Hilfe & App-Erklärungen' : 'Help & App Guide'}
+            >
+              <HelpCircle className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+              <span className="hidden sm:inline">{isDe ? 'Hilfe' : 'Help'}</span>
+            </button>
+          )}
+
           {/* Settings Button */}
           {onOpenSettings && (
             <button
               onClick={onOpenSettings}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold border border-zinc-800 bg-zinc-900/80 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors"
+              className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-md text-xs font-semibold border border-zinc-800 bg-zinc-900/80 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
               title={isDe ? 'Einstellungen & Backup' : 'Settings & Backup'}
             >
-              <Settings className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden md:inline">{isDe ? 'Einstellungen' : 'Settings'}</span>
+              <Settings className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span className="hidden sm:inline">{isDe ? 'Einstellungen' : 'Settings'}</span>
             </button>
           )}
 
           {/* Language Toggle */}
           <button
             onClick={onToggleLanguage}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border border-zinc-800 bg-zinc-900/80 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors"
+            className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-md text-xs font-medium border border-zinc-800 bg-zinc-900/80 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
             title={isDe ? 'Sprache wechseln (DE / EN)' : 'Switch language (EN / DE)'}
             aria-label="Toggle language"
           >
-            <Globe className="w-3.5 h-3.5 text-zinc-400" />
-            <span className="font-mono uppercase font-bold">{lang.toUpperCase()}</span>
+            <Globe className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+            <span className="font-mono uppercase font-bold hidden sm:inline">{lang.toUpperCase()}</span>
           </button>
         </div>
       </div>

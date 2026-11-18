@@ -1,15 +1,37 @@
 {
-  "version": "3.111",
+  "version": "3.113",
   "major": 3,
-  "patch": 111,
+  "patch": 113,
   "releaseDate": "2026-11-18",
-  "title": "Update v3.111: Dauerhafte Favoriten-Speicherung & Cloud-Abgleich",
-  "description": "Favoriten werden nun sofort und dauerhaft im lokalen Speicher gesichert und beim Cloud-Abgleich intelligent zusammengeführt, sodass neu hinzugefügte Karten nach einem Seiten-Reload nicht mehr verloren gehen.",
+  "title": "Update v3.113: Status-Icons im mobilen Header optimiert",
+  "description": "Die Status-Icons (Cloud, App, Version) wurden auf Mobilgeräten ganz nach oben direkt neben den Titel CS2Freitag gesetzt, sodass keine Zeile mehr umbricht.",
   "changes": [
-    "Favoriten werden ab sofort sofort und unabhängig von Cloud-Synchronisation oder Autosave dauerhaft im lokalen Speicher gesichert",
-    "Beim Laden und bei der Anmeldung erfolgt ein intelligenter Abgleich von lokalen und Cloud-Favoriten, damit neu hinzugefügte Karten erhalten bleiben"
+    "Status-Symbole (Cloud-Sync, App-Status, Version) auf Mobilgeräten direkt neben „CS2Freitag“ platziert",
+    "Zeilenumbruch auf Smartphones verhindert – Karten- und Callout-Zähler stehen nun aufgeräumt darunter",
+    "Button-Abstände im Header für Smartphones optimiert"
   ],
   "history": [
+    {
+      "version": "3.113",
+      "releaseDate": "2026-11-18",
+      "title": "Status-Icons im mobilen Header optimiert",
+      "changes": [
+        "Status-Symbole (Cloud-Sync, App-Status, Version) auf Mobilgeräten direkt neben „CS2Freitag“ platziert",
+        "Zeilenumbruch auf Smartphones verhindert – Karten- und Callout-Zähler stehen nun aufgeräumt darunter",
+        "Button-Abstände im Header für Smartphones optimiert"
+      ]
+    },
+    {
+      "version": "3.112",
+      "releaseDate": "2026-11-18",
+      "title": "Quiz- & Hilfe-Buttons in der oberen Leiste",
+      "changes": [
+        "Quiz-Button (Controller-Icon) und Hilfe-Button (Fragezeichen-Icon) direkt links neben die Einstellungen in die obere Leiste integriert",
+        "Auf Mobilgeräten als reines Symbol, auf Tablets und PCs mit Textbeschriftung dargestellt",
+        "Karten- und Callout-Statistik in der oberen Leiste kompakter gestaltet mit einem senkrechten Trennstrich dazwischen",
+        "Quiz- und Hilfe-Einträge aus dem Einstellungs-Menü entfernt"
+      ]
+    },
     {
       "version": "3.111",
       "releaseDate": "2026-11-18",

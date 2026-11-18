@@ -1165,6 +1165,8 @@ export default function App() {
             totalMapsCount={maps.length}
             totalCalloutsCount={totalCalloutsCount}
             onOpenSettings={handleOpenSettings}
+            onStartQuiz={() => setIsQuizOpen(true)}
+            onOpenHelp={() => setIsHelpOpen(true)}
             isLoggedIn={user !== null}
             isAutoCloudSyncEnabled={isAutoCloudSyncEnabled}
           />
@@ -1296,8 +1298,6 @@ export default function App() {
         onManualSaveNow={handleManualSaveNow}
         onLoadFromFileLocation={handleLoadFromFileLocation}
         onDisconnectFileLocation={handleDisconnectFileLocation}
-        onStartQuiz={() => setIsQuizOpen(true)}
-        onOpenHelp={() => setIsHelpOpen(true)}
       />
 
       {/* Help & App Explanations Modal */}
