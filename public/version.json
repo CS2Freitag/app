@@ -1,13 +1,11 @@
 {
-  "version": "3.102",
+  "version": "3.108",
   "major": 3,
-  "patch": 102,
+  "patch": 108,
   "releaseDate": "2026-11-18",
-  "title": "Update v3.102: Karten-Editor & Cloud-Sync Bildoptimierung",
-  "description": "Automatische, qualitätsschonende Bildkomprimierung für den Cloud-Sync, Hinweis & Warnung zum 1-MB-Limit sowie optimiertes Editor-Fenster ohne Abschneiden.",
+  "title": "Update v3.108: Klarere Tooltips für Callout-Info & Ebenen-Panel",
+  "description": "Hover-Hinweise am Info-Button, im Kontextmenü sowie beim Ein- und Ausblenden der rechten Seitenleiste verweisen jetzt eindeutig auf das Callout-Info & Ebenen-Panel.",
   "changes": [
-    "Automatische, verlustarme Bildoptimierung (WebP) beim Bildupload für zuverlässigen Cloud-Sync unter 1 MB",
-    "Hinweis zum 1-MB-Limit und Warnung/Fehlermeldung bei Größenüberschreitung im Karten-Editor ergänzt",
-    "Karten-Editor-Fenster für kleinere Bildschirme angepasst (scrollbarer Mittelteil, fixierte Kopf- und Fußzeile)"
+    "Tooltip am „Info“-Button, im Kontextmenü („Callout-Info“) sowie beim Ein-/Ausblenden des rechten Seitenpanels auf „Callout-Info & Ebenen-Panel öffnen / einblenden / ausblenden“ präzisiert"
   ]
 }

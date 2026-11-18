@@ -36,11 +36,16 @@ export const EditOptionsModal: React.FC<EditOptionsModalProps> = ({
   if (!isOpen) return null;
   const isDe = lang === 'de';
 
-  const filteredCallouts = callouts.filter(
-    (c) =>
-      c.name.toLowerCase().includes(singleEditSearchQuery.toLowerCase()) ||
-      c.zone.toLowerCase().includes(singleEditSearchQuery.toLowerCase())
-  );
+  const normalizedQuery = singleEditSearchQuery.trim().toLowerCase();
+  const filteredCallouts = callouts.filter((c) => {
+    const trimmedName = c.name.trim();
+    const fallbackLabel = isDe ? 'unbenannte zone bereich' : 'unnamed zone area';
+    return (
+      trimmedName.toLowerCase().includes(normalizedQuery) ||
+      c.zone.toLowerCase().includes(normalizedQuery) ||
+      (!trimmedName && fallbackLabel.includes(normalizedQuery))
+    );
+  });
 
   return (
     <div
@@ -145,7 +150,13 @@ export const EditOptionsModal: React.FC<EditOptionsModalProps> = ({
                     }`}
                   >
                     <div className="flex items-center gap-2 truncate">
-                      <span className="font-bold truncate">{c.name}</span>
+                      {c.name.trim() ? (
+                        <span className="font-bold truncate">{c.name.replace(/\n/g, ' ')}</span>
+                      ) : (
+                        <span className="font-semibold italic text-sky-300/90 truncate">
+                          {isDe ? 'Unbenannte Zone' : 'Unnamed Zone'}
+                        </span>
+                      )}
                       <span
                         className={`text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase ${getZoneBadgeColor(
                           c.zone

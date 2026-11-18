@@ -258,7 +258,11 @@ export const TacticalLayersPanel: React.FC<TacticalLayersPanelProps> = ({
               type="button"
               onClick={onCollapsePanel}
               className="p-1 rounded text-zinc-500 hover:text-white hover:bg-zinc-900 transition-colors cursor-pointer"
-              title={isDe ? 'Rechtes Menü ausblenden' : 'Hide right panel'}
+              title={
+                isDe
+                  ? 'Callout-Info & Ebenen-Panel ausblenden'
+                  : 'Hide Callout Info & Layers panel'
+              }
             >
               <PanelRightClose className="w-3.5 h-3.5" />
             </button>

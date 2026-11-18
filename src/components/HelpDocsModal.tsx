@@ -15,6 +15,10 @@ import {
   Smartphone,
   Share2,
   Undo2,
+  Move,
+  SquarePlus,
+  Square,
+  PenTool,
 } from 'lucide-react';
 import { Language } from '../types';
 import { resolveAssetPath } from '../utils/assets';
@@ -477,6 +481,96 @@ export const HelpDocsModal: React.FC<HelpDocsModalProps> = ({ isOpen, onClose, l
                       ? 'Teile jede Taktik als kurzen Link, scanbaren QR-Code oder exportiere sie direkt als hochauflösendes Taktik-PNG.'
                       : 'Share any tactic via compact link, scannable QR code, or export a high-resolution tactical PNG sheet.'}
                   </p>
+                </div>
+              </div>
+            </div>
+
+            {/* 10. Bereiche erstellen, entfernen & Verschiebemodus */}
+            <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-sky-500/30 space-y-2.5">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 font-bold text-sky-400 text-sm">
+                  <Move className="w-4 h-4 shrink-0" />
+                  <span>
+                    {isDe
+                      ? '10. Bereiche erstellen, löschen & Verschiebemodus'
+                      : '10. Creating, Removing Areas & Move Mode'}
+                  </span>
+                </div>
+                <span className="px-2 py-0.5 rounded bg-sky-500/15 border border-sky-500/40 text-sky-300 font-mono text-[10px] font-bold">
+                  {isDe ? 'Callout · Bereich · Beides · Enter/Esc' : 'Callout · Area · Both · Enter/Esc'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                <div className="p-2.5 rounded-lg bg-zinc-900/70 border border-zinc-800/80 space-y-1.5">
+                  <div className="flex items-center gap-1.5 font-bold text-sky-300">
+                    <SquarePlus className="w-3.5 h-3.5 shrink-0" />
+                    <span>
+                      {isDe ? 'Bereiche erstellen & gezielt entfernen' : 'Create & Selectively Remove Areas'}
+                    </span>
+                  </div>
+                  <p className="text-zinc-300 leading-relaxed">
+                    {isDe
+                      ? 'Besitzt ein Callout noch keinen Bereich, erscheint zusätzlich zum Verschieben-Knopf der Button „Neuen Bereich erstellen“. Danach wählst du zwischen:'
+                      : 'If a callout has no area yet, the "Create New Area" button appears alongside the Move button. After clicking it, choose between:'}
+                  </p>
+                  <div className="space-y-1 pt-0.5 text-zinc-400">
+                    <div className="flex items-start gap-1.5">
+                      <Square className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                      <span>
+                        <strong className="text-zinc-200">{isDe ? 'Rechteck:' : 'Rectangle:'}</strong>{' '}
+                        {isDe
+                          ? 'Erstellt sofort eine rechteckige Zone am Callout, die sich über Eck- und Drehgriffe frei anpassen lässt.'
+                          : 'Instantly creates a rectangular zone around the callout with resize and rotation handles.'}
+                      </span>
+                    </div>
+                    <div className="flex items-start gap-1.5">
+                      <PenTool className="w-3.5 h-3.5 text-sky-400 shrink-0 mt-0.5" />
+                      <span>
+                        <strong className="text-zinc-200">{isDe ? 'Linien zeichnen:' : 'Draw Lines:'}</strong>{' '}
+                        {isDe
+                          ? 'Setze per Klick/Tipp eigene Eckpunkte. Auf dem Smartphone kannst du den Finger ziehen, um ein Fadenkreuz knapp über der Fingerspitze präzise zu positionieren. Mit Enter abschließen oder Esc abbrechen.'
+                          : 'Click or tap vertices on the map. On mobile, drag your finger to aim a crosshair cleanly above your fingertip. Press Enter to finish or Esc to cancel.'}
+                      </span>
+                    </div>
+                    <div className="pt-0.5 text-zinc-400">
+                      <strong className="text-orange-300">{isDe ? 'Bereich entfernen / Löschen:' : 'Remove area / Delete:'}</strong>{' '}
+                      {isDe
+                        ? 'Über das Kontextmenü („Bereich entfernen“) lässt sich die Zone direkt lösen. Beim Klick auf „Löschen“ fragt die App (falls Callout und Bereich vorhanden sind), ob nur der Bereich, nur der Callout oder beides gelöscht werden soll.'
+                        : 'Use "Remove area" in the context menu to clear only the zone. Clicking "Delete" when both Callout and Area exist prompts whether to remove only the area, only the callout, or both.'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-zinc-900/70 border border-zinc-800/80 space-y-1.5">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-300">
+                    <Move className="w-3.5 h-3.5 shrink-0" />
+                    <span>
+                      {isDe ? 'Intelligenter Verschiebemodus' : 'Smart Move Mode'}
+                    </span>
+                  </div>
+                  <p className="text-zinc-300 leading-relaxed">
+                    {isDe
+                      ? 'Beim Aktivieren von „Verschieben“ blendet die Karte den Hintergrund ab und hebt das aktive Ziel mit einem dünnen, gestrichelten Rahmen hervor:'
+                      : 'Activating "Move" dims the background and highlights the active target with a thin dashed border:'}
+                  </p>
+                  <ul className="space-y-1 pt-0.5 text-zinc-400 list-disc pl-4">
+                    <li>
+                      {isDe
+                        ? 'Sind Callout und Bereich vorhanden, wählst du zwischen Callout (Name / Pin), Bereich (Zone / Polygon) oder „Beides zusammen“.'
+                        : 'If both Callout and Area exist, choose between Callout (Name / Pin), Area (Zone / Polygon), or "Both together".'}
+                    </li>
+                    <li>
+                      {isDe
+                        ? 'Ist nur eines von beiden vorhanden (z. B. nur Callout ohne Bereich oder nur Bereich ohne Namen), wird dieses automatisch ohne Nachfrage direkt zum Verschieben ausgewählt.'
+                        : 'If only one exists (e.g., only a callout without an area, or only an area without a name), it is automatically selected for moving without an extra prompt.'}
+                    </li>
+                    <li>
+                      {isDe
+                        ? 'Über die obere Leiste wechselst du jederzeit zwischen Callout, Bereich und Beides. Mit Enter oder Esc beendest du den Modus sofort.'
+                        : 'Use the top bar to switch between Callout, Area, and Both at any time. Press Enter or Esc to exit Move Mode immediately.'}
+                    </li>
+                  </ul>
                 </div>
               </div>
             </div>

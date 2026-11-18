@@ -12,6 +12,9 @@ import {
   RotateCcw,
   Spline,
   Trash2,
+  SquarePlus,
+  SquareMinus,
+  Info,
 } from 'lucide-react';
 import {
   Callout,
@@ -22,6 +25,7 @@ import {
   UtilityThrowType,
 } from '../types';
 import { THROW_TYPE_META, UTILITY_THROW_TYPES, formatThrowTypeFull } from '../utils/utilityThrowGeometry';
+import { UTILITY_META } from './UtilitySymbol';
 import { SelectedElementsPatch } from './TacticalLayersPanel';
 
 interface TacticalContextMenuProps {
@@ -37,9 +41,12 @@ interface TacticalContextMenuProps {
   movingAreaCalloutId: string | null;
   showColorSubmenu: boolean;
   onToggleColorSubmenu: () => void;
+  onShowCalloutInfo: (callout: Callout) => void;
   onEditCallout: (callout: Callout, e: React.MouseEvent) => void;
   onRotateCalloutText: (callout: Callout) => void;
   onToggleMoveArea: (callout: Callout) => void;
+  onCreateArea: (callout: Callout) => void;
+  onRemoveArea: (callout: Callout) => void;
   onGroupSelected: () => void;
   onDuplicateSelected: () => void;
   onToggleLockSelected: () => void;
@@ -48,6 +55,22 @@ interface TacticalContextMenuProps {
   onDeleteSelected: () => void;
   onClose: () => void;
 }
+
+const getZoneDefaultColorHex = (zone: Callout['zone']): string => {
+  switch (zone) {
+    case 'a_site':
+    case 'b_site':
+      return '#ef4444';
+    case 'mid':
+      return '#34d399';
+    case 't_spawn':
+      return '#92400e';
+    case 'ct_spawn':
+      return '#2563eb';
+    default:
+      return '#38bdf8';
+  }
+};
 
 export const TacticalContextMenu: React.FC<TacticalContextMenuProps> = ({
   lang,
@@ -62,9 +85,12 @@ export const TacticalContextMenu: React.FC<TacticalContextMenuProps> = ({
   movingAreaCalloutId,
   showColorSubmenu,
   onToggleColorSubmenu,
+  onShowCalloutInfo,
   onEditCallout,
   onRotateCalloutText,
   onToggleMoveArea,
+  onCreateArea,
+  onRemoveArea,
   onGroupSelected,
   onDuplicateSelected,
   onToggleLockSelected,
@@ -99,11 +125,25 @@ export const TacticalContextMenu: React.FC<TacticalContextMenuProps> = ({
     players.filter((p) => selectedElementIds.includes(p.id)).every((p) => p.locked) &&
     callouts.filter((c) => selectedCalloutIds.includes(c.id)).every((c) => c.locked);
 
+  const firstSelectedDrawing = drawings.find((d) => selectedElementIds.includes(d.id));
+  const firstSelectedPlayer = players.find((p) => selectedElementIds.includes(p.id));
+  const firstSelectedCallout = callouts.find((c) => selectedCalloutIds.includes(c.id));
+
+  const currentPreviewColor: string | null = singleCtxCallout
+    ? singleCtxCallout.area?.customColor || getZoneDefaultColorHex(singleCtxCallout.zone)
+    : singleCtxUtil
+    ? UTILITY_META[singleCtxUtil.type]?.colorHex || '#38bdf8'
+    : firstSelectedDrawing?.color ||
+      (firstSelectedPlayer ? (firstSelectedPlayer.side === 'ct' ? '#3b82f6' : '#f59e0b') : null) ||
+      (firstSelectedCallout
+        ? firstSelectedCallout.area?.customColor || getZoneDefaultColorHex(firstSelectedCallout.zone)
+        : null);
+
   const menuLeft =
     typeof window !== 'undefined' ? Math.min(position.x, window.innerWidth - 260) : position.x;
   const menuTop =
     typeof window !== 'undefined'
-      ? Math.min(position.y, window.innerHeight - (singleCtxCallout ? 430 : 300))
+      ? Math.min(position.y, window.innerHeight - (singleCtxCallout ? 500 : 300))
       : position.y;
 
   return (
@@ -116,13 +156,17 @@ export const TacticalContextMenu: React.FC<TacticalContextMenuProps> = ({
         e.stopPropagation();
       }}
       style={{ left: `${Math.max(12, menuLeft)}px`, top: `${Math.max(12, menuTop)}px` }}
-      className="fixed z-[110] w-60 rounded-xl bg-zinc-900/95 border border-zinc-700/90 shadow-2xl backdrop-blur-md text-xs text-zinc-100 overflow-hidden print:hidden"
+      className="fixed z-[110] w-60 max-h-[calc(100dvh-24px)] overflow-y-auto rounded-xl bg-zinc-900/95 border border-zinc-700/90 shadow-2xl backdrop-blur-md text-xs text-zinc-100 animate-menu-soft print:hidden"
     >
       {/* Header */}
-      <div className="px-3.5 py-2.5 border-b border-zinc-800 flex items-center justify-between gap-2 bg-zinc-950/60">
+      <div className="px-3.5 py-2.5 border-b border-zinc-800 flex items-center justify-between gap-2 bg-zinc-950/60 sticky top-0 z-10">
         <span className="font-semibold text-zinc-100 truncate">
           {singleCtxCallout
-            ? singleCtxCallout.name.replace(/\n/g, ' ')
+            ? singleCtxCallout.name.trim()
+              ? singleCtxCallout.name.replace(/\n/g, ' ')
+              : isDe
+              ? 'Unbenannte Zone'
+              : 'Unnamed Zone'
             : totalCount === 1
             ? isDe
               ? '1 Element ausgewählt'
@@ -131,21 +175,39 @@ export const TacticalContextMenu: React.FC<TacticalContextMenuProps> = ({
             ? `${totalCount} Elemente ausgewählt`
             : `${totalCount} elements selected`}
         </span>
-        <span
-          className={`px-2 py-0.5 rounded-md text-[10px] font-bold border shrink-0 ${
-            isGrouped
-              ? 'border-sky-400/70 bg-sky-500/20 text-sky-300'
-              : 'border-sky-500/40 bg-sky-500/10 text-sky-300/80'
-          }`}
-        >
-          {isDe ? 'Gruppe' : 'Group'}
-        </span>
+        {isGrouped && (
+          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold border border-sky-400/70 bg-sky-500/20 text-sky-300 shrink-0">
+            {isDe ? 'Gruppe' : 'Group'}
+          </span>
+        )}
       </div>
 
       {/* Action Rows */}
       <div className="p-1.5 space-y-0.5">
         {singleCtxCallout && (
           <>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onShowCalloutInfo(singleCtxCallout);
+                onClose();
+              }}
+              className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-sky-500/15 text-sky-300 hover:text-white transition-colors cursor-pointer"
+              title={
+                isDe
+                  ? 'Callout-Info & Ebenen-Panel öffnen'
+                  : 'Open Callout Info & Layers panel'
+              }
+            >
+              <span className="flex items-center gap-2.5">
+                <Info className="w-4 h-4 text-sky-400" />
+                <span className="font-medium">
+                  {isDe ? 'Callout-Info' : 'Callout info'}
+                </span>
+              </span>
+            </button>
+
             <button
               type="button"
               onClick={(e) => {
@@ -184,28 +246,83 @@ export const TacticalContextMenu: React.FC<TacticalContextMenuProps> = ({
               </span>
             </button>
 
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleMoveArea(singleCtxCallout);
-                onClose();
-              }}
-              className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-zinc-800 text-zinc-100 transition-colors cursor-pointer"
-            >
-              <span className="flex items-center gap-2.5">
-                <Move className="w-4 h-4 text-amber-400" />
-                <span className="font-medium">
-                  {movingAreaCalloutId === singleCtxCallout.id
-                    ? isDe
-                      ? 'Bereich-Verschieben beenden'
-                      : 'Stop moving area'
-                    : isDe
-                    ? 'Bereich verschieben'
-                    : 'Move area'}
+            {(() => {
+              const isMovingThis = movingAreaCalloutId === singleCtxCallout.id;
+              const hasCalloutMarker = Boolean(
+                (singleCtxCallout.name && singleCtxCallout.name.trim().length > 0) || !singleCtxCallout.hidePin
+              );
+              const hasArea = Boolean(singleCtxCallout.area);
+              const moveLabel = isMovingThis
+                ? isDe
+                  ? 'Verschieben beenden'
+                  : 'Stop moving'
+                : hasCalloutMarker && hasArea
+                ? isDe
+                  ? 'Verschieben (Callout / Bereich)'
+                  : 'Move (Callout / Area)'
+                : hasArea
+                ? isDe
+                  ? 'Bereich verschieben'
+                  : 'Move area'
+                : isDe
+                ? 'Callout verschieben'
+                : 'Move callout';
+
+              return (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleMoveArea(singleCtxCallout);
+                    onClose();
+                  }}
+                  className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-zinc-800 text-zinc-100 transition-colors cursor-pointer"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <Move className="w-4 h-4 text-amber-400" />
+                    <span className="font-medium">{moveLabel}</span>
+                  </span>
+                </button>
+              );
+            })()}
+
+            {!singleCtxCallout.area && movingAreaCalloutId !== singleCtxCallout.id && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCreateArea(singleCtxCallout);
+                  onClose();
+                }}
+                className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-sky-500/15 text-sky-300 hover:text-white transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2.5">
+                  <SquarePlus className="w-4 h-4 text-sky-400" />
+                  <span className="font-medium">
+                    {isDe ? 'Neuen Bereich erstellen' : 'Create new area'}
+                  </span>
                 </span>
-              </span>
-            </button>
+              </button>
+            )}
+
+            {singleCtxCallout.area && movingAreaCalloutId !== singleCtxCallout.id && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemoveArea(singleCtxCallout);
+                  onClose();
+                }}
+                className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-orange-500/15 text-orange-300 hover:text-orange-200 transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2.5">
+                  <SquareMinus className="w-4 h-4 text-orange-400" />
+                  <span className="font-medium">
+                    {isDe ? 'Bereich entfernen' : 'Remove area'}
+                  </span>
+                </span>
+              </button>
+            )}
 
             <div className="my-1 border-t border-zinc-800" />
           </>
@@ -357,24 +474,41 @@ export const TacticalContextMenu: React.FC<TacticalContextMenuProps> = ({
               <Palette className="w-4 h-4 text-zinc-300" />
               <span className="font-medium">{isDe ? 'Farbe ändern' : 'Change color'}</span>
             </span>
-            <ChevronRight
-              className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${
-                showColorSubmenu ? 'rotate-90' : ''
-              }`}
-            />
+            <span className="flex items-center gap-2">
+              {currentPreviewColor && (
+                <span
+                  style={{ backgroundColor: currentPreviewColor }}
+                  className="w-3.5 h-3.5 rounded-full border border-white/30 shrink-0"
+                  title={currentPreviewColor}
+                />
+              )}
+              <ChevronRight
+                className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${
+                  showColorSubmenu ? 'rotate-90' : ''
+                }`}
+              />
+            </span>
           </button>
           {showColorSubmenu && (
-            <div className="px-2.5 py-2 mt-0.5 rounded-lg bg-zinc-950/90 border border-zinc-800 flex items-center justify-between gap-1.5">
-              {colors.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => onUpdateColor(c)}
-                  style={{ backgroundColor: c }}
-                  className="w-5 h-5 rounded-full border border-zinc-600 hover:scale-120 transition-transform cursor-pointer"
-                  title={c}
-                />
-              ))}
+            <div className="px-2.5 py-2 mt-0.5 rounded-lg bg-zinc-950/90 border border-zinc-800 flex items-center justify-between gap-1.5 animate-submenu-soft">
+              {colors.map((c) => {
+                const isActiveColor =
+                  currentPreviewColor?.toLowerCase() === c.toLowerCase();
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => onUpdateColor(c)}
+                    style={{ backgroundColor: c }}
+                    className={`w-5 h-5 rounded-full border transition-transform cursor-pointer ${
+                      isActiveColor
+                        ? 'border-white ring-2 ring-white/50 scale-115'
+                        : 'border-zinc-600 hover:scale-120'
+                    }`}
+                    title={c}
+                  />
+                );
+              })}
             </div>
           )}
         </div>

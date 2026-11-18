@@ -34,11 +34,16 @@ export const CustomSelectionModal: React.FC<CustomSelectionModalProps> = ({
   if (!isOpen) return null;
   const isDe = lang === 'de';
 
-  const filteredCallouts = callouts.filter(
-    (c) =>
-      c.name.toLowerCase().includes(customSelectionSearch.toLowerCase()) ||
-      c.zone.toLowerCase().includes(customSelectionSearch.toLowerCase())
-  );
+  const normalizedQuery = customSelectionSearch.trim().toLowerCase();
+  const filteredCallouts = callouts.filter((c) => {
+    const trimmedName = c.name.trim();
+    const fallbackLabel = isDe ? 'unbenannte zone bereich' : 'unnamed zone area';
+    return (
+      trimmedName.toLowerCase().includes(normalizedQuery) ||
+      c.zone.toLowerCase().includes(normalizedQuery) ||
+      (!trimmedName && fallbackLabel.includes(normalizedQuery))
+    );
+  });
 
   return (
     <div
@@ -188,7 +193,13 @@ export const CustomSelectionModal: React.FC<CustomSelectionModalProps> = ({
                           }`}
                         />
                         <div className="truncate">
-                          <span className="text-xs font-bold block truncate">{c.name}</span>
+                          {c.name.trim() ? (
+                            <span className="text-xs font-bold block truncate">{c.name.replace(/\n/g, ' ')}</span>
+                          ) : (
+                            <span className="text-xs font-semibold italic text-sky-300/90 block truncate">
+                              {isDe ? 'Unbenannte Zone' : 'Unnamed Zone'}
+                            </span>
+                          )}
                           <span
                             className={`text-[9px] font-mono px-1 py-0.2 rounded border uppercase ${getZoneBadgeColor(
                               c.zone
@@ -296,7 +307,13 @@ export const CustomSelectionModal: React.FC<CustomSelectionModalProps> = ({
                         className="flex items-center justify-between p-2 sm:p-2.5 rounded-xl bg-zinc-900/90 border border-indigo-500/30 text-zinc-100 hover:border-indigo-400 transition-all"
                       >
                         <div className="flex items-center gap-2 truncate">
-                          <span className="text-xs font-bold truncate">{callout.name}</span>
+                          {callout.name.trim() ? (
+                            <span className="text-xs font-bold truncate">{callout.name.replace(/\n/g, ' ')}</span>
+                          ) : (
+                            <span className="text-xs font-semibold italic text-sky-300/90 truncate">
+                              {isDe ? 'Unbenannte Zone' : 'Unnamed Zone'}
+                            </span>
+                          )}
                           <span
                             className={`text-[9px] font-mono px-1 py-0.2 rounded border uppercase ${getZoneBadgeColor(
                               callout.zone

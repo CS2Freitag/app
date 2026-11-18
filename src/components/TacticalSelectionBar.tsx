@@ -12,6 +12,7 @@ import {
   Spline,
   Trash2,
   X,
+  SquarePlus,
 } from 'lucide-react';
 import {
   Callout,
@@ -39,6 +40,7 @@ interface TacticalSelectionBarProps {
   onShowCalloutInfo: (callout: Callout) => void;
   onEditCallout: (callout: Callout, e: React.MouseEvent) => void;
   onToggleMoveArea: (callout: Callout) => void;
+  onCreateArea: (callout: Callout) => void;
   onGroupSelected: () => void;
   onDuplicateSelected: () => void;
   onToggleLockSelected: () => void;
@@ -64,6 +66,7 @@ export const TacticalSelectionBar: React.FC<TacticalSelectionBarProps> = ({
   onShowCalloutInfo,
   onEditCallout,
   onToggleMoveArea,
+  onCreateArea,
   onGroupSelected,
   onDuplicateSelected,
   onToggleLockSelected,
@@ -106,9 +109,9 @@ export const TacticalSelectionBar: React.FC<TacticalSelectionBarProps> = ({
       data-no-map-click="true"
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
-      className="absolute top-3 left-1/2 -translate-x-1/2 z-40 flex flex-wrap items-center justify-center gap-1 px-2 py-1 rounded-xl bg-zinc-950/95 border border-zinc-700 shadow-2xl backdrop-blur-md text-xs text-zinc-100 w-max max-w-[calc(100%-72px)] print:hidden"
+      className="absolute top-3 left-1/2 -translate-x-1/2 z-40 flex flex-wrap items-center justify-center gap-1 px-2 py-1.5 sm:py-1 rounded-xl bg-zinc-950/95 border border-zinc-700 shadow-2xl backdrop-blur-md text-xs text-zinc-100 w-max max-w-[calc(100%-16px)] sm:max-w-[calc(100%-72px)] print:hidden"
     >
-      <span className="px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono font-bold tabular-nums shrink-0">
+      <span className="px-2 py-1 sm:py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono font-bold tabular-nums shrink-0">
         {totalCount}
         <span className="hidden sm:inline"> {isDe ? 'gewählt' : 'selected'}</span>
       </span>
@@ -126,10 +129,14 @@ export const TacticalSelectionBar: React.FC<TacticalSelectionBarProps> = ({
             e.stopPropagation();
             onShowCalloutInfo(singleSelectedCallout);
           }}
-          className="flex items-center gap-1 px-2 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/50 text-sky-300 hover:text-white transition-colors shrink-0 cursor-pointer"
-          title={isDe ? 'Callout-Info & Details anzeigen' : 'Show callout info'}
+          className="flex items-center justify-center gap-1 min-w-[34px] min-h-[34px] sm:min-w-0 sm:min-h-0 px-2 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/50 text-sky-300 hover:text-white transition-colors shrink-0 cursor-pointer"
+          title={
+            isDe
+              ? 'Callout-Info & Ebenen-Panel öffnen'
+              : 'Open Callout Info & Layers panel'
+          }
         >
-          <Info className="w-3.5 h-3.5 text-sky-400" />
+          <Info className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-sky-400" />
           <span className="hidden sm:inline">Info</span>
         </button>
       )}
@@ -138,45 +145,84 @@ export const TacticalSelectionBar: React.FC<TacticalSelectionBarProps> = ({
         <button
           type="button"
           onClick={(e) => onEditCallout(singleSelectedCallout, e)}
-          className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-zinc-800 text-zinc-200 hover:text-white transition-colors shrink-0 cursor-pointer"
+          className="flex items-center justify-center gap-1 min-w-[34px] min-h-[34px] sm:min-w-0 sm:min-h-0 px-2 py-1 rounded-lg hover:bg-zinc-800 text-zinc-200 hover:text-white transition-colors shrink-0 cursor-pointer"
           title={isDe ? 'Callout bearbeiten' : 'Edit callout'}
         >
-          <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+          <Edit3 className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-amber-400" />
           <span className="hidden sm:inline">{isDe ? 'Bearbeiten' : 'Edit'}</span>
         </button>
       )}
 
-      {singleSelectedCallout && (
+      {singleSelectedCallout && (() => {
+        const isMovingThis = movingAreaCalloutId === singleSelectedCallout.id;
+        const hasCalloutMarker = Boolean(
+          (singleSelectedCallout.name && singleSelectedCallout.name.trim().length > 0) || !singleSelectedCallout.hidePin
+        );
+        const hasArea = Boolean(singleSelectedCallout.area);
+        const moveLabel = isMovingThis
+          ? isDe
+            ? 'Verschieben beenden'
+            : 'Stop move'
+          : hasCalloutMarker && hasArea
+          ? isDe
+            ? 'Verschieben'
+            : 'Move'
+          : hasArea
+          ? isDe
+            ? 'Bereich verschieben'
+            : 'Move area'
+          : isDe
+          ? 'Callout verschieben'
+          : 'Move callout';
+        const moveTitle = isMovingThis
+          ? isDe
+            ? 'Verschieben beenden'
+            : 'Stop moving'
+          : hasCalloutMarker && hasArea
+          ? isDe
+            ? 'Callout, Bereich oder beides verschieben'
+            : 'Move callout, area, or both'
+          : hasArea
+          ? isDe
+            ? 'Bereich verschieben'
+            : 'Move area'
+          : isDe
+          ? 'Callout verschieben'
+          : 'Move callout';
+
+        return (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleMoveArea(singleSelectedCallout);
+            }}
+            className={`flex items-center justify-center gap-1 min-w-[34px] min-h-[34px] sm:min-w-0 sm:min-h-0 px-2 py-1 rounded-lg transition-colors shrink-0 cursor-pointer ${
+              isMovingThis
+                ? 'bg-amber-500/25 text-amber-300 border border-amber-500/50'
+                : 'hover:bg-zinc-800 text-zinc-200 hover:text-white'
+            }`}
+            title={moveTitle}
+          >
+            <Move className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-amber-400" />
+            <span className="hidden sm:inline">{moveLabel}</span>
+          </button>
+        );
+      })()}
+
+      {singleSelectedCallout && !singleSelectedCallout.area && movingAreaCalloutId !== singleSelectedCallout.id && (
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            onToggleMoveArea(singleSelectedCallout);
+            onCreateArea(singleSelectedCallout);
           }}
-          className={`flex items-center gap-1 px-2 py-1 rounded-lg transition-colors shrink-0 cursor-pointer ${
-            movingAreaCalloutId === singleSelectedCallout.id
-              ? 'bg-amber-500/25 text-amber-300 border border-amber-500/50'
-              : 'hover:bg-zinc-800 text-zinc-200 hover:text-white'
-          }`}
-          title={
-            movingAreaCalloutId === singleSelectedCallout.id
-              ? isDe
-                ? 'Bereich-Verschieben beenden'
-                : 'Stop moving area'
-              : isDe
-              ? 'Bereich verschieben'
-              : 'Move area'
-          }
+          className="flex items-center justify-center gap-1 min-w-[34px] min-h-[34px] sm:min-w-0 sm:min-h-0 px-2 py-1 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 text-sky-300 hover:text-white transition-colors shrink-0 cursor-pointer"
+          title={isDe ? 'Neuen Bereich erstellen' : 'Create new area'}
         >
-          <Move className="w-3.5 h-3.5 text-amber-400" />
+          <SquarePlus className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-sky-400" />
           <span className="hidden sm:inline">
-            {movingAreaCalloutId === singleSelectedCallout.id
-              ? isDe
-                ? 'Verschieben beenden'
-                : 'Stop move'
-              : isDe
-              ? 'Bereich verschieben'
-              : 'Move area'}
+            {isDe ? 'Bereich erstellen' : 'Create area'}
           </span>
         </button>
       )}
@@ -261,10 +307,10 @@ export const TacticalSelectionBar: React.FC<TacticalSelectionBarProps> = ({
         <button
           type="button"
           onClick={onGroupSelected}
-          className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-zinc-800 text-zinc-200 hover:text-white transition-colors shrink-0 cursor-pointer"
+          className="flex items-center justify-center gap-1 min-w-[34px] min-h-[34px] sm:min-w-0 sm:min-h-0 px-2 py-1 rounded-lg hover:bg-zinc-800 text-zinc-200 hover:text-white transition-colors shrink-0 cursor-pointer"
           title={isDe ? 'Elemente gruppieren / Gruppe auflösen' : 'Group / Ungroup'}
         >
-          <Users className="w-3.5 h-3.5 text-sky-400" />
+          <Users className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-sky-400" />
           <span className="hidden sm:inline">
             {isGrouped ? (isDe ? 'Lösen' : 'Ungroup') : isDe ? 'Gruppieren' : 'Group'}
           </span>
@@ -274,23 +320,23 @@ export const TacticalSelectionBar: React.FC<TacticalSelectionBarProps> = ({
       <button
         type="button"
         onClick={onDuplicateSelected}
-        className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-zinc-800 text-zinc-200 hover:text-white transition-colors shrink-0 cursor-pointer"
+        className="flex items-center justify-center gap-1 min-w-[34px] min-h-[34px] sm:min-w-0 sm:min-h-0 px-2 py-1 rounded-lg hover:bg-zinc-800 text-zinc-200 hover:text-white transition-colors shrink-0 cursor-pointer"
         title={isDe ? 'Duplizieren (Strg+D)' : 'Duplicate (Ctrl+D)'}
       >
-        <Copy className="w-3.5 h-3.5 text-emerald-400" />
+        <Copy className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-emerald-400" />
         <span className="hidden sm:inline">{isDe ? 'Duplizieren' : 'Duplicate'}</span>
       </button>
 
       <button
         type="button"
         onClick={onToggleLockSelected}
-        className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-zinc-800 text-zinc-200 hover:text-white transition-colors shrink-0 cursor-pointer"
+        className="flex items-center justify-center gap-1 min-w-[34px] min-h-[34px] sm:min-w-0 sm:min-h-0 px-2 py-1 rounded-lg hover:bg-zinc-800 text-zinc-200 hover:text-white transition-colors shrink-0 cursor-pointer"
         title={isDe ? 'Auswahl sperren / entsperren' : 'Lock / Unlock'}
       >
         {allLocked ? (
-          <Unlock className="w-3.5 h-3.5 text-amber-400" />
+          <Unlock className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-amber-400" />
         ) : (
-          <Lock className="w-3.5 h-3.5 text-amber-400" />
+          <Lock className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-amber-400" />
         )}
         <span className="hidden sm:inline">
           {allLocked ? (isDe ? 'Entsperren' : 'Unlock') : isDe ? 'Sperren' : 'Lock'}
@@ -301,10 +347,10 @@ export const TacticalSelectionBar: React.FC<TacticalSelectionBarProps> = ({
         <button
           type="button"
           onClick={onToggleContextColorPicker}
-          className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-zinc-800 text-zinc-200 hover:text-white transition-colors shrink-0 cursor-pointer"
+          className="flex items-center justify-center gap-1 min-w-[34px] min-h-[34px] sm:min-w-0 sm:min-h-0 px-2 py-1 rounded-lg hover:bg-zinc-800 text-zinc-200 hover:text-white transition-colors shrink-0 cursor-pointer"
           title={isDe ? 'Farbe ändern' : 'Change color'}
         >
-          <Palette className="w-3.5 h-3.5 text-purple-400" />
+          <Palette className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-purple-400" />
           <span className="hidden sm:inline">{isDe ? 'Farbe' : 'Color'}</span>
         </button>
         {showContextColorPicker && (
@@ -333,20 +379,20 @@ export const TacticalSelectionBar: React.FC<TacticalSelectionBarProps> = ({
       <button
         type="button"
         onClick={onDeleteSelected}
-        className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors shrink-0 cursor-pointer"
+        className="flex items-center justify-center gap-1 min-w-[34px] min-h-[34px] sm:min-w-0 sm:min-h-0 px-2 py-1 rounded-lg hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors shrink-0 cursor-pointer"
         title={isDe ? 'Auswahl löschen (Entf)' : 'Delete selected (Del)'}
       >
-        <Trash2 className="w-3.5 h-3.5" />
+        <Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
         <span className="hidden sm:inline">{isDe ? 'Löschen' : 'Delete'}</span>
       </button>
 
       <button
         type="button"
         onClick={onClearSelection}
-        className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 cursor-pointer shrink-0"
+        className="flex items-center justify-center min-w-[32px] min-h-[34px] sm:min-w-0 sm:min-h-0 p-1.5 sm:p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 cursor-pointer shrink-0"
         title={isDe ? 'Auswahl aufheben' : 'Deselect'}
       >
-        <X className="w-3.5 h-3.5" />
+        <X className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
       </button>
     </div>
   );
