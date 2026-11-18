@@ -30,7 +30,11 @@ import { usePWAInstall } from '../hooks/usePWAInstall';
 import { FAVICON_ICO_BASE64 } from '../data/embeddedIcoBase64';
 import { loadUserCloudData } from '../services/firebase';
 import { UploadConflictModal } from './UploadConflictModal';
-import { useAppVersion } from '../services/versionService';
+import {
+  useAppVersion,
+  compareVersions,
+  VersionHistoryEntry,
+} from '../services/versionService';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -114,6 +118,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const {
     installedVersion,
+    previousVersion,
     latestVersion,
     hasUpdate,
     isChecking: isCheckingVersion,
@@ -124,6 +129,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     simulateUpdateAvailable,
     resetSimulation,
   } = useAppVersion();
+
+  const allVersionHistory: VersionHistoryEntry[] =
+    versionManifest?.history && versionManifest.history.length > 0
+      ? versionManifest.history
+      : [
+          {
+            version: latestVersion,
+            releaseDate: versionManifest?.releaseDate,
+            title: versionManifest?.title,
+            changes:
+              versionManifest?.changes && versionManifest.changes.length > 0
+                ? versionManifest.changes
+                : [
+                    'Aktualisierte Callouts & Standard-Datenbestand',
+                    'Positions- und Layout-Optimierungen',
+                  ],
+          },
+        ];
+
+  const pendingChangelogEntries = hasUpdate
+    ? allVersionHistory.filter(
+        (entry) =>
+          compareVersions(entry.version, installedVersion) > 0 &&
+          compareVersions(entry.version, latestVersion) <= 0
+      )
+    : allVersionHistory;
+
+  const displayedChangelogEntries =
+    pendingChangelogEntries.length > 0 ? pendingChangelogEntries : [allVersionHistory[0]];
 
   const handlePerformUpdate = async () => {
     try {
@@ -475,35 +509,70 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   >
                     <ChevronDown className={`w-3.5 h-3.5 text-amber-400 transition-transform duration-200 ${showChangelog ? 'rotate-180' : ''}`} />
                     <span>
-                      {isDe ? `Was ist neu in Version ${latestVersion}?` : `What's new in version ${latestVersion}?`}
+                      {displayedChangelogEntries.length > 1
+                        ? isDe
+                          ? `Was ist neu in Version ${latestVersion}? (${displayedChangelogEntries.length} Updates seit v${installedVersion})`
+                          : `What's new in v${latestVersion}? (${displayedChangelogEntries.length} updates since v${installedVersion})`
+                        : isDe
+                        ? `Was ist neu in Version ${latestVersion}?`
+                        : `What's new in version ${latestVersion}?`}
                     </span>
                   </button>
                 </div>
 
-                {/* Expandable Changelog in short bullet points */}
+                {/* Expandable Cumulative Changelog with left-side scrollbar */}
                 {showChangelog && (
-                  <div className="p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 text-[11px] text-zinc-300 space-y-2 animate-in fade-in-50 duration-150">
-                    <div className="font-bold text-amber-300 text-xs flex items-center justify-between">
+                  <div className="p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 text-[11px] text-zinc-300 space-y-2.5 animate-submenu-soft">
+                    <div className="font-bold text-amber-300 text-xs flex items-center justify-between gap-2 pb-1.5 border-b border-zinc-800/80">
                       <span>
-                        {isDe ? `Neuerungen in Version ${latestVersion}:` : `Changes in Version ${latestVersion}:`}
+                        {displayedChangelogEntries.length > 1
+                          ? isDe
+                            ? `Alle Neuerungen (v${installedVersion} → v${latestVersion}):`
+                            : `All Changes (v${installedVersion} → v${latestVersion}):`
+                          : isDe
+                          ? `Neuerungen in Version ${latestVersion}:`
+                          : `Changes in Version ${latestVersion}:`}
                       </span>
                       {versionManifest?.releaseDate && (
-                        <span className="text-[10px] font-mono text-zinc-500 font-normal">
+                        <span className="text-[10px] font-mono text-zinc-500 font-normal shrink-0">
                           {versionManifest.releaseDate}
                         </span>
                       )}
                     </div>
-                    <ul className="list-disc pl-4 space-y-1 text-zinc-300 text-[11px] leading-relaxed">
-                      {(versionManifest?.changes && versionManifest.changes.length > 0
-                        ? versionManifest.changes
-                        : [
-                            'Aktualisierte Callouts & Standard-Datenbestand',
-                            'Positions- und Layout-Optimierungen',
-                          ]
-                      ).map((change, idx) => (
-                        <li key={idx}>{change}</li>
-                      ))}
-                    </ul>
+
+                    <div className="max-h-56 overflow-y-auto scrollbar-left pl-2.5 pr-1">
+                      <div className="space-y-3 text-zinc-300 text-[11px] leading-relaxed">
+                        {displayedChangelogEntries.map((entry) => (
+                          <div
+                            key={entry.version}
+                            className="space-y-1 pb-2.5 last:pb-0 border-b border-zinc-800/60 last:border-b-0"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 font-mono text-[10px] font-bold shrink-0">
+                                  v{entry.version}
+                                </span>
+                                {entry.title && (
+                                  <span className="font-semibold text-zinc-100 truncate">
+                                    {entry.title}
+                                  </span>
+                                )}
+                              </div>
+                              {entry.releaseDate && (
+                                <span className="text-[10px] font-mono text-zinc-500 shrink-0">
+                                  {entry.releaseDate}
+                                </span>
+                              )}
+                            </div>
+                            <ul className="list-disc pl-4 space-y-1 text-zinc-300">
+                              {entry.changes.map((change, idx) => (
+                                <li key={idx}>{change}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -522,6 +591,89 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </span>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* When already up-to-date: Allow viewing full changelog / version history */}
+            {!hasUpdate && (
+              <div className="space-y-2.5">
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setShowChangelog((prev) => !prev)}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold text-emerald-300 hover:text-emerald-200 bg-emerald-500/10 border border-emerald-500/30 hover:border-emerald-500/50 transition-colors cursor-pointer select-none"
+                    title={isDe ? 'Alle Änderungen und Versionsverlauf anzeigen' : 'Show all changes & version history'}
+                  >
+                    <ChevronDown className={`w-3.5 h-3.5 text-emerald-400 transition-transform duration-200 ${showChangelog ? 'rotate-180' : ''}`} />
+                    <span>
+                      {isDe
+                        ? `Was ist neu in Version ${installedVersion}?`
+                        : `What's new in version ${installedVersion}?`}
+                    </span>
+                  </button>
+                </div>
+
+                {showChangelog && (
+                  <div className="p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 text-[11px] text-zinc-300 space-y-2.5 animate-submenu-soft">
+                    <div className="font-bold text-emerald-300 text-xs flex items-center justify-between gap-2 pb-1.5 border-b border-zinc-800/80">
+                      <span>
+                        {previousVersion && compareVersions(installedVersion, previousVersion) > 0
+                          ? isDe
+                            ? `Alle Neuerungen (Update von v${previousVersion} auf v${installedVersion} & Verlauf):`
+                            : `All Changes (Updated v${previousVersion} → v${installedVersion} & History):`
+                          : isDe
+                          ? `Alle Neuerungen & Versionsverlauf (bis v${installedVersion}):`
+                          : `All Changes & Version History (up to v${installedVersion}):`}
+                      </span>
+                    </div>
+
+                    <div className="max-h-56 overflow-y-auto scrollbar-left pl-2.5 pr-1">
+                      <div className="space-y-3 text-zinc-300 text-[11px] leading-relaxed">
+                        {displayedChangelogEntries.map((entry) => {
+                          const isSinceLastUpdate =
+                            Boolean(previousVersion) &&
+                            compareVersions(entry.version, previousVersion!) > 0 &&
+                            compareVersions(entry.version, installedVersion) <= 0;
+                          return (
+                            <div
+                              key={entry.version}
+                              className="space-y-1 pb-2.5 last:pb-0 border-b border-zinc-800/60 last:border-b-0"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded font-mono text-[10px] font-bold border shrink-0 ${
+                                      isSinceLastUpdate
+                                        ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                                        : 'bg-zinc-800 border-zinc-700 text-zinc-300'
+                                    }`}
+                                  >
+                                    v{entry.version}
+                                  </span>
+                                  {entry.title && (
+                                    <span className="font-semibold text-zinc-100 truncate">
+                                      {entry.title}
+                                    </span>
+                                  )}
+                                </div>
+                                {entry.releaseDate && (
+                                  <span className="text-[10px] font-mono text-zinc-500 shrink-0">
+                                    {entry.releaseDate}
+                                  </span>
+                                )}
+                              </div>
+                              <ul className="list-disc pl-4 space-y-1 text-zinc-300">
+                                {entry.changes.map((change, idx) => (
+                                  <li key={idx}>{change}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

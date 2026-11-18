@@ -11,9 +11,17 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
-export const CURRENT_BUILD_VERSION = '3.108';
+export const CURRENT_BUILD_VERSION = '3.109';
 export const VERSION_STORAGE_KEY = 'cs2_installed_version';
+export const PREVIOUS_VERSION_STORAGE_KEY = 'cs2_previous_version';
 export const SIMULATED_VERSION_KEY = 'cs2_simulated_version';
+
+export interface VersionHistoryEntry {
+  version: string;
+  releaseDate?: string;
+  title?: string;
+  changes: string[];
+}
 
 export interface VersionManifest {
   version: string;
@@ -23,6 +31,7 @@ export interface VersionManifest {
   title?: string;
   description?: string;
   changes?: string[];
+  history?: VersionHistoryEntry[];
 }
 
 /**
@@ -76,6 +85,19 @@ export function setInstalledVersion(version: string): void {
     localStorage.setItem(VERSION_STORAGE_KEY, version);
   } catch (e) {
     console.warn('Failed to save installed version in localStorage:', e);
+  }
+}
+
+/**
+ * Get previously installed version before the last manual update (if any)
+ */
+export function getPreviousVersion(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = localStorage.getItem(PREVIOUS_VERSION_STORAGE_KEY);
+    return stored && stored.trim().length > 0 ? stored.trim() : null;
+  } catch {
+    return null;
   }
 }
 
@@ -150,6 +172,10 @@ export async function applyAppUpdate(newVersion?: string): Promise<void> {
     localStorage.removeItem(SIMULATED_VERSION_KEY);
 
     if (newVersion) {
+      const prevInstalled = getInstalledVersion();
+      if (prevInstalled && compareVersions(newVersion, prevInstalled) > 0) {
+        localStorage.setItem(PREVIOUS_VERSION_STORAGE_KEY, prevInstalled);
+      }
       setInstalledVersion(newVersion);
     }
 
@@ -195,6 +221,7 @@ export async function applyAppUpdate(newVersion?: string): Promise<void> {
  */
 export function useAppVersion() {
   const [installedVersion, setInstalledVer] = useState<string>(() => getInstalledVersion());
+  const [previousVersion, setPreviousVer] = useState<string | null>(() => getPreviousVersion());
   const [latestVersion, setLatestVer] = useState<string>(() => getInstalledVersion());
   const [hasUpdate, setHasUpdate] = useState<boolean>(false);
   const [isChecking, setIsChecking] = useState<boolean>(false);
@@ -211,6 +238,7 @@ export function useAppVersion() {
       setLatestVer(manifest.version);
       const curInstalled = getInstalledVersion();
       setInstalledVer(curInstalled);
+      setPreviousVer(getPreviousVersion());
 
       const isNewer = compareVersions(manifest.version, curInstalled) > 0;
       setHasUpdate(isNewer);
@@ -263,6 +291,7 @@ export function useAppVersion() {
 
   return {
     installedVersion,
+    previousVersion,
     latestVersion,
     hasUpdate,
     isChecking,

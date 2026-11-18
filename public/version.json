@@ -1,11 +1,105 @@
 {
-  "version": "3.108",
+  "version": "3.109",
   "major": 3,
-  "patch": 108,
+  "patch": 109,
   "releaseDate": "2026-11-18",
-  "title": "Update v3.108: Klarere Tooltips für Callout-Info & Ebenen-Panel",
-  "description": "Hover-Hinweise am Info-Button, im Kontextmenü sowie beim Ein- und Ausblenden der rechten Seitenleiste verweisen jetzt eindeutig auf das Callout-Info & Ebenen-Panel.",
+  "title": "Update v3.109: Vollständiger Änderungsverlauf bei Updates",
+  "description": "„Was ist neu“ zeigt ab sofort alle Änderungen aller Versionen seit deiner installierten Version (mit Scrollbalken auf der linken Seite bei längeren Listen).",
   "changes": [
-    "Tooltip am „Info“-Button, im Kontextmenü („Callout-Info“) sowie beim Ein-/Ausblenden des rechten Seitenpanels auf „Callout-Info & Ebenen-Panel öffnen / einblenden / ausblenden“ präzisiert"
+    "„Was ist neu“ fasst ab sofort sämtliche Änderungen aller übersprungenen Versionen seit deinem letzten Stand zusammen",
+    "Längere Änderungslisten erhalten automatisch einen Scrollbalken auf der linken Seite",
+    "Der vollständige Versionsverlauf bleibt auch nach Abschluss des Updates jederzeit einsehbar"
+  ],
+  "history": [
+    {
+      "version": "3.109",
+      "releaseDate": "2026-11-18",
+      "title": "Vollständiger Änderungsverlauf bei Updates",
+      "changes": [
+        "„Was ist neu“ fasst ab sofort sämtliche Änderungen aller übersprungenen Versionen seit deinem letzten Stand zusammen",
+        "Längere Änderungslisten erhalten automatisch einen Scrollbalken auf der linken Seite",
+        "Der vollständige Versionsverlauf bleibt auch nach Abschluss des Updates jederzeit einsehbar"
+      ]
+    },
+    {
+      "version": "3.108",
+      "releaseDate": "2026-11-18",
+      "title": "Klarere Tooltips für Callout-Info & Ebenen-Panel",
+      "changes": [
+        "Hover-Hinweise am blauen „Info“-Button, im Kontextmenü („Callout-Info“) sowie beim Ein-/Ausblenden des rechten Seitenpanels auf „Callout-Info & Ebenen-Panel öffnen / einblenden / ausblenden“ präzisiert"
+      ]
+    },
+    {
+      "version": "3.107",
+      "releaseDate": "2026-11-18",
+      "title": "Spürbar sanftere Einblend-Animationen",
+      "changes": [
+        "Eigene CSS-Keyframes für weiches Einblenden von Kontextmenü, Untermenü, Auswahl-Dialogen (Verschieben, Bereich erstellen, Löschen) und Kurzhilfe-Toast"
+      ]
+    },
+    {
+      "version": "3.106",
+      "releaseDate": "2026-11-18",
+      "title": "Kontextmenü-Details, Unbenannte Zonen & Kurzhilfe-Toast",
+      "changes": [
+        "„Gruppe“-Badge im Kontextmenü wird nur noch angezeigt, wenn wirklich eine Gruppe vorliegt",
+        "Unbenannte Zonen (nach „Nur Callout entfernen“) erhalten ein zentriertes Griff-Symbol im Edit-Modus und sind in Listen auffind- & durchsuchbar",
+        "Kontextmenü um „Callout-Info“ sowie einen Farbpunkt mit aktiver Farbvorschau unter „Farbe ändern“ ergänzt",
+        "Automatische Kurzhilfe-Toasts nach Direkt-Aktionen (Rechteck, Polygon, Verschieben, Entfernen)"
+      ]
+    },
+    {
+      "version": "3.105",
+      "releaseDate": "2026-11-18",
+      "title": "Verschiebemodus, Löschen-Auswahl & Mobile-Feinschliff",
+      "changes": [
+        "Verschiebemodus um dritte Option „Beides zusammen“ erweitert & aktives Ziel mit dünnem gestricheltem Rahmen hervorgehoben",
+        "Direkt-Aktion „Bereich entfernen“ im Kontextmenü sowie Auswahl-Dialog beim Löschen (nur Bereich, nur Callout oder beides)",
+        "Schnelle Tastenkürzel (Enter = Fertig/Verbinden, Esc = Abbrechen) und präzise Touch-Zielhilfe beim Linien-Zeichnen sowie optimierte mobile Auswahlleiste"
+      ]
+    },
+    {
+      "version": "3.104",
+      "releaseDate": "2026-11-17",
+      "title": "Direkter Verschieben-Knopf & Hilfe-Update",
+      "changes": [
+        "Zusätzlicher Knopf zum direkten Verschieben des ausgewählten Callouts oder Bereichs",
+        "Hilfe-Dokumentation entsprechend aktualisiert"
+      ]
+    },
+    {
+      "version": "3.103",
+      "releaseDate": "2026-11-17",
+      "title": "Intelligenter Verschiebemodus & Neuer Bereich",
+      "changes": [
+        "Verschiebemodus fragt gezielt nach (Callout vs. Bereich), wenn beides vorhanden ist – sonst automatische Auswahl",
+        "Button „Neuen Bereich erstellen“ mit Auswahl zwischen Rechteck und Linien zeichnen sowie Erklärung in der Hilfe"
+      ]
+    },
+    {
+      "version": "3.102",
+      "releaseDate": "2026-11-17",
+      "title": "Automatische Bildkomprimierung & Cloud-Sync-Hinweis",
+      "changes": [
+        "Automatische Größenprüfung & Schutz der Bildqualität beim Hochladen inkl. Warnung",
+        "Gekürzter Cloud-Sync-Hinweis zum 1-MB-Firestore-Limit"
+      ]
+    },
+    {
+      "version": "3.101",
+      "releaseDate": "2026-11-16",
+      "title": "Cloud-Sync & Karten-Stabilität",
+      "changes": [
+        "Verbesserte Synchronisation und Speicherung benutzerdefinierter Karten"
+      ]
+    },
+    {
+      "version": "3.100",
+      "releaseDate": "2026-11-16",
+      "title": "Taktik-Board & Callout-Feinschliff",
+      "changes": [
+        "Optimierte Interaktion im Taktik-Editor, Auswahlleiste und Callout-Verwaltung"
+      ]
+    }
   ]
 }
