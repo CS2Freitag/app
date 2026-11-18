@@ -5,19 +5,25 @@ import {
   Globe,
   Upload,
   Download,
-  Trash2,
   FolderOpen,
   RefreshCw,
   CheckCircle2,
   AlertCircle,
-  HelpCircle,
   FileCode,
   FolderTree,
   Sparkles,
-  Gamepad2,
+  ChevronDown,
+  ChevronUp,
+  Monitor,
+  Unlink,
+  Clock,
+  Check,
 } from 'lucide-react';
-import { MapData, Language, Theme } from '../types';
-import { usePWAInstall } from '../hooks/usePWAInstall';
+import { MapData, Language } from '../types';
+import {
+  useAppVersion,
+  compareVersions,
+} from '../services/versionService';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -77,16 +83,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onDisconnectFileLocation,
 }) => {
   const isDe = lang === 'de';
-  const { isInstallable, isInstalled, isIOS, isInIframe, install } = usePWAInstall();
 
+  // Version management hook
+  const {
+    installedVersion,
+    previousVersion,
+    latestVersion,
+    hasUpdate,
+    isChecking,
+    versionManifest,
+    checkMessage,
+    checkForUpdates,
+    applyUpdateNow,
+  } = useAppVersion();
+
+  const [showChangelog, setShowChangelog] = useState<boolean>(false);
+  const [isUpdating, setIsUpdating] = useState<boolean>(false);
   const [selectedMapToExportId, setSelectedMapToExportId] = useState<string>(
     maps[0]?.id || ''
   );
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showResetModal, setShowResetModal] = useState<boolean>(false);
-  const [showInstallGuide, setShowInstallGuide] = useState<boolean>(false);
-  const [showUploadConflict, setShowUploadConflict] = useState<boolean>(false);
   const [showDownloadConfirm, setShowDownloadConfirm] = useState<boolean>(false);
   const [isCheckingUploadConflict, setIsCheckingUploadConflict] = useState<boolean>(false);
 
@@ -108,6 +126,72 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setSuccessMsg(null);
       setErrorMsg(null);
     }, 4000);
+  };
+
+  const handlePerformUpdate = async () => {
+    setIsUpdating(true);
+    try {
+      await applyUpdateNow();
+    } catch (e) {
+      setIsUpdating(false);
+      showNotification(isDe ? 'Fehler beim Durchführen des Updates.' : 'Failed to apply update.', true);
+    }
+  };
+
+  const handleDownloadWindowsLauncher = () => {
+    try {
+      const currentUrl = typeof window !== 'undefined' ? window.location.href : 'https://ais-pre-mkiapnqfs3whcrnq7ubhwi-408525611466.europe-west3.run.app/';
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://ais-pre-mkiapnqfs3whcrnq7ubhwi-408525611466.europe-west3.run.app';
+      const iconUrl = `${origin}/favicon.ico`;
+
+      const batContent = `@echo off\r\n` +
+        `title CS2Freitag Tactical PWA Launcher\r\n` +
+        `color 0B\r\n` +
+        `set "URL=${currentUrl}"\r\n` +
+        `set "ICON_URL=${iconUrl}"\r\n` +
+        `set "DIR=%USERPROFILE%\\AppData\\Local\\CS2Freitag"\r\n` +
+        `if not exist "%DIR%" mkdir "%DIR%"\r\n` +
+        `if not "%~dp0"=="%DIR%\\" (\r\n` +
+        `    copy /y "%~f0" "%DIR%\\CS2Freitag-App.bat" >nul\r\n` +
+        `)\r\n` +
+        `set "BAT_PATH=%DIR%\\CS2Freitag-App.bat"\r\n` +
+        `set "ICO_PATH=%DIR%\\favicon.ico"\r\n` +
+        `\r\n` +
+        `powershell -NoProfile -ExecutionPolicy Bypass -Command ^\r\n` +
+        `  "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^\r\n` +
+        `  "if (-not (Test-Path '%ICO_PATH%')) { try { (New-Object System.Net.WebClient).DownloadFile('%ICON_URL%', '%ICO_PATH%') } catch {} };" ^\r\n` +
+        `  "$ws = New-Object -ComObject WScript.Shell;" ^\r\n` +
+        `  "$desktop = [Environment]::GetFolderPath('Desktop');" ^\r\n` +
+        `  "$scPath = Join-Path $desktop 'CS2Freitag.lnk';" ^\r\n` +
+        `  "$sc = $ws.CreateShortcut($scPath);" ^\r\n` +
+        `  "$sc.TargetPath = '%BAT_PATH%';" ^\r\n` +
+        `  "$sc.WorkingDirectory = '%DIR%';" ^\r\n` +
+        `  "if ((Test-Path '%ICO_PATH%') -and (Get-Item '%ICO_PATH%').Length -gt 100) { $sc.IconLocation = '%ICO_PATH%,0' };" ^\r\n` +
+        `  "$sc.Description = 'CS2Freitag Tactical PWA';" ^\r\n` +
+        `  "$sc.Save();"\r\n` +
+        `\r\n` +
+        `cls\r\n` +
+        `echo ========================================================\r\n` +
+        `echo   CS2Freitag - Counter-Strike 2 Tactical PWA\r\n` +
+        `echo ========================================================\r\n` +
+        `echo Starte App-Fenster...\r\n` +
+        `start msedge --app="%URL%" 2>nul || start chrome --app="%URL%" 2>nul || start "" "%URL%"\r\n` +
+        `exit\r\n`;
+
+      const blob = new Blob([batContent], { type: 'application/x-bat' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'CS2Freitag-App.bat';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showNotification(isDe ? 'Windows-Starter (CS2Freitag-App.bat) heruntergeladen!' : 'Windows launcher downloaded!');
+    } catch (e) {
+      console.warn('Download error:', e);
+      showNotification(isDe ? 'Fehler beim Herunterladen des Windows-Starters.' : 'Failed to download launcher.', true);
+    }
   };
 
   const handleTriggerUpload = async () => {
@@ -160,6 +244,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
+  // Determine changelog entries to display
+  const allVersionHistory = versionManifest?.history || [];
+  const pendingChangelogEntries = allVersionHistory.filter((entry) => {
+    return (
+      compareVersions(entry.version, installedVersion) > 0 &&
+      compareVersions(entry.version, latestVersion) <= 0
+    );
+  });
+
+  const updatedChangelogEntries = allVersionHistory.filter((entry) => {
+    if (!previousVersion) return entry.version === installedVersion;
+    return (
+      compareVersions(entry.version, previousVersion) > 0 &&
+      compareVersions(entry.version, installedVersion) <= 0
+    );
+  });
+
+  const displayedChangelogEntries = hasUpdate
+    ? pendingChangelogEntries.length > 0
+      ? pendingChangelogEntries
+      : versionManifest?.changes
+      ? [{ version: latestVersion, releaseDate: versionManifest.releaseDate, title: versionManifest.title, changes: versionManifest.changes }]
+      : []
+    : updatedChangelogEntries.length > 0
+    ? updatedChangelogEntries
+    : allVersionHistory.slice(0, 3);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 overflow-y-auto print:hidden">
       <div className="w-full max-w-xl rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl text-zinc-100 max-h-[90vh] overflow-y-auto">
@@ -188,6 +299,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
         </div>
 
+        {/* Notifications */}
         {successMsg && (
           <div className="mb-4 flex items-center gap-2 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs font-semibold animate-in fade-in-50">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -228,14 +340,197 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         />
 
         <div className="space-y-5 text-xs">
-          {/* 1. LOKALE DATEN & DATEISYSTEM-VERKNÜPFUNG (AUTOSAVE) */}
+          {/* 0. APP-VERSION & MANUELLE UPDATE-STEUERUNG */}
+          <div className="p-4 rounded-xl bg-zinc-950/70 border border-zinc-800 space-y-3.5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 font-mono uppercase font-bold text-zinc-300">
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                <span>{isDe ? 'App-Version & Updates' : 'App Version & Updates'}</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-300 font-bold">
+                  v{installedVersion}
+                </span>
+
+                {hasUpdate ? (
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold animate-pulse">
+                    ⚡ {isDe ? `Update v${latestVersion} verfügbar` : `Update v${latestVersion} available`}
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold">
+                    ✓ {isDe ? 'Aktuell' : 'Up to date'}
+                  </span>
+                )}
+
+                <button
+                  onClick={() => checkForUpdates(true)}
+                  disabled={isChecking}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white font-medium transition-colors cursor-pointer text-[11px] disabled:opacity-50"
+                  title={isDe ? 'Auf dem Server nach neuen Versionen suchen' : 'Check server for new versions'}
+                >
+                  <RefreshCw className={`w-3 h-3 text-sky-400 ${isChecking ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">{isDe ? 'Prüfen' : 'Check'}</span>
+                </button>
+              </div>
+            </div>
+
+            {checkMessage && (
+              <div className="p-2.5 rounded-lg bg-sky-500/10 border border-sky-500/30 text-[11px] text-sky-300 flex items-center gap-2">
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-sky-400" />
+                <span>{checkMessage}</span>
+              </div>
+            )}
+
+            {hasUpdate ? (
+              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  <div>
+                    <h4 className="font-bold text-amber-300 text-xs flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>{isDe ? `Neues Update v${latestVersion} ist bereit!` : `New update v${latestVersion} is ready!`}</span>
+                    </h4>
+                    <p className="text-[11px] text-zinc-300 mt-0.5">
+                      {isDe
+                        ? 'Deine Karten, Callouts und Einstellungen bleiben beim Update vollständig erhalten.'
+                        : 'Your maps, callouts, and settings will remain fully intact.'}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={handlePerformUpdate}
+                    disabled={isUpdating}
+                    className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black text-xs transition-all shadow-md cursor-pointer disabled:opacity-50 shrink-0"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isUpdating ? 'animate-spin' : ''}`} />
+                    <span>{isUpdating ? (isDe ? 'Aktualisiere...' : 'Updating...') : (isDe ? 'Update durchführen' : 'Update Now')}</span>
+                  </button>
+                </div>
+
+                <div className="pt-1">
+                  <button
+                    onClick={() => setShowChangelog((prev) => !prev)}
+                    className="flex items-center gap-1.5 text-xs text-amber-300/90 hover:text-amber-200 font-semibold cursor-pointer"
+                  >
+                    {showChangelog ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    <span>
+                      {isDe
+                        ? `Neuerungen ansehen (v${installedVersion} → v${latestVersion})`
+                        : `View changelog (v${installedVersion} → v${latestVersion})`}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between pt-0.5">
+                <span className="text-[11px] text-zinc-400">
+                  {isDe
+                    ? `Installierte Version: v${installedVersion}. Die App ist auf dem neuesten Stand.`
+                    : `Installed version: v${installedVersion}. The app is up to date.`}
+                </span>
+                <button
+                  onClick={() => setShowChangelog((prev) => !prev)}
+                  className="flex items-center gap-1 text-[11px] text-zinc-400 hover:text-zinc-200 font-semibold cursor-pointer"
+                >
+                  {showChangelog ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  <span>{isDe ? 'Was ist neu' : 'What is new'}</span>
+                </button>
+              </div>
+            )}
+
+            {/* Changelog Accordion */}
+            {showChangelog && (
+              <div className="p-3 rounded-xl bg-zinc-950/90 border border-zinc-800 space-y-3.5 animate-in fade-in-50">
+                <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+                  <span className="font-mono text-[11px] uppercase font-bold text-zinc-300">
+                    {hasUpdate
+                      ? isDe ? `Neuerungen (Update auf v${latestVersion}):` : `Changes in v${latestVersion}:`
+                      : previousVersion
+                      ? isDe ? `Alle Neuerungen (Update von v${previousVersion} auf v${installedVersion}):` : `Changes from v${previousVersion} to v${installedVersion}:`
+                      : isDe ? `Versionsverlauf (v${installedVersion}):` : `Version history (v${installedVersion}):`}
+                  </span>
+                  <span className="text-[10px] text-zinc-500 font-mono">
+                    {displayedChangelogEntries.length} {isDe ? 'Version(en)' : 'Version(s)'}
+                  </span>
+                </div>
+
+                <div className="max-h-56 overflow-y-auto pr-2 scrollbar-left space-y-3.5 text-[11px]">
+                  {displayedChangelogEntries.length > 0 ? (
+                    displayedChangelogEntries.map((entry, idx) => (
+                      <div key={entry.version || idx} className="space-y-1.5 pb-2 border-b border-zinc-800/40 last:border-0 last:pb-0">
+                        <div className="flex items-center gap-2">
+                          <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono text-[10px] font-bold">
+                            v{entry.version}
+                          </span>
+                          {entry.title && (
+                            <span className="font-semibold text-zinc-200">
+                              {entry.title}
+                            </span>
+                          )}
+                          {entry.releaseDate && (
+                            <span className="text-[10px] text-zinc-500 ml-auto font-mono">
+                              {entry.releaseDate}
+                            </span>
+                          )}
+                        </div>
+                        {entry.changes && entry.changes.length > 0 && (
+                          <ul className="list-disc list-inside text-zinc-400 space-y-1 pl-1 text-[11px]">
+                            {entry.changes.map((change, cIdx) => (
+                              <li key={cIdx} className="leading-relaxed">
+                                {change}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-zinc-500 text-xs italic">
+                      {isDe ? 'Keine Versionsdetails hinterlegt.' : 'No version details available.'}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 1. AUTOMATISCHE SPEICHERUNG & LOKALE DATEISYSTEM-VERKNÜPFUNG (AUTOSAVE) */}
           <div className="p-4 rounded-xl bg-zinc-950/70 border border-zinc-800 space-y-3.5 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 font-mono uppercase font-bold text-zinc-300">
                 <FolderOpen className="w-4 h-4 text-amber-400" />
-                <span>{isDe ? 'Lokale Datei & Autosave' : 'Local File & Autosave'}</span>
+                <span>{isDe ? 'Automatische Speicherung & Lokale Datei' : 'Autosave & Local File'}</span>
               </div>
-              <div className="flex items-center gap-1.5">
+
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-semibold text-zinc-300 hidden sm:inline">
+                  {isDe ? 'Autosave aktiv' : 'Autosave active'}
+                </span>
+                <span className={`text-[10px] font-mono font-bold uppercase ${isAutosaveEnabled ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                  {isAutosaveEnabled ? (isDe ? 'Aktiviert' : 'Active') : (isDe ? 'Deaktiviert' : 'Disabled')}
+                </span>
+                <button
+                  type="button"
+                  onClick={onToggleAutosave}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    isAutosaveEnabled ? 'bg-emerald-500' : 'bg-zinc-700'
+                  }`}
+                  role="switch"
+                  aria-checked={isAutosaveEnabled}
+                  title={isDe ? 'Autosave ein- oder ausschalten' : 'Toggle autosave'}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                      isAutosaveEnabled ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+
+            {/* Status row: linked file & timestamp */}
+            <div className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-zinc-900/80 border border-zinc-800">
+              <div className="flex items-center gap-2">
                 <span className={`text-[10px] font-mono px-2 py-0.5 rounded border font-bold ${
                   connectedFileName
                     ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
@@ -245,13 +540,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     ? (isDe ? `Verknüpft: ${connectedFileName}` : `Linked: ${connectedFileName}`)
                     : (isDe ? 'Keine Datei verknüpft' : 'No file linked')}
                 </span>
+
+                {connectedFileName && onDisconnectFileLocation && (
+                  <button
+                    onClick={async () => {
+                      await onDisconnectFileLocation();
+                      showNotification(isDe ? 'Dateiverknüpfung getrennt.' : 'File unlinked.');
+                    }}
+                    className="flex items-center gap-1 text-[10px] text-zinc-400 hover:text-rose-400 font-semibold cursor-pointer"
+                    title={isDe ? 'Dateiverknüpfung aufheben' : 'Unlink file'}
+                  >
+                    <Unlink className="w-3 h-3" />
+                    <span>{isDe ? 'Trennen' : 'Unlink'}</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1.5 text-[10px] text-zinc-400">
+                <Clock className="w-3 h-3 text-zinc-500" />
+                <span>
+                  {lastAutosaveTs
+                    ? isDe
+                      ? `Zuletzt gespeichert: ${new Date(lastAutosaveTs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
+                      : `Last saved: ${new Date(lastAutosaveTs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
+                    : isDe
+                    ? 'Noch kein Autosave in dieser Sitzung'
+                    : 'No autosave yet this session'}
+                </span>
               </div>
             </div>
 
             <p className="text-[11px] text-zinc-400 leading-relaxed">
               {isDe
-                ? 'Verknüpfe eine lokale Backup-Datei auf deinem PC oder Tablet, damit alle Änderungen direkt in diese Datei geschrieben werden. Alternativ sichert Autosave deine Daten im Browser-Speicher.'
-                : 'Link a local backup file on your PC or tablet so changes write directly into it. Alternatively, Autosave keeps data safe in browser storage.'}
+                ? 'Verknüpfe eine lokale Backup-Datei auf deinem PC oder Tablet, damit alle Änderungen direkt in diese Datei geschrieben werden. Alternativ sichert Autosave deine Daten lückenlos im Browser-Speicher dieses Geräts.'
+                : 'Link a local backup file on your PC or tablet so changes write directly into it. Alternatively, Autosave keeps data safe in offline browser storage.'}
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
@@ -305,6 +627,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               >
                 <RefreshCw className="w-3.5 h-3.5 shrink-0 text-sky-400" />
                 <span>{isDe ? '🔄 Aus Datei laden' : '🔄 Load File'}</span>
+              </button>
+            </div>
+
+            {/* Windows Launcher Download */}
+            <div className="pt-1">
+              <button
+                onClick={handleDownloadWindowsLauncher}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white font-semibold transition-all shadow-xs cursor-pointer text-xs"
+                title={isDe ? 'Erstellt ein Desktop-Icon und startet CS2Freitag als eigenständige App im rahmenlosen Vollfenster (Edge/Chrome PWA)' : 'Creates a desktop shortcut and starts CS2Freitag as standalone PWA app'}
+              >
+                <Monitor className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>{isDe ? 'Windows-App-Starter (.bat) herunterladen' : 'Download Windows Launcher (.bat)'}</span>
               </button>
             </div>
 

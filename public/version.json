@@ -1,16 +1,26 @@
 {
-  "version": "3.113",
+  "version": "3.114",
   "major": 3,
-  "patch": 113,
+  "patch": 114,
   "releaseDate": "2026-11-18",
-  "title": "Update v3.113: Status-Icons im mobilen Header optimiert",
-  "description": "Die Status-Icons (Cloud, App, Version) wurden auf Mobilgeräten ganz nach oben direkt neben den Titel CS2Freitag gesetzt, sodass keine Zeile mehr umbricht.",
+  "title": "Update v3.114: Einstellungen vollständig wiederhergestellt",
+  "description": "Die Steuerungen für App-Version, Updates, Changelog sowie die automatische Speicherung (Autosave-Schalter, Zeitstempel, Dateiverknüpfung und Windows-Launcher) wurden in den Einstellungen vollständig wiederhergestellt. Quiz und Hilfe bleiben separat in der oberen Leiste.",
   "changes": [
-    "Status-Symbole (Cloud-Sync, App-Status, Version) auf Mobilgeräten direkt neben „CS2Freitag“ platziert",
-    "Zeilenumbruch auf Smartphones verhindert – Karten- und Callout-Zähler stehen nun aufgeräumt darunter",
-    "Button-Abstände im Header für Smartphones optimiert"
+    "App-Version & Manuelle Update-Steuerung mit Versionsverlauf und Update-Prüfung in den Einstellungen wiederhergestellt",
+    "Automatische Speicherung mit Ein-/Ausschalter, Speicher-Zeitstempel, Dateiverknüpfung und Windows-Launcher-Download wiederhergestellt",
+    "Quiz und Hilfe verbleiben direkt links neben den Einstellungen in der oberen Menüleiste"
   ],
   "history": [
+    {
+      "version": "3.114",
+      "releaseDate": "2026-11-18",
+      "title": "Einstellungen vollständig wiederhergestellt",
+      "changes": [
+        "App-Version & Manuelle Update-Steuerung mit Versionsverlauf und Update-Prüfung in den Einstellungen wiederhergestellt",
+        "Automatische Speicherung mit Ein-/Ausschalter, Speicher-Zeitstempel, Dateiverknüpfung und Windows-Launcher-Download wiederhergestellt",
+        "Quiz und Hilfe verbleiben direkt links neben den Einstellungen in der oberen Menüleiste"
+      ]
+    },
     {
       "version": "3.113",
       "releaseDate": "2026-11-18",
