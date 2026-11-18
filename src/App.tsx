@@ -272,8 +272,11 @@ export default function App() {
               saveLanguage(cloudSettings.lang);
             }
             if (Array.isArray(cloudSettings.favorites)) {
-              setFavorites(cloudSettings.favorites);
-              saveFavorites(cloudSettings.favorites);
+              const localFavs = loadFavorites();
+              const mergedFavs = Array.from(new Set([...localFavs, ...cloudSettings.favorites]));
+              setFavorites(mergedFavs);
+              saveFavorites(mergedFavs);
+              syncUserSettings(u.uid, { theme, lang, favorites: mergedFavs }).catch(() => {});
             }
           }
 
@@ -301,8 +304,11 @@ export default function App() {
               saveLanguage(cloudSettings.lang);
             }
             if (Array.isArray(cloudSettings.favorites)) {
-              setFavorites(cloudSettings.favorites);
-              saveFavorites(cloudSettings.favorites);
+              const localFavs = loadFavorites();
+              const mergedFavs = Array.from(new Set([...localFavs, ...cloudSettings.favorites]));
+              setFavorites(mergedFavs);
+              saveFavorites(mergedFavs);
+              syncUserSettings(res.user.uid, { theme, lang, favorites: mergedFavs }).catch(() => {});
             }
           }
           if (cloudMaps && cloudMaps.length > 0) {
@@ -362,10 +368,14 @@ export default function App() {
       if (cloudSettings) {
         setTheme(cloudSettings.theme);
         setLang(cloudSettings.lang);
-        setFavorites(cloudSettings.favorites);
         saveTheme(cloudSettings.theme);
         saveLanguage(cloudSettings.lang);
-        saveFavorites(cloudSettings.favorites);
+        if (Array.isArray(cloudSettings.favorites)) {
+          const localFavs = loadFavorites();
+          const mergedFavs = Array.from(new Set([...localFavs, ...cloudSettings.favorites]));
+          setFavorites(mergedFavs);
+          saveFavorites(mergedFavs);
+        }
       }
 
       if (cloudMaps && cloudMaps.length > 0) {
@@ -402,6 +412,11 @@ export default function App() {
     setFavorites((prev) => {
       const next = prev.includes(mapId) ? prev.filter((id) => id !== mapId) : [...prev, mapId];
       saveFavorites(next);
+      if (user) {
+        syncUserSettings(user.uid, { theme, lang, favorites: next }).catch((err) =>
+          console.warn('Failed to sync favorites to cloud:', err)
+        );
+      }
       return next;
     });
   };
@@ -1045,6 +1060,11 @@ export default function App() {
   const handleReorderFavorites = (newFavoriteIds: string[]) => {
     setFavorites(newFavoriteIds);
     saveFavorites(newFavoriteIds);
+    if (user) {
+      syncUserSettings(user.uid, { theme, lang, favorites: newFavoriteIds }).catch((err) =>
+        console.warn('Failed to sync favorites reorder to cloud:', err)
+      );
+    }
   };
 
   // Compute favorite maps in user-defined order
