@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   X,
   HelpCircle,
@@ -19,6 +19,9 @@ import {
   SquarePlus,
   Square,
   PenTool,
+  Monitor,
+  ExternalLink,
+  AlertTriangle,
 } from 'lucide-react';
 import { Language } from '../types';
 import { resolveAssetPath } from '../utils/assets';
@@ -28,12 +31,42 @@ interface HelpDocsModalProps {
   isOpen: boolean;
   onClose: () => void;
   lang: Language;
+  initialSection?: 'top' | 'installation';
 }
 
-export const HelpDocsModal: React.FC<HelpDocsModalProps> = ({ isOpen, onClose, lang }) => {
-  if (!isOpen) return null;
+export const HelpDocsModal: React.FC<HelpDocsModalProps> = ({
+  isOpen,
+  onClose,
+  lang,
+  initialSection = 'top',
+}) => {
   const isDe = lang === 'de';
   const [enlargedImage, setEnlargedImage] = useState<{ src: string; title: string; subtitle: string } | null>(null);
+  const installationSectionRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (initialSection === 'installation') {
+      const scrollToInstallation = () => {
+        if (installationSectionRef.current) {
+          installationSectionRef.current.scrollIntoView({ behavior: 'auto', block: 'start' });
+        } else if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+        }
+      };
+      const rafId = window.requestAnimationFrame(scrollToInstallation);
+      const timer = window.setTimeout(scrollToInstallation, 80);
+      return () => {
+        window.cancelAnimationFrame(rafId);
+        window.clearTimeout(timer);
+      };
+    } else if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
+  }, [isOpen, initialSection]);
+
+  if (!isOpen) return null;
 
   const galleryImages = [
     {
@@ -93,6 +126,7 @@ export const HelpDocsModal: React.FC<HelpDocsModalProps> = ({ isOpen, onClose, l
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 print:hidden animate-in fade-in"
       >
         <div
+          ref={scrollContainerRef}
           onClick={(e) => e.stopPropagation()}
           className="w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-2xl border border-zinc-700 bg-zinc-900 p-4 sm:p-6 shadow-2xl text-zinc-100 space-y-5"
         >
@@ -571,6 +605,116 @@ export const HelpDocsModal: React.FC<HelpDocsModalProps> = ({ isOpen, onClose, l
                         : 'Use the top bar to switch between Callout, Area, and Both at any time. Press Enter or Esc to exit Move Mode immediately.'}
                     </li>
                   </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* 11. Installation, Firefox & Lokale Backup-Datei */}
+            <div
+              id="help-installation-section"
+              ref={installationSectionRef}
+              className="p-3.5 rounded-xl bg-zinc-950/80 border border-amber-500/35 space-y-3 scroll-mt-4"
+            >
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 font-bold text-amber-400 text-sm">
+                  <Monitor className="w-4 h-4 shrink-0" />
+                  <span>
+                    {isDe
+                      ? '11. Installation, Firefox & Lokale Backup-Datei'
+                      : '11. Installation, Firefox & Local Backup File'}
+                  </span>
+                </div>
+                <span className="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 font-mono text-[10px] font-bold">
+                  {isDe ? 'Firefox · Lesezeichenleiste · PWA · iOS' : 'Firefox · Bookmarks Bar · PWA · iOS'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-[11px]">
+                <div className="p-2.5 rounded-lg bg-zinc-900/70 border border-zinc-800/80 space-y-2">
+                  <div className="font-bold text-amber-300">
+                    {isDe
+                      ? 'CS2Freitag in Firefox nutzen & installieren'
+                      : 'Using & Installing CS2Freitag in Firefox'}
+                  </div>
+                  <p className="text-zinc-300 leading-relaxed">
+                    {isDe
+                      ? 'Firefox unterstützt am PC keine native PWA-Installation direkt ab Werk, weil die Browser-Schnittstelle für „App installieren“ dort anders bzw. nicht eingebaut ist. So nutzt du CS2Freitag trotzdem bequem:'
+                      : 'Firefox on desktop does not offer a built-in native PWA install button out of the box. You can still use CS2Freitag comfortably in three ways:'}
+                  </p>
+                  <ul className="space-y-1.5 text-zinc-400 list-disc pl-4 leading-relaxed">
+                    <li>
+                      <strong className="text-zinc-200">
+                        {isDe ? 'In Lesezeichenleiste (ohne Erweiterung):' : 'Bookmarks Toolbar (no extension):'}
+                      </strong>{' '}
+                      {isDe
+                        ? 'Drücke Strg + D (Mac: Cmd + D) oder ziehe das Schloss-/URL-Symbol links oben direkt in deine Firefox-Lesezeichenleiste („Lesezeichen-Symbolleiste“), um die App mit einem Klick zu starten.'
+                        : 'Press Ctrl + D (Mac: Cmd + D) or drag the URL bar icon into your Firefox Bookmarks Toolbar for instant 1-click launch.'}
+                    </li>
+                    <li>
+                      <strong className="text-zinc-200">
+                        {isDe ? 'Als echte Desktop-App (Erweiterung):' : 'As a Desktop App (Extension):'}
+                      </strong>{' '}
+                      {isDe
+                        ? 'Mit dem Add-on „PWAs for Firefox“ (inkl. zugehörigem Hilfsprogramm) kannst du CS2Freitag auch unter Firefox als eigenständige App mit eigenem Fenster und Desktop-Symbol installieren:'
+                        : 'With the "PWAs for Firefox" extension (plus its companion runtime), you can install CS2Freitag as a standalone window & desktop shortcut in Firefox:'}
+                      <div className="mt-1">
+                        <a
+                          href="https://addons.mozilla.org/de/firefox/addon/pwas-for-firefox/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-sky-400 hover:text-sky-300 font-semibold underline decoration-sky-500/50 underline-offset-2"
+                        >
+                          <span>PWAs for Firefox (Mozilla Add-ons)</span>
+                          <ExternalLink className="w-3 h-3 shrink-0" />
+                        </a>
+                      </div>
+                    </li>
+                    <li>
+                      <strong className="text-zinc-200">
+                        {isDe ? 'Firefox auf Android:' : 'Firefox on Android:'}
+                      </strong>{' '}
+                      {isDe
+                        ? 'Tippe rechts auf das Drei-Punkte-Menü (⋮) und wähle „App installieren“ bzw. „Zum Startbildschirm hinzufügen“.'
+                        : 'Tap the three-dot menu (⋮) and choose "Install" or "Add to Home screen".'}
+                    </li>
+                    <li>
+                      <strong className="text-zinc-200">
+                        {isDe ? 'Alternative (Chrome, Edge, iOS, .bat):' : 'Alternatives (Chrome, Edge, iOS, .bat):'}
+                      </strong>{' '}
+                      {isDe
+                        ? 'In Chrome/Edge erscheint das Install-Symbol direkt in der Adressleiste (oder nutze den „Windows-App-Starter (.bat)“ in den Einstellungen). Auf iPhone/iPad (Safari) wähle Teilen → „Zum Home-Bildschirm“.'
+                        : 'In Chrome/Edge click the install icon in the address bar (or use the Windows .bat launcher in Settings). On iPhone/iPad (Safari) tap Share → "Add to Home Screen".'}
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-zinc-900/70 border border-rose-500/30 space-y-2">
+                  <div className="flex items-center gap-1.5 font-bold text-rose-300">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    <span>
+                      {isDe
+                        ? 'Warum „Lokale Backup-Datei“ in Firefox & iOS Safari nicht funktioniert'
+                        : 'Why "Local Backup File" does not work in Firefox & iOS Safari'}
+                    </span>
+                  </div>
+                  <p className="text-zinc-300 leading-relaxed">
+                    {isDe
+                      ? 'Die Funktion „Lokale Backup-Datei“ (Datei verknüpfen & direkt hineinschreiben) funktioniert in Firefox und Apple iOS Safari nicht.'
+                      : 'The "Local Backup File" feature (linking and writing directly to a file on disk) does not work in Firefox or Apple iOS Safari.'}
+                  </p>
+                  <p className="text-zinc-400 leading-relaxed">
+                    {isDe
+                      ? 'Der Grund ist eine technische Einschränkung dieser Browser: Sowohl Firefox als auch Safari auf iPhone/iPad erlauben Webseiten aus Sicherheitsgründen keinen direkten Lese- und Schreibzugriff auf eine ausgewählte Datei auf deinem Gerät (die sogenannte File-System-Access-Schnittstelle fehlt dort).'
+                      : 'The reason is a browser restriction: both Firefox and Safari on iOS block websites from directly reading and writing files on your device (the File System Access API is unavailable there).'}
+                  </p>
+                  <div className="p-2 rounded bg-zinc-950/80 border border-zinc-800 text-zinc-300 leading-relaxed">
+                    <strong className="text-emerald-300">
+                      {isDe ? 'So bleiben deine Daten trotzdem sicher:' : 'How to keep your data safe anyway:'}
+                    </strong>{' '}
+                    {isDe
+                      ? 'Autosave sichert alle Änderungen automatisch im geschützten Offline-Speicher des Browsers (solange keine Browserdaten gelöscht werden). Für externe Sicherungen oder den Wechsel auf ein anderes Gerät nutze einfach „ZIP exportieren“ / „JSON exportieren“ in den Einstellungen oder die Google Cloud-Synchronisierung.'
+                      : 'Autosave still saves all edits inside your browser’s offline storage (until site data is cleared). For external backups or switching devices, simply use "Export ZIP" / "Export JSON" in Settings or Google Cloud Sync.'}
+                  </div>
                 </div>
               </div>
             </div>

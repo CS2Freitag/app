@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   X,
   Settings as SettingsIcon,
@@ -18,6 +18,8 @@ import {
   Unlink,
   Clock,
   Check,
+  ArrowRight,
+  BookOpen,
 } from 'lucide-react';
 import { MapData, Language } from '../types';
 import {
@@ -32,15 +34,16 @@ interface SettingsModalProps {
   favorites: string[];
   lang: Language;
   onToggleLanguage: () => void;
-  onExportFullBackup: () => void;
+  onExportFullBackup: () => void | Promise<void>;
+  onExportFullBackupJson?: () => void | Promise<void>;
   onImportFullBackup: (fileOrFiles: File | FileList) => void;
   onExportSingleMap: (map: MapData) => void;
   onImportSingleMapFile: (file: File) => void;
   onResetDefaults: () => void;
   currentUser: any;
-  onLogin: () => void;
+  onLogin: () => void | Promise<void>;
   onLogout: () => void;
-  onUploadToCloud: () => void;
+  onUploadToCloud: () => void | Promise<void>;
   onDownloadFromCloud: () => void;
   isAutosaveEnabled?: boolean;
   onToggleAutosave?: () => void;
@@ -52,6 +55,7 @@ interface SettingsModalProps {
   onManualSaveNow?: () => Promise<boolean>;
   onLoadFromFileLocation?: () => Promise<boolean>;
   onDisconnectFileLocation?: () => Promise<void>;
+  onOpenInstallationHelp?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -62,6 +66,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   lang,
   onToggleLanguage,
   onExportFullBackup,
+  onExportFullBackupJson,
   onImportFullBackup,
   onExportSingleMap,
   onImportSingleMapFile,
@@ -81,6 +86,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onManualSaveNow,
   onLoadFromFileLocation,
   onDisconnectFileLocation,
+  onOpenInstallationHelp,
 }) => {
   const isDe = lang === 'de';
 
@@ -105,12 +111,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showResetModal, setShowResetModal] = useState<boolean>(false);
+  const [isBackingUpAndResetting, setIsBackingUpAndResetting] = useState<boolean>(false);
+  const [backupZipBeforeReset, setBackupZipBeforeReset] = useState<boolean>(true);
+  const [backupLocalFileBeforeReset, setBackupLocalFileBeforeReset] = useState<boolean>(true);
+  const [backupCloudBeforeReset, setBackupCloudBeforeReset] = useState<boolean>(Boolean(currentUser));
   const [showDownloadConfirm, setShowDownloadConfirm] = useState<boolean>(false);
   const [isCheckingUploadConflict, setIsCheckingUploadConflict] = useState<boolean>(false);
 
   const fullBackupInputRef = useRef<HTMLInputElement>(null);
   const singleMapInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (showResetModal) {
+      setBackupZipBeforeReset(true);
+      setBackupLocalFileBeforeReset(true);
+      setBackupCloudBeforeReset(Boolean(currentUser));
+    }
+  }, [showResetModal, currentUser]);
 
   if (!isOpen) return null;
 
@@ -198,7 +216,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     if (!currentUser) return;
     setIsCheckingUploadConflict(true);
     try {
-      onUploadToCloud();
+      await onUploadToCloud();
       showNotification(isDe ? 'Daten erfolgreich in die Cloud hochgeladen!' : 'Data uploaded to cloud successfully!');
     } catch (err) {
       showNotification(isDe ? 'Fehler beim Hochladen in die Cloud.' : 'Failed to upload to cloud.', true);
@@ -497,12 +515,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* 1. AUTOMATISCHE SPEICHERUNG & LOKALE DATEISYSTEM-VERKNÜPFUNG (AUTOSAVE) */}
           <div className="p-4 rounded-xl bg-zinc-950/70 border border-zinc-800 space-y-3.5 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2 font-mono uppercase font-bold text-zinc-300">
-                <FolderOpen className="w-4 h-4 text-amber-400" />
+              <div className="flex items-center gap-2 font-mono uppercase font-bold text-zinc-300 min-w-0">
+                <FolderOpen className="w-4 h-4 text-amber-400 shrink-0" />
                 <span>{isDe ? 'Automatische Speicherung & Lokale Datei' : 'Autosave & Local File'}</span>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 ml-auto shrink-0">
                 <span className="text-[11px] font-semibold text-zinc-300 hidden sm:inline">
                   {isDe ? 'Autosave aktiv' : 'Autosave active'}
                 </span>
@@ -642,21 +660,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </button>
             </div>
 
-            <div className="p-2.5 rounded-lg bg-zinc-900/60 border border-zinc-800/80 text-[10px] text-zinc-400 space-y-1">
+            <div className="p-2.5 rounded-lg bg-zinc-900/60 border border-zinc-800/80 text-[10px] text-zinc-400 space-y-1.5">
               <p>
                 <strong className="text-zinc-300">{isDe ? '💡 Hinweis zu PC & Smartphone:' : '💡 Note for PC & Mobile:'}</strong>{' '}
                 {isDe
-                  ? 'Auf PCs und Android (Chrome/Edge) wird die Datei über die Dateisystem-Schnittstelle direkt an deinem gewählten Speicherort aktualisiert. Auf Apple iOS (Safari) oder Browsern ohne direkten Ordnerzugriff sichert Autosave alles lückenlos im Offline-Speicher (PWA Storage) dieses Geräts.'
-                  : 'On PC and Android (Chrome/Edge), files write directly to your chosen folder. On Apple iOS (Safari), Autosave saves in offline PWA storage.'}
+                  ? 'Auf PCs und Android (Chrome/Edge) wird die Datei über die Dateisystem-Schnittstelle direkt an deinem gewählten Speicherort aktualisiert. In Firefox und Apple iOS (Safari) funktioniert „Lokale Backup-Datei“ (direkte Dateiverknüpfung) nicht – dort sichert Autosave im Offline-Speicher (PWA/Browser Storage) des Geräts.'
+                  : 'On PC and Android (Chrome/Edge), files write directly to your chosen folder. "Local Backup File" (direct file linking) does not work in Firefox or Apple iOS (Safari) – Autosave keeps data in offline browser storage there.'}
               </p>
+              {onOpenInstallationHelp && (
+                <button
+                  type="button"
+                  onClick={onOpenInstallationHelp}
+                  className="inline-flex items-center gap-1.5 text-[11px] font-bold text-amber-400 hover:text-amber-300 underline decoration-amber-500/40 underline-offset-2 active:scale-[0.98] transition-all cursor-pointer text-left"
+                >
+                  <BookOpen className="w-3.5 h-3.5 shrink-0" />
+                  <span>
+                    {isDe
+                      ? 'Hilfe zu Firefox (Lesezeichenleiste / App installieren), PWA & lokalen Backups öffnen'
+                      : 'Open Help: Firefox (Bookmarks Bar / Install App), PWA & Local Backups'}
+                  </span>
+                  <ArrowRight className="w-3 h-3 shrink-0" />
+                </button>
+              )}
             </div>
           </div>
 
           {/* 2. CLOUD SYNC */}
           <div className="p-4 rounded-xl bg-zinc-950/70 border border-zinc-800 space-y-3.5 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2 font-mono uppercase font-bold text-zinc-300">
-                <Globe className="w-4 h-4 text-sky-400" />
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2 font-mono uppercase font-bold text-zinc-300 min-w-0">
+                <Globe className="w-4 h-4 text-sky-400 shrink-0" />
                 <span>{isDe ? 'Cloud-Synchronisierung' : 'Cloud Synchronization'}</span>
                 {currentUser ? (
                   isAutoCloudSyncEnabled ? (
@@ -675,28 +708,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-semibold text-zinc-300 hidden sm:inline">
+              <div className="flex items-center justify-between gap-2 pt-0.5">
+                <span className="text-[11px] font-semibold text-zinc-300 text-left">
                   {isDe ? 'Auto-Abgleich beim Anmelden' : 'Auto-Sync on Login'}
                 </span>
-                <span className={`text-[10px] font-mono font-bold uppercase ${isAutoCloudSyncEnabled ? 'text-sky-400' : 'text-zinc-500'}`}>
-                  {isAutoCloudSyncEnabled ? (isDe ? 'Aktiviert' : 'Active') : (isDe ? 'Deaktiviert' : 'Disabled')}
-                </span>
-                <button
-                  type="button"
-                  onClick={onToggleAutoCloudSync}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                    isAutoCloudSyncEnabled ? 'bg-sky-500' : 'bg-zinc-700'
-                  }`}
-                  role="switch"
-                  aria-checked={isAutoCloudSyncEnabled}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                      isAutoCloudSyncEnabled ? 'translate-x-5' : 'translate-x-0'
+                <div className="flex items-center gap-2 ml-auto shrink-0">
+                  <span className={`text-[10px] font-mono font-bold uppercase ${isAutoCloudSyncEnabled ? 'text-sky-400' : 'text-zinc-500'}`}>
+                    {isAutoCloudSyncEnabled ? (isDe ? 'Aktiviert' : 'Active') : (isDe ? 'Deaktiviert' : 'Disabled')}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={onToggleAutoCloudSync}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      isAutoCloudSyncEnabled ? 'bg-sky-500' : 'bg-zinc-700'
                     }`}
-                  />
-                </button>
+                    role="switch"
+                    aria-checked={isAutoCloudSyncEnabled}
+                    aria-label={isDe ? 'Auto-Abgleich beim Anmelden' : 'Auto-Sync on Login'}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                        isAutoCloudSyncEnabled ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -778,21 +814,48 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 : 'Backup all maps, callouts, favorites, and settings or restore from a backup file.'}
             </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <button
-                onClick={onExportFullBackup}
-                className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 font-bold transition-all shadow-xs cursor-pointer text-xs"
+                type="button"
+                onClick={async () => {
+                  try {
+                    await onExportFullBackup();
+                    showNotification(isDe ? 'ZIP-Backup erfolgreich exportiert!' : 'ZIP backup exported successfully!');
+                  } catch {
+                    showNotification(isDe ? 'Fehler beim Erstellen des ZIP-Backups.' : 'Failed to export ZIP backup.', true);
+                  }
+                }}
+                className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 font-bold transition-all shadow-xs cursor-pointer text-xs whitespace-nowrap"
               >
                 <Download className="w-4 h-4 shrink-0 text-emerald-400" />
-                <span>{isDe ? 'Gesamtes Backup exportieren' : 'Export Full Backup'}</span>
+                <span>{isDe ? 'ZIP exportieren' : 'Export ZIP'}</span>
               </button>
 
               <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    if (onExportFullBackupJson) {
+                      await onExportFullBackupJson();
+                      showNotification(isDe ? 'JSON-Backup erfolgreich exportiert!' : 'JSON backup exported successfully!');
+                    }
+                  } catch {
+                    showNotification(isDe ? 'Fehler beim Erstellen des JSON-Backups.' : 'Failed to export JSON backup.', true);
+                  }
+                }}
+                className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-sky-500/40 bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 font-bold transition-all shadow-xs cursor-pointer text-xs whitespace-nowrap"
+              >
+                <FileCode className="w-4 h-4 shrink-0 text-sky-400" />
+                <span>{isDe ? 'JSON exportieren' : 'Export JSON'}</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => fullBackupInputRef.current?.click()}
-                className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-white font-bold transition-all shadow-xs cursor-pointer text-xs"
+                className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-white font-bold transition-all shadow-xs cursor-pointer text-xs whitespace-nowrap"
               >
                 <Upload className="w-4 h-4 shrink-0 text-amber-400" />
-                <span>{isDe ? 'Backup wiederherstellen' : 'Restore Backup'}</span>
+                <span>{isDe ? 'Wiederherstellen' : 'Restore'}</span>
               </button>
             </div>
           </div>
@@ -839,15 +902,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* 5. STANDARDWERTE WIEDERHERSTELLEN */}
           <div className="p-4 rounded-xl bg-rose-950/20 border border-rose-500/40 space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <div>
                 <h4 className="font-bold text-rose-300 text-xs uppercase tracking-wide">
                   {isDe ? 'Auf Standardwerte zurücksetzen' : 'Reset to Default Maps'}
                 </h4>
                 <p className="text-[11px] text-zinc-400 mt-0.5">
                   {isDe
-                    ? 'Setzt alle Karten auf die offiziellen CS2-Standardwerte zurück. Eigene Änderungen gehen verloren.'
-                    : 'Resets all maps to official CS2 defaults. Custom changes will be lost.'}
+                    ? 'Eigene Änderungen gehen verloren.'
+                    : 'Custom changes will be lost.'}
                 </p>
               </div>
               <button
@@ -864,7 +927,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800/80 pb-2">
               <div>
                 <span className="font-bold text-zinc-200">Impressum: </span>
-                <span className="text-zinc-400">Community-Projekt (callmebythecolor)</span>
+                <span className="text-zinc-400">
+                  Community-Projekt (
+                  <span className="font-bold text-blue-400">callmebythecolor</span>)
+                </span>
               </div>
               <a
                 href="https://steamcommunity.com/profiles/76561198014156077"
@@ -886,7 +952,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Modal: Reset Confirmation */}
         {showResetModal && (
           <div className="fixed inset-0 z-65 flex items-center justify-center bg-black/85 backdrop-blur-xs p-4">
-            <div className="w-full max-w-sm rounded-2xl border border-rose-500/50 bg-zinc-900 p-6 shadow-2xl text-zinc-100 space-y-4">
+            <div className="w-full max-w-lg rounded-2xl border border-rose-500/50 bg-zinc-900 p-6 shadow-2xl text-zinc-100 space-y-4">
               <h3 className="text-base font-bold text-rose-400">
                 {isDe ? 'Wirklich auf Standardwerte zurücksetzen?' : 'Reset to Default Maps?'}
               </h3>
@@ -895,20 +961,186 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   ? 'Dadurch werden alle Karten und Callouts auf den Auslieferungszustand zurückgesetzt. Deine manuell gespeicherten Änderungen und Favoriten werden gelöscht.'
                   : 'This will reset all maps and callouts to factory defaults. Your custom edits and favorites will be cleared.'}
               </p>
-              <div className="flex items-center justify-end gap-2 pt-2">
+
+              {/* Sicherungsoptionen vor dem Zurücksetzen */}
+              <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800 space-y-2.5">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-300">
+                  {isDe ? 'Vor dem Zurücksetzen sichern:' : 'Back up before resetting:'}
+                </p>
+
+                {/* 1. ZIP-Backup */}
+                <label className="flex items-start gap-2.5 p-2 rounded-lg bg-zinc-900/70 border border-zinc-800/90 hover:border-emerald-500/40 transition-colors cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={backupZipBeforeReset}
+                    onChange={(e) => setBackupZipBeforeReset(e.target.checked)}
+                    disabled={isBackingUpAndResetting}
+                    className="mt-0.5 h-4 w-4 rounded border-zinc-600 bg-zinc-950 accent-emerald-500 cursor-pointer"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-300">
+                      <Download className="w-3.5 h-3.5 shrink-0" />
+                      <span>{isDe ? 'ZIP-Backup erstellen' : 'Create ZIP Backup'}</span>
+                    </div>
+                    <p className="text-[10px] text-zinc-400 mt-0.5">
+                      {isDe
+                        ? 'Vollständiges ZIP-Archiv (JSON + Radarbilder) herunterladen'
+                        : 'Download complete ZIP archive (JSON + radar images)'}
+                    </p>
+                  </div>
+                </label>
+
+                {/* 2. Speicherung Lokale Datei */}
+                <label className="flex items-start gap-2.5 p-2 rounded-lg bg-zinc-900/70 border border-zinc-800/90 hover:border-amber-500/40 transition-colors cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={backupLocalFileBeforeReset}
+                    onChange={(e) => setBackupLocalFileBeforeReset(e.target.checked)}
+                    disabled={isBackingUpAndResetting}
+                    className="mt-0.5 h-4 w-4 rounded border-zinc-600 bg-zinc-950 accent-amber-500 cursor-pointer"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-amber-300">
+                      <FolderOpen className="w-3.5 h-3.5 shrink-0" />
+                      <span>{isDe ? 'Speicherung Lokale Datei' : 'Save Local File'}</span>
+                    </div>
+                    <p className="text-[10px] text-zinc-400 mt-0.5">
+                      {connectedFileName
+                        ? isDe
+                          ? `In verknüpfte Datei speichern: ${connectedFileName}`
+                          : `Save to linked file: ${connectedFileName}`
+                        : isDe
+                        ? 'Aktuellen Stand als lokale JSON-Datei speichern'
+                        : 'Save current state as a local JSON file'}
+                    </p>
+                  </div>
+                </label>
+
+                {/* 3. Cloud-Synchronisierung */}
+                <div className="flex items-start gap-2.5 p-2 rounded-lg bg-zinc-900/70 border border-zinc-800/90 hover:border-sky-500/40 transition-colors">
+                  <input
+                    type="checkbox"
+                    id="reset-backup-cloud-checkbox"
+                    checked={backupCloudBeforeReset}
+                    onChange={(e) => setBackupCloudBeforeReset(e.target.checked)}
+                    disabled={isBackingUpAndResetting || !currentUser}
+                    className="mt-0.5 h-4 w-4 rounded border-zinc-600 bg-zinc-950 accent-sky-500 cursor-pointer disabled:opacity-40"
+                  />
+                  <label
+                    htmlFor="reset-backup-cloud-checkbox"
+                    className="min-w-0 flex-1 cursor-pointer"
+                  >
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-sky-300">
+                        <Globe className="w-3.5 h-3.5 shrink-0" />
+                        <span>{isDe ? 'Cloud-Synchronisierung' : 'Cloud Synchronization'}</span>
+                      </div>
+                      {!currentUser && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            onLogin();
+                          }}
+                          className="px-2 py-0.5 rounded bg-white text-zinc-950 hover:bg-zinc-200 text-[10px] font-bold cursor-pointer"
+                        >
+                          {isDe ? 'Mit Google anmelden' : 'Sign in with Google'}
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-zinc-400 mt-0.5">
+                      {currentUser
+                        ? isDe
+                          ? `Vor dem Zurücksetzen in die Google Cloud hochladen (${currentUser.email || currentUser.displayName})`
+                          : `Upload to Google Cloud before resetting (${currentUser.email || currentUser.displayName})`
+                        : isDe
+                        ? 'Nicht angemeldet – zum Cloud-Backup zuerst anmelden'
+                        : 'Not signed in – sign in to enable cloud backup'}
+                    </p>
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2">
                 <button
+                  type="button"
+                  disabled={isBackingUpAndResetting}
                   onClick={() => setShowResetModal(false)}
-                  className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold cursor-pointer"
+                  className="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold whitespace-nowrap cursor-pointer disabled:opacity-50"
                 >
                   {isDe ? 'Abbrechen' : 'Cancel'}
                 </button>
                 <button
+                  type="button"
+                  disabled={
+                    isBackingUpAndResetting ||
+                    (!backupZipBeforeReset && !backupLocalFileBeforeReset && !(backupCloudBeforeReset && currentUser))
+                  }
+                  onClick={async () => {
+                    setIsBackingUpAndResetting(true);
+                    const completedParts: string[] = [];
+                    try {
+                      if (backupZipBeforeReset) {
+                        await onExportFullBackup();
+                        completedParts.push('ZIP');
+                      }
+                      if (backupLocalFileBeforeReset && onManualSaveNow) {
+                        const saved = await onManualSaveNow();
+                        if (!saved) {
+                          throw new Error('Local file save failed');
+                        }
+                        completedParts.push(isDe ? 'Lokale Datei' : 'Local File');
+                      }
+                      if (backupCloudBeforeReset && currentUser) {
+                        await onUploadToCloud();
+                        completedParts.push('Cloud');
+                      }
+                      await new Promise((resolve) => setTimeout(resolve, 350));
+                      setShowResetModal(false);
+                      onResetDefaults();
+                      showNotification(
+                        isDe
+                          ? `Sicherung (${completedParts.join(', ')}) erstellt & auf Standardwerte zurückgesetzt!`
+                          : `Backup (${completedParts.join(', ')}) completed & reset to defaults!`
+                      );
+                    } catch (err) {
+                      console.warn('Backup before reset failed:', err);
+                      showNotification(
+                        isDe
+                          ? 'Fehler bei der Datensicherung. Zurücksetzen wurde abgebrochen.'
+                          : 'Backup failed. Reset cancelled.',
+                        true
+                      );
+                    } finally {
+                      setIsBackingUpAndResetting(false);
+                    }
+                  }}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold whitespace-nowrap cursor-pointer shadow disabled:opacity-50"
+                >
+                  <Download className="w-3.5 h-3.5 shrink-0" />
+                  <span>
+                    {isBackingUpAndResetting
+                      ? isDe
+                        ? 'Sichere...'
+                        : 'Backing up...'
+                      : backupZipBeforeReset && !backupLocalFileBeforeReset && !(backupCloudBeforeReset && currentUser)
+                      ? isDe
+                        ? 'ZIP-Backup & Zurücksetzen'
+                        : 'ZIP Backup & Reset'
+                      : isDe
+                      ? 'Sichern & Zurücksetzen'
+                      : 'Backup & Reset'}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  disabled={isBackingUpAndResetting}
                   onClick={() => {
                     setShowResetModal(false);
                     onResetDefaults();
                     showNotification(isDe ? 'Auf Standardwerte zurückgesetzt!' : 'Reset to defaults successful!');
                   }}
-                  className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold cursor-pointer shadow"
+                  className="px-3 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold whitespace-nowrap cursor-pointer shadow disabled:opacity-50"
                 >
                   {isDe ? 'Ja, zurücksetzen' : 'Yes, Reset'}
                 </button>

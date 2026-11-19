@@ -97,6 +97,7 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isQuizOpen, setIsQuizOpen] = useState<boolean>(false);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
+  const [helpInitialSection, setHelpInitialSection] = useState<'top' | 'installation'>('top');
   const [isGlobalLoadTacticOpen, setIsGlobalLoadTacticOpen] = useState<boolean>(false);
 
   // Custom Map Groups / Pools
@@ -533,6 +534,15 @@ export default function App() {
     }
   };
 
+  const handleOpenInstallationHelp = () => {
+    if (window.history.state?.view === 'settings') {
+      window.history.replaceState({}, '');
+    }
+    setIsSettingsOpen(false);
+    setHelpInitialSection('installation');
+    setIsHelpOpen(true);
+  };
+
   const handleOpenEditor = (mapToEditArg?: MapData | null) => {
     setMapToEdit(mapToEditArg || null);
     setIsEditorOpen(true);
@@ -624,18 +634,11 @@ export default function App() {
     handleSelectMap(map, calloutId);
   };
 
-  // Reset to original official maps
+  // Reset to original official maps (confirmation handled inside SettingsModal warning dialog)
   const handleResetDefaults = () => {
-    if (
-      window.confirm(
-        lang === 'de'
-          ? 'Möchtest du alle Karten und Callouts auf die offiziellen Standardwerte zurücksetzen?'
-          : 'Do you want to reset all maps and callouts to official default values?'
-      )
-    ) {
-      const defs = resetToDefaults();
-      setMaps(defs);
-    }
+    const defs = resetToDefaults();
+    setMaps(defs);
+    setFavorites(loadFavorites());
   };
 
   const parseAndApplyBackup = (text: string, silent = false) => {
@@ -793,8 +796,19 @@ export default function App() {
     const a = document.createElement('a');
     a.href = url;
     a.download = `CS2Freitag_Backup_ZIP_${new Date().toISOString().slice(0, 10)}.zip`;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+  }, [maps, theme, lang, favorites]);
+
+  // FULL BACKUP EXPORT AS JSON
+  const handleExportFullBackupJson = React.useCallback(() => {
+    const payload = createBackupPayload(maps, { theme, lang, favorites });
+    downloadBackupJsonFile(
+      payload,
+      `CS2Freitag_Backup_JSON_${new Date().toISOString().slice(0, 10)}.json`
+    );
   }, [maps, theme, lang, favorites]);
 
   // FULL BACKUP IMPORT (Supports .json, .zip or folder selection)
@@ -1166,7 +1180,10 @@ export default function App() {
             totalCalloutsCount={totalCalloutsCount}
             onOpenSettings={handleOpenSettings}
             onStartQuiz={() => setIsQuizOpen(true)}
-            onOpenHelp={() => setIsHelpOpen(true)}
+            onOpenHelp={() => {
+              setHelpInitialSection('top');
+              setIsHelpOpen(true);
+            }}
             isLoggedIn={user !== null}
             isAutoCloudSyncEnabled={isAutoCloudSyncEnabled}
           />
@@ -1279,6 +1296,7 @@ export default function App() {
         lang={lang}
         onToggleLanguage={handleToggleLanguage}
         onExportFullBackup={handleExportFullBackup}
+        onExportFullBackupJson={handleExportFullBackupJson}
         onImportFullBackup={handleImportFullBackup}
         onExportSingleMap={handleExportSingleMap}
         onImportSingleMapFile={handleImportSingleMapFile}
@@ -1298,6 +1316,7 @@ export default function App() {
         onManualSaveNow={handleManualSaveNow}
         onLoadFromFileLocation={handleLoadFromFileLocation}
         onDisconnectFileLocation={handleDisconnectFileLocation}
+        onOpenInstallationHelp={handleOpenInstallationHelp}
       />
 
       {/* Help & App Explanations Modal */}
@@ -1305,6 +1324,7 @@ export default function App() {
         isOpen={isHelpOpen}
         onClose={() => setIsHelpOpen(false)}
         lang={lang}
+        initialSection={helpInitialSection}
       />
 
       {/* Global Load & QR Scan Modal for Eigene Taktiken */}

@@ -39,7 +39,16 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const isDe = lang === 'de';
   const [isTooltipOpen, setIsTooltipOpen] = React.useState(false);
+  const [pressedKey, setPressedKey] = React.useState<string | null>(null);
   const infoRef = React.useRef<HTMLDivElement>(null);
+
+  const triggerWithFeedback = (key: string, action?: () => void) => {
+    setPressedKey(key);
+    window.setTimeout(() => {
+      setPressedKey((cur) => (cur === key ? null : cur));
+      action?.();
+    }, 85);
+  };
 
   // Online / Offline & PWA App Installation Status
   const isOnline = useOnlineStatus();
@@ -119,10 +128,12 @@ export const Header: React.FC<HeaderProps> = ({
     <div className="inline-flex items-center gap-1 shrink-0">
       <button
         type="button"
-        onClick={onOpenSettings}
+        onClick={() => triggerWithFeedback('status_cloud', onOpenSettings)}
         title={cloudTooltip}
         aria-label={cloudTooltip}
-        className={`w-4 h-4 sm:w-[19px] sm:h-[19px] rounded-full border flex items-center justify-center transition-all duration-150 cursor-pointer shadow-xs active:scale-90 ${cloudColorClasses}`}
+        className={`w-4 h-4 sm:w-[19px] sm:h-[19px] rounded-full border flex items-center justify-center transition-all duration-100 cursor-pointer shadow-xs active:scale-90 ${
+          pressedKey === 'status_cloud' ? 'is-pressing scale-90 ring-2 ring-amber-400' : ''
+        } ${cloudColorClasses}`}
       >
         {isLoggedIn ? (
           <Cloud className="w-2.5 h-2.5 sm:w-3 sm:h-3" strokeWidth={2.2} />
@@ -133,20 +144,24 @@ export const Header: React.FC<HeaderProps> = ({
 
       <button
         type="button"
-        onClick={onOpenSettings}
+        onClick={() => triggerWithFeedback('status_install', onOpenSettings)}
         title={installTooltip}
         aria-label={installTooltip}
-        className={`w-4 h-4 sm:w-[19px] sm:h-[19px] rounded-full border flex items-center justify-center transition-all duration-150 cursor-pointer shadow-xs active:scale-90 ${installColorClasses}`}
+        className={`w-4 h-4 sm:w-[19px] sm:h-[19px] rounded-full border flex items-center justify-center transition-all duration-100 cursor-pointer shadow-xs active:scale-90 ${
+          pressedKey === 'status_install' ? 'is-pressing scale-90 ring-2 ring-amber-400' : ''
+        } ${installColorClasses}`}
       >
         <Smartphone className="w-2.5 h-2.5 sm:w-3 sm:h-3" strokeWidth={2.2} />
       </button>
 
       <button
         type="button"
-        onClick={onOpenSettings}
+        onClick={() => triggerWithFeedback('status_version', onOpenSettings)}
         title={versionTooltip}
         aria-label={versionTooltip}
-        className={`w-4 h-4 sm:w-[19px] sm:h-[19px] rounded-full border flex items-center justify-center transition-all duration-150 cursor-pointer shadow-xs active:scale-90 ${versionColorClasses}`}
+        className={`w-4 h-4 sm:w-[19px] sm:h-[19px] rounded-full border flex items-center justify-center transition-all duration-100 cursor-pointer shadow-xs active:scale-90 ${
+          pressedKey === 'status_version' ? 'is-pressing scale-90 ring-2 ring-amber-400' : ''
+        } ${versionColorClasses}`}
       >
         {curHasUpdate ? (
           <ArrowUpCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" strokeWidth={2.4} />
@@ -259,8 +274,11 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Quiz Button: Controller icon on mobile, icon + "Quiz" on tablet/PC */}
           {onStartQuiz && (
             <button
-              onClick={onStartQuiz}
-              className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-md text-xs font-semibold border border-amber-500/40 bg-amber-500/10 text-amber-300 hover:text-white hover:bg-amber-500/20 active:scale-90 active:brightness-75 active:bg-amber-500/30 active:border-amber-400 active:ring-2 active:ring-amber-400/60 transition-all duration-75 cursor-pointer"
+              type="button"
+              onClick={() => triggerWithFeedback('quiz', onStartQuiz)}
+              className={`flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-md text-xs font-semibold border border-amber-500/40 bg-amber-500/10 text-amber-300 hover:text-white hover:bg-amber-500/20 active:scale-90 active:bg-amber-500/30 active:border-amber-400 active:ring-2 active:ring-amber-400/70 transition-all duration-75 cursor-pointer ${
+                pressedKey === 'quiz' ? 'is-pressing bg-amber-500/30 border-amber-400' : ''
+              }`}
               title={isDe ? 'Callout-Trainer / Lern-Quiz' : 'Callout Trainer / Quiz'}
             >
               <Gamepad2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
@@ -271,8 +289,11 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Help Button: Question icon on mobile, icon + "Hilfe" on tablet/PC */}
           {onOpenHelp && (
             <button
-              onClick={onOpenHelp}
-              className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-md text-xs font-semibold border border-sky-500/40 bg-sky-500/10 text-sky-300 hover:text-white hover:bg-sky-500/20 active:scale-90 active:brightness-75 active:bg-sky-500/30 active:border-sky-400 active:ring-2 active:ring-sky-400/60 transition-all duration-75 cursor-pointer"
+              type="button"
+              onClick={() => triggerWithFeedback('help', onOpenHelp)}
+              className={`flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-md text-xs font-semibold border border-sky-500/40 bg-sky-500/10 text-sky-300 hover:text-white hover:bg-sky-500/20 active:scale-90 active:bg-sky-500/30 active:border-sky-400 active:ring-2 active:ring-sky-400/70 transition-all duration-75 cursor-pointer ${
+                pressedKey === 'help' ? 'is-pressing bg-sky-500/30 border-sky-400' : ''
+              }`}
               title={isDe ? 'Hilfe & App-Erklärungen' : 'Help & App Guide'}
             >
               <HelpCircle className="w-3.5 h-3.5 text-sky-400 shrink-0" />
@@ -283,8 +304,11 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Settings Button */}
           {onOpenSettings && (
             <button
-              onClick={onOpenSettings}
-              className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-md text-xs font-semibold border border-zinc-800 bg-zinc-900/80 text-zinc-300 hover:text-white hover:bg-zinc-800 active:scale-90 active:brightness-75 active:bg-zinc-700 active:border-amber-400 active:ring-2 active:ring-amber-400/60 transition-all duration-75 cursor-pointer"
+              type="button"
+              onClick={() => triggerWithFeedback('settings', onOpenSettings)}
+              className={`flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-md text-xs font-semibold border border-zinc-800 bg-zinc-900/80 text-zinc-300 hover:text-white hover:bg-zinc-800 active:scale-90 active:bg-zinc-700 active:border-amber-400 active:ring-2 active:ring-amber-400/70 transition-all duration-75 cursor-pointer ${
+                pressedKey === 'settings' ? 'is-pressing bg-zinc-700 border-amber-400' : ''
+              }`}
               title={isDe ? 'Einstellungen & Backup' : 'Settings & Backup'}
             >
               <Settings className="w-3.5 h-3.5 text-amber-400 shrink-0" />
@@ -294,8 +318,11 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Language Toggle */}
           <button
-            onClick={onToggleLanguage}
-            className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-md text-xs font-medium border border-zinc-800 bg-zinc-900/80 text-zinc-300 hover:text-white hover:bg-zinc-800 active:scale-90 active:brightness-75 active:bg-zinc-700 active:border-zinc-400 active:ring-2 active:ring-zinc-400/60 transition-all duration-75 cursor-pointer"
+            type="button"
+            onClick={() => triggerWithFeedback('lang', onToggleLanguage)}
+            className={`flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-md text-xs font-medium border border-zinc-800 bg-zinc-900/80 text-zinc-300 hover:text-white hover:bg-zinc-800 active:scale-90 active:bg-zinc-700 active:border-amber-400 active:ring-2 active:ring-amber-400/70 transition-all duration-75 cursor-pointer ${
+              pressedKey === 'lang' ? 'is-pressing bg-zinc-700 border-amber-400' : ''
+            }`}
             title={isDe ? 'Sprache wechseln (DE / EN)' : 'Switch language (EN / DE)'}
             aria-label="Toggle language"
           >

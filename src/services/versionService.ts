@@ -11,7 +11,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
-export const CURRENT_BUILD_VERSION = '3.116';
+export const CURRENT_BUILD_VERSION = '3.119';
 export const VERSION_STORAGE_KEY = 'cs2_installed_version';
 export const PREVIOUS_VERSION_STORAGE_KEY = 'cs2_previous_version';
 export const SIMULATED_VERSION_KEY = 'cs2_simulated_version';
@@ -64,9 +64,15 @@ export function compareVersions(v1: string, v2: string): number {
 export function getInstalledVersion(): string {
   if (typeof window === 'undefined') return CURRENT_BUILD_VERSION;
   try {
-    const stored = localStorage.getItem(VERSION_STORAGE_KEY);
-    if (stored && stored.trim().length > 0) {
-      return stored.trim();
+    const stored = localStorage.getItem(VERSION_STORAGE_KEY)?.trim();
+    if (stored && stored.length > 0) {
+      // If the currently executing bundle is strictly newer than localStorage (e.g. initial SW migration
+      // or hard browser cache bypass), sync localStorage to the actually running bundle version.
+      if (compareVersions(CURRENT_BUILD_VERSION, stored) > 0) {
+        localStorage.setItem(VERSION_STORAGE_KEY, CURRENT_BUILD_VERSION);
+        return CURRENT_BUILD_VERSION;
+      }
+      return stored;
     }
     // Initialize with current build version
     localStorage.setItem(VERSION_STORAGE_KEY, CURRENT_BUILD_VERSION);
@@ -159,13 +165,16 @@ export async function fetchRemoteVersion(): Promise<VersionManifest> {
 }
 
 /**
- * Execute the app update:
+ * Execute the app update ONLY when explicitly triggered by the user:
  * 1. Store the new version in localStorage
- * 2. Unregister old service worker caches if applicable
- * 3. Reload cleanly to apply new assets
+ * 2. Check for & promote any waiting prompt Service Worker via SKIP_WAITING
+ * 3. Clear stale static/dev caches so fresh UI loads cleanly
+ * 4. Reload cleanly to apply new assets
  */
 export async function applyAppUpdate(newVersion?: string): Promise<void> {
   if (typeof window === 'undefined') return;
+
+  let waitingSwActivated = false;
 
   try {
     // Clear simulated version if any
@@ -179,14 +188,58 @@ export async function applyAppUpdate(newVersion?: string): Promise<void> {
       setInstalledVersion(newVersion);
     }
 
-    // Clear runtime static caches so browser fetches the latest bundle
+    // Tell prompt service worker to check for new version and activate waiting worker
+    if ('serviceWorker' in navigator) {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) {
+          await reg.update().catch(() => {});
+
+          // If a new SW just started installing, wait briefly for it to reach 'installed'
+          if (reg.installing && !reg.waiting) {
+            await new Promise<void>((resolve) => {
+              const installing = reg.installing;
+              if (!installing) return resolve();
+              const timer = window.setTimeout(resolve, 2500);
+              installing.addEventListener('statechange', () => {
+                if (installing.state === 'installed' || installing.state === 'redundant') {
+                  window.clearTimeout(timer);
+                  resolve();
+                }
+              });
+            });
+          }
+
+          if (reg.waiting) {
+            await new Promise<void>((resolve) => {
+              const timer = window.setTimeout(resolve, 2500);
+              const onControllerChange = () => {
+                window.clearTimeout(timer);
+                navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+                waitingSwActivated = true;
+                resolve();
+              };
+              navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+              reg.waiting?.postMessage({ type: 'SKIP_WAITING' });
+            });
+          }
+        }
+      } catch (swErr) {
+        console.warn('SW update error during update:', swErr);
+      }
+    }
+
+    // Clear stale runtime/dev caches (keep map image cache and newly activated workbox precache)
     if ('caches' in window) {
       try {
         const cacheNames = await caches.keys();
         await Promise.all(
           cacheNames.map((name) => {
-            // Keep map image cache if desired, but clear app code caches
-            if (name.includes('static') || name.includes('resources') || name.includes('precache')) {
+            if (
+              name.includes('static') ||
+              name.includes('resources') ||
+              (!waitingSwActivated && name.startsWith('cs2-dev-app-'))
+            ) {
               return caches.delete(name);
             }
             return Promise.resolve(true);
@@ -194,18 +247,6 @@ export async function applyAppUpdate(newVersion?: string): Promise<void> {
         );
       } catch (cacheErr) {
         console.warn('Cache clear error during update:', cacheErr);
-      }
-    }
-
-    // Tell service worker to update
-    if ('serviceWorker' in navigator) {
-      try {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        for (const reg of registrations) {
-          await reg.update().catch(() => {});
-        }
-      } catch (swErr) {
-        console.warn('SW update error during update:', swErr);
       }
     }
   } catch (err) {

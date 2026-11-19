@@ -16,7 +16,7 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
       VitePWA({
         injectRegister: null,
-        registerType: 'autoUpdate',
+        registerType: 'prompt',
         manifest: {
           id: base,
           name: 'CS2Freitag - Counter-Strike 2 Callouts',
@@ -69,10 +69,17 @@ export default defineConfig(({ mode }) => {
           ]
         },
         workbox: {
+          skipWaiting: false,
+          clientsClaim: false,
+          cleanupOutdatedCaches: true,
           maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10 MiB
           globPatterns: ['**/*.{js,css,html,ico,svg,woff,woff2}', 'pwa-*.png', 'apple-touch-icon.png', 'screenshot-*.png', 'ct.png', 'T.png', 'manifest.json'],
           navigateFallback: null,
           runtimeCaching: [
+            {
+              urlPattern: ({ url }) => url.pathname.endsWith('/version.json'),
+              handler: 'NetworkOnly',
+            },
             {
               urlPattern: ({ request }) => request.destination === 'image',
               handler: 'NetworkFirst',
@@ -93,9 +100,12 @@ export default defineConfig(({ mode }) => {
                 request.destination === 'script' ||
                 request.destination === 'style' ||
                 request.destination === 'worker',
-              handler: 'StaleWhileRevalidate',
+              handler: 'CacheFirst',
               options: {
                 cacheName: 'cs2-static-resources-v3',
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
               },
             },
           ],

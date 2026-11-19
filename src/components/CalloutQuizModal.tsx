@@ -21,6 +21,13 @@ import {
 import confetti from 'canvas-confetti';
 import { resolveAssetPath } from '../utils/assets';
 import { playTTS } from '../utils/tts';
+import {
+  QuizMode,
+  getEligibleMapsForQuiz,
+  getMinimumCalloutsForQuizMode,
+} from '../utils/quizFilter';
+
+export type { QuizMode };
 
 interface CalloutQuizModalProps {
   isOpen: boolean;
@@ -28,12 +35,6 @@ interface CalloutQuizModalProps {
   maps: MapData[];
   lang: Language;
 }
-
-export type QuizMode =
-  | 'mode1_classic'
-  | 'mode2_short'
-  | 'mode3_mapclick_classic'
-  | 'mode4_mapclick_short';
 
 const QUIZ_MUTED_STORAGE_KEY = 'cs2_quiz_tts_muted';
 
@@ -45,12 +46,12 @@ export const CalloutQuizModal: React.FC<CalloutQuizModalProps> = ({
 }) => {
   const isDe = lang === 'de';
 
-  // Filter maps with at least 6 callouts
-  const eligibleMaps = maps.filter((m) => (m.callouts?.length || 0) >= 6);
-
   const [selectedMapId, setSelectedMapId] = useState<string>('');
   const [quizMode, setQuizMode] = useState<QuizMode>('mode1_classic');
   const [isQuizActive, setIsQuizActive] = useState<boolean>(false);
+
+  const minCalloutsRequired = getMinimumCalloutsForQuizMode(quizMode);
+  const eligibleMaps = getEligibleMapsForQuiz(maps, quizMode);
 
   // Audio Mute State for Map Click Modes (Persisted in localStorage)
   const [isMuted, setIsMuted] = useState<boolean>(() => {
@@ -113,7 +114,11 @@ export const CalloutQuizModal: React.FC<CalloutQuizModalProps> = ({
   }, []);
 
   useEffect(() => {
-    if (eligibleMaps.length > 0 && !selectedMapId) {
+    if (eligibleMaps.length === 0) {
+      if (selectedMapId) setSelectedMapId('');
+      return;
+    }
+    if (!selectedMapId || !eligibleMaps.some((m) => m.id === selectedMapId)) {
       setSelectedMapId(eligibleMaps[0].id);
     }
   }, [eligibleMaps, selectedMapId]);
@@ -177,7 +182,7 @@ export const CalloutQuizModal: React.FC<CalloutQuizModalProps> = ({
   // Direct start when clicking a map card
   const startQuizForMap = (targetMapId: string) => {
     const targetMap = maps.find((m) => m.id === targetMapId);
-    if (!targetMap || !targetMap.callouts || targetMap.callouts.length < 6) return;
+    if (!targetMap || !targetMap.callouts || targetMap.callouts.length < minCalloutsRequired) return;
 
     setSelectedMapId(targetMapId);
     stopConfetti();
@@ -496,31 +501,39 @@ export const CalloutQuizModal: React.FC<CalloutQuizModalProps> = ({
                 {isDe ? '2. Klicke auf eine Karte, um das Quiz sofort zu starten:' : '2. Click any map to start quiz immediately:'}
               </label>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[300px] overflow-y-auto pr-1">
-                {eligibleMaps.map((map) => {
-                  return (
-                    <button
-                      key={map.id}
-                      onClick={() => startQuizForMap(map.id)}
-                      className="flex items-center gap-3 p-3 rounded-xl border border-zinc-800 bg-zinc-900/80 text-zinc-300 hover:border-amber-500 hover:bg-amber-500/10 hover:text-white transition-all cursor-pointer group shadow-sm active:scale-[0.98]"
-                    >
-                      <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 border border-zinc-700 bg-zinc-950 group-hover:border-amber-400">
-                        <img
-                          src={resolveAssetPath(map.image)}
-                          alt={map.name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <div className="min-w-0 flex-1 text-left">
-                        <p className="font-bold text-xs truncate text-white group-hover:text-amber-300">{map.name}</p>
-                        <p className="text-[10px] text-amber-400/90 font-mono mt-0.5">
-                          {map.callouts.length} Callouts
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+              {eligibleMaps.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[300px] overflow-y-auto pr-1">
+                  {eligibleMaps.map((map) => {
+                    return (
+                      <button
+                        key={map.id}
+                        onClick={() => startQuizForMap(map.id)}
+                        className="flex items-center gap-3 p-3 rounded-xl border border-zinc-800 bg-zinc-900/80 text-zinc-300 hover:border-amber-500 hover:bg-amber-500/10 hover:text-white transition-all cursor-pointer group shadow-sm active:scale-[0.98]"
+                      >
+                        <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 border border-zinc-700 bg-zinc-950 group-hover:border-amber-400">
+                          <img
+                            src={resolveAssetPath(map.image)}
+                            alt={map.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1 text-left">
+                          <p className="font-bold text-xs truncate text-white group-hover:text-amber-300">{map.name}</p>
+                          <p className="text-[10px] text-amber-400/90 font-mono mt-0.5">
+                            {map.callouts.length} Callouts
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/60 text-center text-xs text-zinc-400">
+                  {isDe
+                    ? `Für diesen Modus wird mindestens eine Karte mit ${minCalloutsRequired} Callouts benötigt.`
+                    : `At least one map with ${minCalloutsRequired} callouts is required for this mode.`}
+                </div>
+              )}
             </div>
           </div>
         )}

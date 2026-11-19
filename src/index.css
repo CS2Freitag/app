@@ -187,6 +187,7 @@
    ======================================================== */
 button,
 [role="button"],
+[role="switch"],
 .cursor-pointer:not(input):not(textarea):not(select):not(svg):not(svg *):not(.no-press),
 .map-card,
 .interactive-card,
@@ -205,28 +206,35 @@ input[type="reset"] {
 }
 
 button:active:not(:disabled),
+button.is-pressing:not(:disabled),
 [role="button"]:active:not([aria-disabled="true"]):not([role="switch"]):not(.map-card),
+[role="button"].is-pressing:not([aria-disabled="true"]):not([role="switch"]):not(.map-card),
 .cursor-pointer:active:not(input):not(textarea):not(select):not(svg):not(svg *):not([role="switch"]):not(.map-card):not(.no-press),
+.cursor-pointer.is-pressing:not(input):not(textarea):not(select):not(svg):not(svg *):not([role="switch"]):not(.map-card):not(.no-press),
 label.cursor-pointer:active,
+label.cursor-pointer.is-pressing,
 input[type="button"]:active:not(:disabled),
 input[type="submit"]:active:not(:disabled),
 input[type="reset"]:active:not(:disabled) {
-  transform: scale(0.95) translateY(1.5px) !important;
-  filter: brightness(0.85) contrast(1.15) !important;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25), inset 0 2px 4px rgba(0, 0, 0, 0.45) !important;
+  transform: scale(0.93) translateY(1.5px) !important;
+  filter: brightness(1.18) !important;
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.85), 0 0 12px rgba(251, 191, 36, 0.35), inset 0 2px 5px rgba(0, 0, 0, 0.45) !important;
 }
 
 /* Switch toggle tactile feedback */
-[role="switch"]:active {
-  transform: scale(0.94) !important;
-  filter: brightness(0.9) !important;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2) !important;
+[role="switch"]:active,
+[role="switch"].is-pressing {
+  transform: scale(0.92) !important;
+  filter: brightness(1.15) !important;
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.75) !important;
 }
 
-/* Map cards tactile compression (smoother scale for large cards) */
-.map-card:active {
-  transform: scale(0.98) translateY(2px) !important;
-  filter: brightness(0.9) contrast(1.1) !important;
-  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.5), inset 0 2px 8px rgba(0, 0, 0, 0.5) !important;
+/* Map cards tactile compression (clear inward feedback & golden rim) */
+.map-card:active,
+.map-card.is-pressing {
+  transform: scale(0.96) translateY(2px) !important;
+  filter: brightness(1.1) !important;
+  border-color: rgba(251, 191, 36, 0.9) !important;
+  box-shadow: 0 0 0 2.5px rgba(251, 191, 36, 0.85), 0 0 18px rgba(251, 191, 36, 0.35), inset 0 2px 10px rgba(0, 0, 0, 0.45) !important;
 }
 

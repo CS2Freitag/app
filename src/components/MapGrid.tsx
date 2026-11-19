@@ -41,11 +41,12 @@ export const MapGrid: React.FC<MapGridProps> = ({
   const isDe = lang === 'de';
 
   const handleCardClick = (map: MapData) => {
+    if (pressedMapId) return;
     setPressedMapId(map.id);
-    setTimeout(() => {
+    window.setTimeout(() => {
       onSelectMap(map);
       setPressedMapId(null);
-    }, 120);
+    }, 125);
   };
 
   // Filter and sort: prioritizing map name in search results
@@ -284,12 +285,15 @@ export const MapGrid: React.FC<MapGridProps> = ({
                     handleCardClick(map);
                   }
                 }}
-                className={`map-card group relative flex flex-col justify-between rounded-xl border bg-zinc-900/50 light:bg-white hover:bg-zinc-900 light:hover:bg-zinc-50 transition-all duration-100 overflow-hidden shadow-sm cursor-pointer select-none active:scale-[0.96] active:brightness-75 active:border-amber-400 active:ring-2 active:ring-amber-400/80 ${
+                className={`map-card group relative flex flex-col justify-between rounded-xl border bg-zinc-900/50 light:bg-white hover:bg-zinc-900 light:hover:bg-zinc-50 transition-all duration-100 overflow-hidden shadow-sm cursor-pointer select-none active:scale-[0.96] active:brightness-110 active:border-amber-400 active:ring-2 active:ring-amber-400/90 ${
                   isPressed
-                    ? 'scale-[0.96] brightness-75 border-amber-400 ring-2 ring-amber-400/80 shadow-inner'
+                    ? 'is-pressing scale-[0.96] brightness-110 border-amber-400 ring-2 ring-amber-400/90 shadow-[0_0_20px_rgba(251,191,36,0.35)]'
                     : 'border-zinc-800/90 light:border-zinc-300 hover:border-amber-400/60'
                 }`}
               >
+                {isPressed && (
+                  <div className="pointer-events-none absolute inset-0 z-20 bg-amber-400/15 ring-2 ring-inset ring-amber-400/60 rounded-xl" />
+                )}
                 {/* Top preview & banner */}
                 <div
                   className="relative aspect-video w-full overflow-hidden bg-zinc-950 light:bg-zinc-200"

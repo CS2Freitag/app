@@ -23,6 +23,16 @@ export const FavoritesSection: React.FC<FavoritesSectionProps> = ({
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [isSortingMode, setIsSortingMode] = useState<boolean>(false);
+  const [pressedFavId, setPressedFavId] = useState<string | null>(null);
+
+  const handleFavoriteSelect = (map: MapData) => {
+    if (pressedFavId) return;
+    setPressedFavId(map.id);
+    window.setTimeout(() => {
+      onSelectMap(map);
+      setPressedFavId(null);
+    }, 125);
+  };
 
   // Collapse state persisted in localStorage
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
@@ -242,6 +252,7 @@ export const FavoritesSection: React.FC<FavoritesSectionProps> = ({
           {favoriteMaps.map((map) => {
             const isDraggingThis = draggedId === map.id;
             const isDragOverThis = dragOverId === map.id;
+            const isPressed = pressedFavId === map.id;
 
             return (
               <div
@@ -269,7 +280,7 @@ export const FavoritesSection: React.FC<FavoritesSectionProps> = ({
                     return;
                   }
                   if (!isSortingMode) {
-                    onSelectMap(map);
+                    handleFavoriteSelect(map);
                   }
                 }}
                 role="button"
@@ -277,19 +288,26 @@ export const FavoritesSection: React.FC<FavoritesSectionProps> = ({
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    onSelectMap(map);
+                    if (!isSortingMode) {
+                      handleFavoriteSelect(map);
+                    }
                   }
                 }}
-                className={`map-card group relative cursor-pointer overflow-hidden rounded-xl border transition-all shadow-md p-3 text-left select-none ${
+                className={`map-card group relative cursor-pointer overflow-hidden rounded-xl border transition-all duration-100 shadow-md p-3 text-left select-none ${
                   isDraggingThis
                     ? 'opacity-40 border-amber-400 scale-95 ring-2 ring-amber-400/50'
                     : isDragOverThis
                     ? 'border-amber-400 bg-amber-400/10 scale-102 ring-2 ring-amber-400'
+                    : isPressed
+                    ? 'is-pressing scale-[0.96] brightness-110 border-amber-400 ring-2 ring-amber-400/90 shadow-[0_0_20px_rgba(251,191,36,0.35)]'
                     : isSortingMode
                     ? 'border-amber-400/60 bg-zinc-900/90 light:bg-zinc-100 animate-pulse cursor-grab active:cursor-grabbing'
-                    : 'border-zinc-800 light:border-zinc-300 bg-zinc-900/60 light:bg-white hover:bg-zinc-800/80 light:hover:bg-zinc-100 hover:border-amber-400/60 active:scale-[0.97] active:brightness-90 active:border-amber-400'
+                    : 'border-zinc-800 light:border-zinc-300 bg-zinc-900/60 light:bg-white hover:bg-zinc-800/80 light:hover:bg-zinc-100 hover:border-amber-400/60 active:scale-[0.96] active:brightness-110 active:border-amber-400'
                 }`}
               >
+                {isPressed && (
+                  <div className="pointer-events-none absolute inset-0 z-20 bg-amber-400/15 ring-2 ring-inset ring-amber-400/60 rounded-xl" />
+                )}
                 {/* Top row: Grip handle when sorting / Name & Favorite Star */}
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="flex items-center gap-1.5 min-w-0">

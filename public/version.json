@@ -1,16 +1,49 @@
 {
-  "version": "3.116",
+  "version": "3.119",
   "major": 3,
-  "patch": 116,
-  "releaseDate": "2026-11-18",
-  "title": "Update v3.116: Taktiles Klick-Feedback bei Kartenauswahl & Editor",
-  "description": "Das visuelle Feedback beim Drücken wurde nun auch auf die Kartenauswahl (Kartenkarten in der Übersicht & Favoriten) sowie die gesamte Kartenbearbeitung und Werkzeugleisten erweitert.",
+  "patch": 119,
+  "releaseDate": "2026-11-19",
+  "title": "Update v3.119: Firefox-Installationshilfe & Hinweis zu lokalen Backup-Dateien",
+  "description": "Hilfe-Bereich um Anleitung zur Nutzung & Installation unter Firefox (Lesezeichenleiste, Add-on „PWAs for Firefox“, Android) sowie Hinweis zu lokalen Backup-Dateien in Firefox & iOS Safari erweitert – direkt verlinkt unter „Hinweis zu PC & Smartphone“ in den Einstellungen.",
   "changes": [
-    "Kartenkarten in der Übersicht und den Favoriten federn beim Anklicken/Antippen haptisch ein und heben sich mit goldenem Rahmen hervor",
-    "Visuelles Feedback für sämtliche Bedienelemente in der Karten- und Callout-Bearbeitung (Gruppen-Auswahl, Bildupload-Felder, Werkzeuge & Leisten)",
-    "Flüssige taktile Reaktion auf Mobilgeräten und Desktops"
+    "Einstellungen: Direkter Hilfe-Link unter „Hinweis zu PC & Smartphone“ zur ausführlichen Installations- und Backup-Anleitung",
+    "Hilfe-Bereich (Punkt 11): Anleitung für Firefox („In Lesezeichenleiste“, Erweiterung „PWAs for Firefox“ mit Link sowie Firefox Android „App installieren“)",
+    "Verständlicher Hinweis in Einstellungen und Hilfe, dass „Lokale Backup-Datei“ in Firefox und Apple iOS (Safari) technisch nicht funktioniert und stattdessen Offline-Speicher, ZIP/JSON-Export bzw. Cloud-Sync genutzt werden"
   ],
   "history": [
+    {
+      "version": "3.119",
+      "releaseDate": "2026-11-19",
+      "title": "Firefox-Installationshilfe & Hinweis zu lokalen Backup-Dateien",
+      "changes": [
+        "Einstellungen: Direkter Hilfe-Link unter „Hinweis zu PC & Smartphone“ zur ausführlichen Installations- und Backup-Anleitung",
+        "Hilfe-Bereich (Punkt 11): Anleitung für Firefox („In Lesezeichenleiste“, Erweiterung „PWAs for Firefox“ mit Link sowie Firefox Android „App installieren“)",
+        "Verständlicher Hinweis in Einstellungen und Hilfe, dass „Lokale Backup-Datei“ in Firefox und Apple iOS (Safari) technisch nicht funktioniert und stattdessen Offline-Speicher, ZIP/JSON-Export bzw. Cloud-Sync genutzt werden"
+      ]
+    },
+    {
+      "version": "3.118",
+      "releaseDate": "2026-11-19",
+      "title": "Einstellungen, JSON/ZIP-Export, Reset-Sicherung & Quiz-Filter",
+      "changes": [
+        "„Auto-Abgleich beim Anmelden“ linksbündig platziert, während Status & Schalter rechtsbündig bleiben",
+        "Unter „Gesamtes Backup (JSON / ZIP)“ drei klare Aktionen: ZIP exportieren, JSON exportieren und Wiederherstellen",
+        "Warn-Dialog beim Zurücksetzen um Sicherungsoptionen für ZIP-Backup, Lokale Datei und Cloud-Synchronisierung erweitert",
+        "Impressum: „callmebythecolor“ fett und blau hervorgehoben",
+        "Quiz-Kartenfilter: Karten mit weniger als 5 Callouts werden im Quiz ausgeblendet; Karten mit weniger als 10 Callouts erscheinen nicht in den 10-Fragen-Modi"
+      ]
+    },
+    {
+      "version": "3.117",
+      "releaseDate": "2026-11-19",
+      "title": "Strikte Update-Sperre, Klick-Feedback & Einstellungen-Feinschliff",
+      "changes": [
+        "Strikte Update-Kontrolle auch im normalen Browser: Beim Neuladen (F5) bleibt der aktive Stand erhalten, bis „Update durchführen“ gedrückt wird",
+        "Deutlich sichtbares Klick- und Touch-Feedback (goldener Druck-Rahmen & Ein-Federn) auf der oberen Leiste, Kartenkarten, Favoriten und allen Tasten",
+        "Schalter (Aktiviert / Deaktiviert) in den Einstellungen auf Desktop und Mobilgeräten einheitlich rechtsbündig ausgerichtet",
+        "Zurücksetzen-Hinweis gekürzt und Warn-Dialog um einen direkten Button für „ZIP-Backup & Zurücksetzen“ erweitert"
+      ]
+    },
     {
       "version": "3.116",
       "releaseDate": "2026-11-18",
