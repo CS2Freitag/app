@@ -71,11 +71,9 @@ if ('serviceWorker' in navigator) {
           }
         }
 
-        // Check for SW updates silently (installs into waiting only, never auto-activates)
-        reg.update().catch(() => {});
-        setInterval(() => {
-          reg.update().catch(() => {});
-        }, 10 * 60 * 1000);
+        // Do NOT call reg.update() automatically in the background!
+        // Version discovery uses /version.json (NetworkOnly) and SW updates run
+        // exclusively when the user explicitly clicks "Update durchführen".
       })
       .catch((err) => {
         console.warn('PWA ServiceWorker registration error:', err);

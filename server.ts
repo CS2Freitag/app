@@ -66,7 +66,8 @@ async function startServer() {
       // fallback to 0.0
     }
 
-    const cacheName = `cs2-dev-app-v${appVersion}`;
+    const cacheName = 'cs2-locked-app-shell-v1';
+    const mapCacheName = 'cs2-maps-cache-v3';
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
@@ -74,41 +75,124 @@ async function startServer() {
     res.setHeader('Service-Worker-Allowed', '/');
     return res.send(`/* CS2Freitag Version-Locked Prompt Service Worker (${appVersion}) */
 const APP_VERSION = ${JSON.stringify(appVersion)};
-const CACHE_NAME = ${JSON.stringify(cacheName)};
+const LOCKED_SHELL_CACHE = ${JSON.stringify(cacheName)};
+const MAP_IMAGE_CACHE = ${JSON.stringify(mapCacheName)};
+const UPDATE_LOCK_DB_NAME = 'cs2-update-lock-db';
+const UPDATE_LOCK_STORE = 'meta';
+const UPDATE_AUTHORIZED_KEY = 'update_authorized';
 const CORE_SHELL = ['/', '/index.html', '/manifest.json'];
 
+function openLockDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(UPDATE_LOCK_DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(UPDATE_LOCK_STORE)) {
+        db.createObjectStore(UPDATE_LOCK_STORE);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function getUpdateAuthorized() {
+  try {
+    const db = await openLockDb();
+    const val = await new Promise((resolve, reject) => {
+      const tx = db.transaction(UPDATE_LOCK_STORE, 'readonly');
+      const req = tx.objectStore(UPDATE_LOCK_STORE).get(UPDATE_AUTHORIZED_KEY);
+      req.onsuccess = () => resolve(Boolean(req.result));
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    return val;
+  } catch {
+    return false;
+  }
+}
+
+async function setUpdateAuthorized(val) {
+  try {
+    const db = await openLockDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(UPDATE_LOCK_STORE, 'readwrite');
+      tx.objectStore(UPDATE_LOCK_STORE).put(Boolean(val), UPDATE_AUTHORIZED_KEY);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch {
+    // ignore
+  }
+}
+
+async function hasLockedAppShell() {
+  try {
+    const cache = await caches.open(LOCKED_SHELL_CACHE);
+    return Boolean((await cache.match('/')) || (await cache.match('/index.html')));
+  } catch {
+    return false;
+  }
+}
+
+async function seedCoreShell() {
+  const cache = await caches.open(LOCKED_SHELL_CACHE);
+  await Promise.all(
+    CORE_SHELL.map((url) =>
+      fetch(url, { cache: 'no-store', credentials: 'same-origin' })
+        .then((r) => {
+          if (r && r.status === 200) {
+            return cache.put(url, r.clone());
+          }
+        })
+        .catch(() => {})
+    )
+  );
+  await setUpdateAuthorized(false);
+}
+
 self.addEventListener('install', (event) => {
-  // Never call self.skipWaiting() automatically here!
-  // New versions must stay in waiting state until the user clicks "Update durchführen".
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return Promise.all(
-        CORE_SHELL.map((url) =>
-          fetch(url, { cache: 'no-store', credentials: 'same-origin' })
-            .then((res) => {
-              if (res && res.status === 200) {
-                return cache.put(url, res.clone());
-              }
-            })
-            .catch(() => {})
-        )
-      );
-    })
+    (async () => {
+      const hasShell = await hasLockedAppShell();
+      const authorized = await getUpdateAuthorized();
+      if (hasShell && !authorized) {
+        return;
+      }
+      if (authorized) {
+        await caches.delete(LOCKED_SHELL_CACHE);
+      }
+      await seedCoreShell();
+    })()
   );
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(
         keys.map((key) => {
-          if (key.startsWith('cs2-dev-app-') && key !== CACHE_NAME) {
+          if (key === LOCKED_SHELL_CACHE || key === MAP_IMAGE_CACHE) {
+            return Promise.resolve(true);
+          }
+          if (key.startsWith('cs2-dev-app-') || key.startsWith('cs2-static-') || key.startsWith('workbox-precache-')) {
             return caches.delete(key);
           }
           return Promise.resolve(true);
         })
-      )
-    ).then(() => self.clients.claim())
+      );
+      const hasShell = await hasLockedAppShell();
+      const authorized = await getUpdateAuthorized();
+      if (!hasShell || authorized) {
+        if (authorized) {
+          await caches.delete(LOCKED_SHELL_CACHE);
+        }
+        await seedCoreShell();
+      }
+      await self.clients.claim();
+    })()
   );
 });
 
@@ -121,12 +205,25 @@ self.addEventListener('message', (event) => {
     return;
   }
 
+  if (data.type === 'AUTHORIZE_UPDATE') {
+    event.waitUntil(
+      (async () => {
+        await setUpdateAuthorized(true);
+        await caches.delete(LOCKED_SHELL_CACHE);
+        event.ports?.[0]?.postMessage({ ok: true });
+      })()
+    );
+    return;
+  }
+
   if (data.type === 'CLEAR_CACHES') {
     event.waitUntil(
       caches.keys().then((keys) =>
         Promise.all(
           keys.map((key) =>
-            key.startsWith('cs2-dev-app-') ? caches.delete(key) : Promise.resolve(true)
+            key === LOCKED_SHELL_CACHE || key.startsWith('cs2-dev-app-')
+              ? caches.delete(key)
+              : Promise.resolve(true)
           )
         )
       )
@@ -136,7 +233,8 @@ self.addEventListener('message', (event) => {
 
   if (data.type === 'WARM_CACHE' && Array.isArray(data.urls)) {
     event.waitUntil(
-      caches.open(CACHE_NAME).then(async (cache) => {
+      (async () => {
+        const cache = await caches.open(LOCKED_SHELL_CACHE);
         for (const rawUrl of data.urls) {
           try {
             const u = new URL(rawUrl, self.location.origin);
@@ -151,16 +249,16 @@ self.addEventListener('message', (event) => {
             }
             const existing = await cache.match(u.href);
             if (!existing) {
-              const res = await fetch(u.href, { credentials: 'same-origin' });
-              if (res && res.status === 200) {
-                await cache.put(u.href, res.clone());
+              const r = await fetch(u.href, { credentials: 'same-origin' });
+              if (r && r.status === 200) {
+                await cache.put(u.href, r.clone());
               }
             }
           } catch {
             // Ignore individual warm-cache misses
           }
         }
-      })
+      })()
     );
   }
 });
@@ -191,35 +289,47 @@ self.addEventListener('fetch', (event) => {
 
   if (req.mode === 'navigate') {
     event.respondWith(
-      caches.open(CACHE_NAME).then(async (cache) => {
-        const cached = (await cache.match('/')) || (await cache.match('/index.html')) || (await cache.match(req));
-        if (cached) {
-          return cached;
+      (async () => {
+        const authorized = await getUpdateAuthorized();
+        const cache = await caches.open(LOCKED_SHELL_CACHE);
+        if (!authorized) {
+          const cached = (await cache.match('/')) || (await cache.match('/index.html')) || (await cache.match(req));
+          if (cached) {
+            return cached;
+          }
         }
-        const netRes = await fetch(req);
+        const netRes = await fetch(req, { cache: 'no-store' });
         if (netRes && netRes.status === 200) {
-          cache.put('/', netRes.clone());
+          await cache.put('/', netRes.clone());
+          await cache.put('/index.html', netRes.clone());
+          if (authorized) {
+            await setUpdateAuthorized(false);
+          }
         }
         return netRes;
-      })
+      })()
     );
     return;
   }
 
   // Strictly CacheFirst for same-origin static assets & Vite module graph so
-  // browser refreshes preserve the locked version until manual update is triggered.
+  // browser refreshes and PWA closes/reopens preserve the locked version until manual update.
   event.respondWith(
-    caches.open(CACHE_NAME).then(async (cache) => {
-      const cached = await cache.match(req);
-      if (cached) {
-        return cached;
+    (async () => {
+      const authorized = await getUpdateAuthorized();
+      const cache = await caches.open(LOCKED_SHELL_CACHE);
+      if (!authorized) {
+        const cached = await cache.match(req);
+        if (cached) {
+          return cached;
+        }
       }
-      const netRes = await fetch(req);
+      const netRes = await fetch(req, authorized ? { cache: 'no-store' } : undefined);
       if (netRes && netRes.status === 200) {
-        cache.put(req, netRes.clone());
+        await cache.put(req, netRes.clone());
       }
       return netRes;
-    })
+    })()
   );
 });
 `);

@@ -1,16 +1,26 @@
 {
-  "version": "3.119",
+  "version": "3.120",
   "major": 3,
-  "patch": 119,
+  "patch": 120,
   "releaseDate": "2026-11-19",
-  "title": "Update v3.119: Firefox-Installationshilfe & Hinweis zu lokalen Backup-Dateien",
-  "description": "Hilfe-Bereich um Anleitung zur Nutzung & Installation unter Firefox (Lesezeichenleiste, Add-on „PWAs for Firefox“, Android) sowie Hinweis zu lokalen Backup-Dateien in Firefox & iOS Safari erweitert – direkt verlinkt unter „Hinweis zu PC & Smartphone“ in den Einstellungen.",
+  "title": "Update v3.120: Strikte PWA-Update-Sperre & kompaktes „Was ist neu“",
+  "description": "Installierte PWAs bleiben ab sofort auch nach dem Schließen und erneuten Öffnen strikt auf der installierten Version gesperrt. Unter „Was ist neu“ werden nur noch ausstehende Updates und das zuletzt durchgeführte Update angezeigt.",
   "changes": [
-    "Einstellungen: Direkter Hilfe-Link unter „Hinweis zu PC & Smartphone“ zur ausführlichen Installations- und Backup-Anleitung",
-    "Hilfe-Bereich (Punkt 11): Anleitung für Firefox („In Lesezeichenleiste“, Erweiterung „PWAs for Firefox“ mit Link sowie Firefox Android „App installieren“)",
-    "Verständlicher Hinweis in Einstellungen und Hilfe, dass „Lokale Backup-Datei“ in Firefox und Apple iOS (Safari) technisch nicht funktioniert und stattdessen Offline-Speicher, ZIP/JSON-Export bzw. Cloud-Sync genutzt werden"
+    "Strikte PWA-Update-Sperre über geschützten App-Shell-Cache: Auch nach Schließen/Neustarten der installierten PC- oder Smartphone-PWA wird kein Update mehr automatisch aktiviert",
+    "Automatische Hintergrund-Checks des Service Workers deaktiviert – Updates laden ausschließlich beim Klick auf „Update durchführen“",
+    "„Was ist neu“ zeigt ab sofort nur noch ausstehende Updates sowie das zuletzt durchgeführte Update an (statt des gesamten Verlaufs ab v3.109)"
   ],
   "history": [
+    {
+      "version": "3.120",
+      "releaseDate": "2026-11-19",
+      "title": "Strikte PWA-Update-Sperre & kompaktes „Was ist neu“",
+      "changes": [
+        "Strikte PWA-Update-Sperre über geschützten App-Shell-Cache: Auch nach Schließen/Neustarten der installierten PC- oder Smartphone-PWA wird kein Update mehr automatisch aktiviert",
+        "Automatische Hintergrund-Checks des Service Workers deaktiviert – Updates laden ausschließlich beim Klick auf „Update durchführen“",
+        "„Was ist neu“ zeigt ab sofort nur noch ausstehende Updates sowie das zuletzt durchgeführte Update an (statt des gesamten Verlaufs ab v3.109)"
+      ]
+    },
     {
       "version": "3.119",
       "releaseDate": "2026-11-19",

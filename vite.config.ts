@@ -15,6 +15,9 @@ export default defineConfig(({ mode }) => {
       react(),
       tailwindcss(),
       VitePWA({
+        strategies: 'injectManifest',
+        srcDir: 'src',
+        filename: 'sw.ts',
         injectRegister: null,
         registerType: 'prompt',
         manifest: {
@@ -68,47 +71,9 @@ export default defineConfig(({ mode }) => {
             }
           ]
         },
-        workbox: {
-          skipWaiting: false,
-          clientsClaim: false,
-          cleanupOutdatedCaches: true,
+        injectManifest: {
           maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10 MiB
           globPatterns: ['**/*.{js,css,html,ico,svg,woff,woff2}', 'pwa-*.png', 'apple-touch-icon.png', 'screenshot-*.png', 'ct.png', 'T.png', 'manifest.json'],
-          navigateFallback: null,
-          runtimeCaching: [
-            {
-              urlPattern: ({ url }) => url.pathname.endsWith('/version.json'),
-              handler: 'NetworkOnly',
-            },
-            {
-              urlPattern: ({ request }) => request.destination === 'image',
-              handler: 'NetworkFirst',
-              options: {
-                cacheName: 'cs2-maps-cache-v3',
-                networkTimeoutSeconds: 3,
-                expiration: {
-                  maxEntries: 150,
-                  maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
-                },
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
-              },
-            },
-            {
-              urlPattern: ({ request }) =>
-                request.destination === 'script' ||
-                request.destination === 'style' ||
-                request.destination === 'worker',
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'cs2-static-resources-v3',
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
-              },
-            },
-          ],
         },
         devOptions: {
           enabled: false,

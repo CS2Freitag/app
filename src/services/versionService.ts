@@ -10,8 +10,13 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import {
+  LOCKED_SHELL_CACHE,
+  setUpdateAuthorized,
+  shouldDeleteCacheOnActivate,
+} from '../utils/updateLock';
 
-export const CURRENT_BUILD_VERSION = '3.119';
+export const CURRENT_BUILD_VERSION = '3.120';
 export const VERSION_STORAGE_KEY = 'cs2_installed_version';
 export const PREVIOUS_VERSION_STORAGE_KEY = 'cs2_previous_version';
 export const SIMULATED_VERSION_KEY = 'cs2_simulated_version';
@@ -188,11 +193,48 @@ export async function applyAppUpdate(newVersion?: string): Promise<void> {
       setInstalledVersion(newVersion);
     }
 
+    // Explicitly authorize this manual update in IndexedDB and unlock the cached shell
+    await setUpdateAuthorized(true);
+
+    // Clear locked app shell & legacy static/dev caches BEFORE fetching/activating new SW
+    if ('caches' in window) {
+      try {
+        const cacheNames = await caches.keys();
+        await Promise.all(
+          cacheNames.map((name) => {
+            if (name === LOCKED_SHELL_CACHE || shouldDeleteCacheOnActivate(name)) {
+              return caches.delete(name);
+            }
+            return Promise.resolve(true);
+          })
+        );
+      } catch (cacheErr) {
+        console.warn('Cache clear error during update:', cacheErr);
+      }
+    }
+
     // Tell prompt service worker to check for new version and activate waiting worker
     if ('serviceWorker' in navigator) {
       try {
         const reg = await navigator.serviceWorker.getRegistration();
         if (reg) {
+          if (reg.active) {
+            await new Promise<void>((resolve) => {
+              const timer = window.setTimeout(resolve, 1000);
+              const channel = new MessageChannel();
+              channel.port1.onmessage = () => {
+                window.clearTimeout(timer);
+                resolve();
+              };
+              try {
+                reg.active?.postMessage({ type: 'AUTHORIZE_UPDATE' }, [channel.port2]);
+              } catch {
+                window.clearTimeout(timer);
+                resolve();
+              }
+            });
+          }
+
           await reg.update().catch(() => {});
 
           // If a new SW just started installing, wait briefly for it to reach 'installed'
@@ -229,24 +271,19 @@ export async function applyAppUpdate(newVersion?: string): Promise<void> {
       }
     }
 
-    // Clear stale runtime/dev caches (keep map image cache and newly activated workbox precache)
-    if ('caches' in window) {
+    // Re-ensure legacy caches are wiped if waiting SW activation didn't handle them
+    if (!waitingSwActivated && 'caches' in window) {
       try {
         const cacheNames = await caches.keys();
         await Promise.all(
-          cacheNames.map((name) => {
-            if (
-              name.includes('static') ||
-              name.includes('resources') ||
-              (!waitingSwActivated && name.startsWith('cs2-dev-app-'))
-            ) {
-              return caches.delete(name);
-            }
-            return Promise.resolve(true);
-          })
+          cacheNames.map((name) =>
+            name === LOCKED_SHELL_CACHE || shouldDeleteCacheOnActivate(name)
+              ? caches.delete(name)
+              : Promise.resolve(true)
+          )
         );
-      } catch (cacheErr) {
-        console.warn('Cache clear error during update:', cacheErr);
+      } catch {
+        // ignore
       }
     }
   } catch (err) {

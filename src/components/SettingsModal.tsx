@@ -22,10 +22,8 @@ import {
   BookOpen,
 } from 'lucide-react';
 import { MapData, Language } from '../types';
-import {
-  useAppVersion,
-  compareVersions,
-} from '../services/versionService';
+import { useAppVersion } from '../services/versionService';
+import { selectRelevantChangelogEntries } from '../utils/changelogFilter';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -93,7 +91,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   // Version management hook
   const {
     installedVersion,
-    previousVersion,
     latestVersion,
     hasUpdate,
     isChecking,
@@ -262,32 +259,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  // Determine changelog entries to display
-  const allVersionHistory = versionManifest?.history || [];
-  const pendingChangelogEntries = allVersionHistory.filter((entry) => {
-    return (
-      compareVersions(entry.version, installedVersion) > 0 &&
-      compareVersions(entry.version, latestVersion) <= 0
-    );
-  });
-
-  const updatedChangelogEntries = allVersionHistory.filter((entry) => {
-    if (!previousVersion) return entry.version === installedVersion;
-    return (
-      compareVersions(entry.version, previousVersion) > 0 &&
-      compareVersions(entry.version, installedVersion) <= 0
-    );
-  });
-
-  const displayedChangelogEntries = hasUpdate
-    ? pendingChangelogEntries.length > 0
-      ? pendingChangelogEntries
-      : versionManifest?.changes
-      ? [{ version: latestVersion, releaseDate: versionManifest.releaseDate, title: versionManifest.title, changes: versionManifest.changes }]
-      : []
-    : updatedChangelogEntries.length > 0
-    ? updatedChangelogEntries
-    : allVersionHistory.slice(0, 3);
+  // Determine changelog entries to display: only not-yet-installed updates + the single last completed update
+  const displayedChangelogEntries = selectRelevantChangelogEntries(
+    versionManifest,
+    installedVersion,
+    latestVersion,
+    hasUpdate
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 overflow-y-auto print:hidden">
@@ -388,7 +366,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   title={isDe ? 'Auf dem Server nach neuen Versionen suchen' : 'Check server for new versions'}
                 >
                   <RefreshCw className={`w-3 h-3 text-sky-400 ${isChecking ? 'animate-spin' : ''}`} />
-                  <span className="hidden sm:inline">{isDe ? 'Prüfen' : 'Check'}</span>
+                  <span>{isDe ? 'Prüfen' : 'Check'}</span>
                 </button>
               </div>
             </div>
@@ -462,10 +440,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2">
                   <span className="font-mono text-[11px] uppercase font-bold text-zinc-300">
                     {hasUpdate
-                      ? isDe ? `Neuerungen (Update auf v${latestVersion}):` : `Changes in v${latestVersion}:`
-                      : previousVersion
-                      ? isDe ? `Alle Neuerungen (Update von v${previousVersion} auf v${installedVersion}):` : `Changes from v${previousVersion} to v${installedVersion}:`
-                      : isDe ? `Versionsverlauf (v${installedVersion}):` : `Version history (v${installedVersion}):`}
+                      ? isDe
+                        ? `Ausstehende Updates & letztes Update (v${installedVersion}):`
+                        : `Pending Updates & Last Installed (v${installedVersion}):`
+                      : isDe
+                      ? `Zuletzt durchgeführtes Update (v${installedVersion}):`
+                      : `Last Installed Update (v${installedVersion}):`}
                   </span>
                   <span className="text-[10px] text-zinc-500 font-mono">
                     {displayedChangelogEntries.length} {isDe ? 'Version(en)' : 'Version(s)'}
@@ -476,9 +456,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {displayedChangelogEntries.length > 0 ? (
                     displayedChangelogEntries.map((entry, idx) => (
                       <div key={entry.version || idx} className="space-y-1.5 pb-2 border-b border-zinc-800/40 last:border-0 last:pb-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono text-[10px] font-bold">
                             v{entry.version}
+                          </span>
+                          <span
+                            className={`px-1.5 py-0.5 rounded font-mono text-[9px] font-bold uppercase ${
+                              entry.status === 'pending'
+                                ? 'bg-sky-500/15 border border-sky-500/30 text-sky-300'
+                                : 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
+                            }`}
+                          >
+                            {entry.status === 'pending'
+                              ? isDe
+                                ? 'Noch offen'
+                                : 'Pending'
+                              : isDe
+                              ? 'Zuletzt installiert'
+                              : 'Last installed'}
                           </span>
                           {entry.title && (
                             <span className="font-semibold text-zinc-200">
