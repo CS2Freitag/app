@@ -1,16 +1,26 @@
 {
-  "version": "3.120",
+  "version": "3.121",
   "major": 3,
-  "patch": 120,
+  "patch": 121,
   "releaseDate": "2026-11-19",
-  "title": "Update v3.120: Strikte PWA-Update-Sperre & kompaktes „Was ist neu“",
-  "description": "Installierte PWAs bleiben ab sofort auch nach dem Schließen und erneuten Öffnen strikt auf der installierten Version gesperrt. Unter „Was ist neu“ werden nur noch ausstehende Updates und das zuletzt durchgeführte Update angezeigt.",
+  "title": "Update v3.121: Mobile „Prüfen“-Text, Gelb/Orange „Was ist neu“ & gehärtete Update-Sperre",
+  "description": "Der „Prüfen“-Button zeigt seinen Text jetzt auch auf Smartphones, „Was ist neu“ leuchtet im passenden Amber-Ton und der PWA-Update-Schutz prüft Cache-Einträge unabhängig von Proxy-Headern.",
   "changes": [
-    "Strikte PWA-Update-Sperre über geschützten App-Shell-Cache: Auch nach Schließen/Neustarten der installierten PC- oder Smartphone-PWA wird kein Update mehr automatisch aktiviert",
-    "Automatische Hintergrund-Checks des Service Workers deaktiviert – Updates laden ausschließlich beim Klick auf „Update durchführen“",
-    "„Was ist neu“ zeigt ab sofort nur noch ausstehende Updates sowie das zuletzt durchgeführte Update an (statt des gesamten Verlaufs ab v3.109)"
+    "Einstellungen: „Prüfen“-Text neben dem Aktualisierungs-Symbol jetzt auch in der mobilen Ansicht sichtbar",
+    "Einstellungen: „Was ist neu“-Link im gelb/orangen Amber-Stil hervorgehoben (passend zum Hilfe-Link darunter)",
+    "PWA-Update-Sperre weiter gehärtet: Service Worker vermeidet unnötige Re-Registrierungen beim App-Start und gleicht geschützte App-Shell-Caches mit ignoreVary/ignoreSearch ab"
   ],
   "history": [
+    {
+      "version": "3.121",
+      "releaseDate": "2026-11-19",
+      "title": "Mobile „Prüfen“-Text, Gelb/Orange „Was ist neu“ & gehärtete Update-Sperre",
+      "changes": [
+        "Einstellungen: „Prüfen“-Text neben dem Aktualisierungs-Symbol jetzt auch in der mobilen Ansicht sichtbar",
+        "Einstellungen: „Was ist neu“-Link im gelb/orangen Amber-Stil hervorgehoben (passend zum Hilfe-Link darunter)",
+        "PWA-Update-Sperre weiter gehärtet: Service Worker vermeidet unnötige Re-Registrierungen beim App-Start und gleicht geschützte App-Shell-Caches mit ignoreVary/ignoreSearch ab"
+      ]
+    },
     {
       "version": "3.120",
       "releaseDate": "2026-11-19",

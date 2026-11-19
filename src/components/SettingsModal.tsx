@@ -426,9 +426,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </span>
                 <button
                   onClick={() => setShowChangelog((prev) => !prev)}
-                  className="flex items-center gap-1 text-[11px] text-zinc-400 hover:text-zinc-200 font-semibold cursor-pointer"
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-400 hover:text-amber-300 underline decoration-amber-500/40 underline-offset-2 active:scale-[0.98] transition-all cursor-pointer shrink-0 whitespace-nowrap"
                 >
-                  {showChangelog ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  {showChangelog ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                   <span>{isDe ? 'Was ist neu' : 'What is new'}</span>
                 </button>
               </div>

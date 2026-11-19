@@ -29,55 +29,57 @@ if ('serviceWorker' in navigator) {
     }
   };
 
-  window.addEventListener('load', () => {
+  window.addEventListener('load', async () => {
     const swUrl = `${import.meta.env.BASE_URL}sw.js`;
     const hadController = Boolean(navigator.serviceWorker.controller);
 
-    navigator.serviceWorker
-      .register(swUrl, { updateViaCache: 'none' })
-      .then((reg) => {
-        // First-ever installation: activate immediately without waiting so current session locks cleanly
-        if (!hadController) {
-          if (reg.waiting) {
-            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-          } else if (reg.installing) {
-            const installing = reg.installing;
-            installing.addEventListener('statechange', () => {
-              if (installing.state === 'installed' && !navigator.serviceWorker.controller) {
-                installing.postMessage({ type: 'SKIP_WAITING' });
-              }
-            });
-          }
-          navigator.serviceWorker.ready.then((readyReg) => {
-            warmDevCache(readyReg.active);
-          });
-        } else {
-          // Existing controller present: keep any new SW in `waiting` state until user clicks Update!
-          if (reg.waiting) {
-            window.dispatchEvent(new CustomEvent('app-sw-update-ready'));
-          }
-          reg.addEventListener('updatefound', () => {
-            const newWorker = reg.installing;
-            if (!newWorker) return;
-            newWorker.addEventListener('statechange', () => {
-              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                window.dispatchEvent(new CustomEvent('app-sw-update-ready'));
-              }
-            });
-          });
-          // Warm current active cache in case any dynamic chunk loaded
-          if (reg.active) {
-            warmDevCache(reg.active);
-          }
-        }
+    try {
+      const existingReg = await navigator.serviceWorker.getRegistration();
+      const reg =
+        existingReg ||
+        (await navigator.serviceWorker.register(swUrl, { updateViaCache: 'none' }));
 
-        // Do NOT call reg.update() automatically in the background!
-        // Version discovery uses /version.json (NetworkOnly) and SW updates run
-        // exclusively when the user explicitly clicks "Update durchführen".
-      })
-      .catch((err) => {
-        console.warn('PWA ServiceWorker registration error:', err);
-      });
+      // First-ever installation: activate immediately without waiting so current session locks cleanly
+      if (!hadController) {
+        if (reg.waiting) {
+          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        } else if (reg.installing) {
+          const installing = reg.installing;
+          installing.addEventListener('statechange', () => {
+            if (installing.state === 'installed' && !navigator.serviceWorker.controller) {
+              installing.postMessage({ type: 'SKIP_WAITING' });
+            }
+          });
+        }
+        navigator.serviceWorker.ready.then((readyReg) => {
+          warmDevCache(readyReg.active);
+        });
+      } else {
+        // Existing controller present: keep any new SW in `waiting` state until user clicks Update!
+        if (reg.waiting) {
+          window.dispatchEvent(new CustomEvent('app-sw-update-ready'));
+        }
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          if (!newWorker) return;
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              window.dispatchEvent(new CustomEvent('app-sw-update-ready'));
+            }
+          });
+        });
+        // Warm current active cache in case any dynamic chunk loaded
+        if (reg.active) {
+          warmDevCache(reg.active);
+        }
+      }
+
+      // Do NOT call reg.update() or register() again automatically in the background!
+      // Version discovery uses /version.json (NetworkOnly) and SW updates run
+      // exclusively when the user explicitly clicks "Update durchführen".
+    } catch (err) {
+      console.warn('PWA ServiceWorker registration error:', err);
+    }
   });
 
   navigator.serviceWorker.addEventListener('controllerchange', () => {

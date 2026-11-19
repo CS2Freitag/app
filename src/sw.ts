@@ -45,13 +45,25 @@ function getManifestUrls(): string[] {
   return Array.from(urls);
 }
 
+async function toCleanCachedResponse(res: Response): Promise<Response> {
+  if (!res.redirected) return res;
+  const body = await res.clone().arrayBuffer();
+  return new Response(body, {
+    status: res.status,
+    statusText: res.statusText,
+    headers: new Headers(res.headers),
+  });
+}
+
 async function hasLockedAppShell(): Promise<boolean> {
   try {
     const cache = await caches.open(LOCKED_SHELL_CACHE);
-    const scopeMatch = await cache.match(sw.registration.scope);
+    const scopeMatch = await cache.match(sw.registration.scope, { ignoreSearch: true, ignoreVary: true });
     if (scopeMatch) return true;
-    const indexMatch = await cache.match(getScopeIndexUrl());
-    return Boolean(indexMatch);
+    const indexMatch = await cache.match(getScopeIndexUrl(), { ignoreSearch: true, ignoreVary: true });
+    if (indexMatch) return true;
+    const keys = await cache.keys();
+    return keys.length > 0;
   } catch {
     return false;
   }
@@ -72,9 +84,10 @@ async function precacheManifestIntoLockedShell(): Promise<void> {
           credentials: 'same-origin',
         });
         if (res && res.status === 200) {
-          await cache.put(absUrl, res.clone());
+          const cleanRes = await toCleanCachedResponse(res);
+          await cache.put(absUrl, cleanRes.clone());
           if (absUrl === indexUrl) {
-            await cache.put(scopeRoot, res.clone());
+            await cache.put(scopeRoot, cleanRes.clone());
           }
         }
       } catch {
@@ -190,9 +203,9 @@ sw.addEventListener('fetch', (event: any) => {
 
         if (!authorized) {
           const cached =
-            (await cache.match(sw.registration.scope)) ||
-            (await cache.match(getScopeIndexUrl())) ||
-            (await cache.match(req, { ignoreSearch: true }));
+            (await cache.match(sw.registration.scope, { ignoreSearch: true, ignoreVary: true })) ||
+            (await cache.match(getScopeIndexUrl(), { ignoreSearch: true, ignoreVary: true })) ||
+            (await cache.match(req, { ignoreSearch: true, ignoreVary: true }));
           if (cached) {
             return cached;
           }
@@ -200,11 +213,13 @@ sw.addEventListener('fetch', (event: any) => {
 
         const netRes = await fetch(req, { cache: 'no-store' });
         if (netRes && netRes.status === 200) {
-          await cache.put(sw.registration.scope, netRes.clone());
-          await cache.put(getScopeIndexUrl(), netRes.clone());
+          const cleanRes = await toCleanCachedResponse(netRes);
+          await cache.put(sw.registration.scope, cleanRes.clone());
+          await cache.put(getScopeIndexUrl(), cleanRes.clone());
           if (authorized) {
             await setUpdateAuthorized(false);
           }
+          return cleanRes;
         }
         return netRes;
       })()
@@ -217,8 +232,8 @@ sw.addEventListener('fetch', (event: any) => {
       (async () => {
         const lockedCache = await caches.open(LOCKED_SHELL_CACHE);
         const coreCached =
-          (await lockedCache.match(req)) ||
-          (await lockedCache.match(url.origin + url.pathname));
+          (await lockedCache.match(req, { ignoreVary: true })) ||
+          (await lockedCache.match(url.origin + url.pathname, { ignoreVary: true }));
         if (coreCached) {
           return coreCached;
         }
@@ -234,7 +249,7 @@ sw.addEventListener('fetch', (event: any) => {
           }
           return netRes;
         } catch {
-          const fallback = await mapCache.match(req);
+          const fallback = await mapCache.match(req, { ignoreVary: true });
           if (fallback) return fallback;
           return fetch(req);
         }
@@ -252,8 +267,8 @@ sw.addEventListener('fetch', (event: any) => {
 
       if (!authorized) {
         const cached =
-          (await cache.match(req)) ||
-          (await cache.match(url.origin + url.pathname));
+          (await cache.match(req, { ignoreVary: true })) ||
+          (await cache.match(url.origin + url.pathname, { ignoreVary: true }));
         if (cached) {
           return cached;
         }

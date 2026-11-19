@@ -130,7 +130,12 @@ async function setUpdateAuthorized(val) {
 async function hasLockedAppShell() {
   try {
     const cache = await caches.open(LOCKED_SHELL_CACHE);
-    return Boolean((await cache.match('/')) || (await cache.match('/index.html')));
+    const rootMatch = await cache.match('/', { ignoreSearch: true, ignoreVary: true });
+    if (rootMatch) return true;
+    const indexMatch = await cache.match('/index.html', { ignoreSearch: true, ignoreVary: true });
+    if (indexMatch) return true;
+    const keys = await cache.keys();
+    return keys.length > 0;
   } catch {
     return false;
   }
@@ -247,7 +252,7 @@ self.addEventListener('message', (event) => {
             ) {
               continue;
             }
-            const existing = await cache.match(u.href);
+            const existing = await cache.match(u.href, { ignoreVary: true });
             if (!existing) {
               const r = await fetch(u.href, { credentials: 'same-origin' });
               if (r && r.status === 200) {
@@ -293,7 +298,10 @@ self.addEventListener('fetch', (event) => {
         const authorized = await getUpdateAuthorized();
         const cache = await caches.open(LOCKED_SHELL_CACHE);
         if (!authorized) {
-          const cached = (await cache.match('/')) || (await cache.match('/index.html')) || (await cache.match(req));
+          const cached =
+            (await cache.match('/', { ignoreSearch: true, ignoreVary: true })) ||
+            (await cache.match('/index.html', { ignoreSearch: true, ignoreVary: true })) ||
+            (await cache.match(req, { ignoreSearch: true, ignoreVary: true }));
           if (cached) {
             return cached;
           }
@@ -319,7 +327,7 @@ self.addEventListener('fetch', (event) => {
       const authorized = await getUpdateAuthorized();
       const cache = await caches.open(LOCKED_SHELL_CACHE);
       if (!authorized) {
-        const cached = await cache.match(req);
+        const cached = await cache.match(req, { ignoreVary: true });
         if (cached) {
           return cached;
         }
