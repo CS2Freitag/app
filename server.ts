@@ -293,14 +293,6 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (req.mode === 'navigate') {
-    if (
-      url.pathname.includes('/en/') ||
-      url.pathname.endsWith('/en') ||
-      url.pathname.includes('/callouts/') ||
-      url.pathname.endsWith('/callouts')
-    ) {
-      return;
-    }
     event.respondWith(
       (async () => {
         const authorized = await getUpdateAuthorized();
@@ -391,22 +383,6 @@ self.addEventListener('fetch', (event) => {
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     res.setHeader('Content-Type', 'image/png');
     res.sendFile(target);
-  });
-
-  // Serve static SEO landing pages cleanly (redirecting missing trailing slashes so relative ../ links resolve)
-  app.get(['/en', '/en/', '/en/index.html', '/callouts', '/callouts/', '/callouts/index.html'], (req, res, next) => {
-    if (req.path === '/en' || req.path === '/callouts') {
-      return res.redirect(301, `${req.path}/`);
-    }
-    const cleanRel = req.path.replace(/^\/+/, '').replace(/\/$/, '/index.html');
-    const distFile = path.join(distPath, cleanRel);
-    const publicFile = path.join(__dirname, 'public', cleanRel);
-    const target = isProd && fs.existsSync(distFile) ? distFile : publicFile;
-    if (fs.existsSync(target)) {
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      return res.sendFile(target);
-    }
-    next();
   });
 
   if (isProd && fs.existsSync(distPath)) {

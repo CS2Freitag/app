@@ -1,24 +1,32 @@
 {
-  "version": "3.132",
+  "version": "3.133",
   "major": 3,
-  "patch": 132,
+  "patch": 133,
   "releaseDate": "2026-11-20",
-  "title": "Update v3.132: Google-SEO für Callouts, Quiz, Taktik & Utility + Englische Seite & Bilder-Sitemap",
-  "description": "Verbesserte Auffindbarkeit bei Google (DE & EN) inklusive Callout-Quiz, Taktik- & Utility-Infos, eigener englischer Seite (/en/), deutscher Map-Übersicht (/callouts/) und Google Bilder-Sitemap.",
+  "title": "Update v3.133: Direktes App-SEO auf Hauptseite & neues Desktop-Vorschaubild",
+  "description": "Entfernt die separaten Vorschaltseiten (/en/ & /callouts/), bündelt alle Callout-, Quiz-, Taktik- & Utility-Infos direkt auf der Hauptseite und ersetzt das veraltete Desktop-Vorschaubild.",
   "changes": [
-    "Seitentitel, Meta-Beschreibung, Schema.org & hreflang auf „CS2 Callouts, Quiz, Taktik & Utility“ optimiert",
-    "Saubere englische Seite (/en/) und deutsche Karten-Übersicht (/callouts/) mit Cobblestone, Mirage, Dust2, Inferno, Italy & weiteren Maps ergänzt",
-    "Google Bilder-Sitemap für Screenshots und CS2-Map-Radare hinzugefügt"
+    "Separate /en/ und /callouts/ Vorschaltseiten entfernt, damit Google-Treffer und PWA-Links immer direkt in die eigentliche App führen",
+    "Callouts-, Quiz-, Taktik-, Utility- und Map-Daten (Cobblestone, Mirage, Dust2, Inferno, Italy u. v. m.) direkt in Hauptseite & Bilder-Sitemap gebündelt",
+    "Veraltetes Desktop-Vorschaubild (screenshot-desktop.png) durch einen sauberen 1280×720-App-Screenshot ersetzt"
   ],
   "history": [
     {
+      "version": "3.133",
+      "releaseDate": "2026-11-20",
+      "title": "Direktes App-SEO auf Hauptseite & neues Desktop-Vorschaubild",
+      "changes": [
+        "Separate /en/ und /callouts/ Vorschaltseiten entfernt, damit Google-Treffer und PWA-Links immer direkt in die eigentliche App führen",
+        "Callouts-, Quiz-, Taktik-, Utility- und Map-Daten (Cobblestone, Mirage, Dust2, Inferno, Italy u. v. m.) direkt in Hauptseite & Bilder-Sitemap gebündelt",
+        "Veraltetes Desktop-Vorschaubild (screenshot-desktop.png) durch einen sauberen 1280×720-App-Screenshot ersetzt"
+      ]
+    },
+    {
       "version": "3.132",
       "releaseDate": "2026-11-20",
-      "title": "Google-SEO für Callouts, Quiz, Taktik & Utility + Englische Seite & Bilder-Sitemap",
+      "title": "Google-SEO für Callouts, Quiz, Taktik & Utility + Bilder-Sitemap",
       "changes": [
-        "Seitentitel, Meta-Beschreibung, Schema.org & hreflang auf „CS2 Callouts, Quiz, Taktik & Utility“ optimiert",
-        "Saubere englische Seite (/en/) und deutsche Karten-Übersicht (/callouts/) mit Cobblestone, Mirage, Dust2, Inferno, Italy & weiteren Maps ergänzt",
-        "Google Bilder-Sitemap für Screenshots und CS2-Map-Radare hinzugefügt"
+        "Seitentitel, Meta-Beschreibung, Schema.org & Bilder-Sitemap auf „CS2 Callouts, Quiz, Taktik & Utility“ optimiert"
       ]
     },
     {

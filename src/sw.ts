@@ -196,14 +196,6 @@ sw.addEventListener('fetch', (event: any) => {
   }
 
   if (req.mode === 'navigate') {
-    if (
-      url.pathname.includes('/en/') ||
-      url.pathname.endsWith('/en') ||
-      url.pathname.includes('/callouts/') ||
-      url.pathname.endsWith('/callouts')
-    ) {
-      return;
-    }
     event.respondWith(
       (async () => {
         const authorized = await getUpdateAuthorized();

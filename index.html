@@ -8,9 +8,7 @@
     <meta name="keywords" content="CS2, Counter-Strike 2, CS2 Callouts, CS2 Callout Quiz, CS2 Quiz, CS2 Taktik, CS2 Taktik Planer, CS2 Utility, CS2 Smoke Lineups, CS2 Callouts Deutsch, Cobblestone Callouts, Mirage Callouts, Dust2 Callouts, Inferno Callouts, Italy Callouts, Nuke Callouts, Ancient Callouts, Anubis Callouts, Overpass Callouts, Train Callouts, CS2 Tactic Board, PWA" />
     <meta name="robots" content="index, follow, max-image-preview:large" />
     <link rel="canonical" href="https://cs2freitag.github.io/app/" />
-    <link rel="alternate" hreflang="de" href="https://cs2freitag.github.io/app/" />
-    <link rel="alternate" hreflang="en" href="https://cs2freitag.github.io/app/en/" />
-    <link rel="alternate" hreflang="x-default" href="https://cs2freitag.github.io/app/en/" />
+    <link rel="alternate" hreflang="x-default" href="https://cs2freitag.github.io/app/" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="CS2Freitag" />
     <meta property="og:locale" content="de_DE" />
@@ -28,48 +26,88 @@
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
-        "@type": "WebApplication",
-        "name": "CS2Freitag – CS2 Callouts, Quiz, Taktik & Utility",
-        "alternateName": ["CS2Freitag", "CS2 Callout Quiz & Tactic Board"],
-        "url": "https://cs2freitag.github.io/app/",
-        "applicationCategory": "GameApplication",
-        "operatingSystem": "All",
-        "inLanguage": ["de", "en"],
-        "description": "Interaktive CS2 Web-App für Callouts, Callout-Quiz (5/10/Alle, Schwachstellen & 40s-C4-Challenge), Taktik-Board und Utility-Lineups (Smokes, Flashes, Molotovs, Jumpthrow) mit Discord-PNG-Export.",
-        "featureList": [
-          "Interaktives CS2 Callout-Quiz mit 40-Sekunden-C4-Challenge und Schwachstellen-Modus",
-          "CS2 Taktik-Board mit Utility-Lineups (Smokes, Flashes, Molotovs, HE, Jumpthrow)",
-          "1-Klick-Discord-PNG-Export für Team-Taktiken",
-          "CS2 Map Callouts für Mirage, Dust2, Inferno, Cobblestone, Italy, Nuke, Ancient, Anubis, Overpass, Train, Cache & Vertigo",
-          "Offline-fähige PWA ohne Anmeldung"
-        ],
-        "screenshot": [
+        "@graph": [
           {
-            "@type": "ImageObject",
-            "url": "https://cs2freitag.github.io/app/screenshot-desktop.png",
-            "caption": "CS2Freitag Callouts, Taktik-Board & Utility-Planer (Desktop)"
+            "@type": "WebApplication",
+            "name": "CS2Freitag – CS2 Callouts, Quiz, Taktik & Utility",
+            "alternateName": ["CS2Freitag", "CS2 Callout Quiz & Tactic Board", "CS2 Map Callouts & Utility Planner"],
+            "url": "https://cs2freitag.github.io/app/",
+            "applicationCategory": "GameApplication",
+            "operatingSystem": "All",
+            "inLanguage": ["de", "en"],
+            "description": "Kostenlose CS2 Web-App (DE & EN) für Callouts, Callout-Quiz (5/10/Alle, Schwachstellen & 40-Sekunden-C4-Challenge), Taktik-Board und Utility-Lineups (Smokes, Flashes, Molotovs, Jumpthrow) mit 1-Klick-Discord-PNG-Export für Mirage, Dust2, Inferno, Cobblestone, Italy, Nuke, Ancient, Anubis, Overpass, Train, Cache & Vertigo.",
+            "featureList": [
+              "Interaktives CS2 Callout-Quiz mit 40-Sekunden-C4-Challenge und Schwachstellen-Modus",
+              "CS2 Taktik-Board mit Utility-Lineups (Smokes, Flashes, Molotovs, HE, Jumpthrow)",
+              "1-Klick-Discord-PNG-Export inklusive Taktik-Legende",
+              "CS2 Map Callouts für Cobblestone (31), Mirage (35), Dust2 (23), Inferno (42), Italy (14), Nuke, Ancient, Anubis, Overpass, Train, Cache & Vertigo",
+              "Free Counter-Strike 2 Callout Quiz, Tactic Board & Smoke Lineup Planner (Offline PWA)"
+            ],
+            "screenshot": [
+              {
+                "@type": "ImageObject",
+                "url": "https://cs2freitag.github.io/app/screenshot-desktop.png",
+                "caption": "CS2Freitag Callouts, Taktik-Board & Utility-Planer (Desktop)"
+              },
+              {
+                "@type": "ImageObject",
+                "url": "https://cs2freitag.github.io/app/screenshot-mobile.png",
+                "caption": "CS2Freitag Mobile Callout Quiz & Radar-Ansicht"
+              },
+              {
+                "@type": "ImageObject",
+                "url": "https://cs2freitag.github.io/app/maps/cobblestone.png",
+                "caption": "CS2 Cobblestone Callouts Radar (Drop, Chicken, Connector, B Main, CT Ramp)"
+              },
+              {
+                "@type": "ImageObject",
+                "url": "https://cs2freitag.github.io/app/maps/mirage.png",
+                "caption": "CS2 Mirage Callouts & Utility Radar (Palace, Window, Connector, Jungle, Stairs)"
+              },
+              {
+                "@type": "ImageObject",
+                "url": "https://cs2freitag.github.io/app/maps/dust2.png",
+                "caption": "CS2 Dust2 Callouts Radar (Long Doors, Pit, Catwalk, Xbox, Upper Tunnels)"
+              },
+              {
+                "@type": "ImageObject",
+                "url": "https://cs2freitag.github.io/app/maps/inferno.png",
+                "caption": "CS2 Inferno Callouts & Banana Utility Radar (Banana, Car, Coffins, Pit, Apps)"
+              },
+              {
+                "@type": "ImageObject",
+                "url": "https://cs2freitag.github.io/app/maps/italy.png",
+                "caption": "CS2 Italy Callouts Radar (T House, Balcony, Bridge, Wine Cellar, Market)"
+              }
+            ],
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "EUR"
+            }
           },
           {
-            "@type": "ImageObject",
-            "url": "https://cs2freitag.github.io/app/screenshot-mobile.png",
-            "caption": "CS2Freitag Mobile Callout Quiz & Radar-Ansicht"
-          },
-          {
-            "@type": "ImageObject",
-            "url": "https://cs2freitag.github.io/app/maps/mirage.png",
-            "caption": "CS2 Mirage Callouts & Taktik-Radar"
-          },
-          {
-            "@type": "ImageObject",
-            "url": "https://cs2freitag.github.io/app/maps/cobblestone.png",
-            "caption": "CS2 Cobblestone Callouts & Taktik-Radar"
+            "@type": "FAQPage",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "Welche Spielmodi bietet das CS2 Callout-Quiz?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Das interaktive Callout-Quiz bietet 5 Fragen, 10 Fragen (ab 10 Callouts), Alle Callouts, das Schwachstellen-Training (ein Spot verschwindet erst nach 3 fehlerfreien Antworten in Folge) sowie die 40-Sekunden-C4-Challenge mit persönlichem Highscore pro Karte."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Welche CS2 Maps und Utility-Funktionen sind enthalten?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Enthalten sind unter anderem Inferno (42 Callouts), Mirage (35), Cobblestone (31), Train (28), Cache (28), Ancient (27), Anubis (27), Vertigo (25), Dust II (23), Overpass (15), Nuke (14) und Italy (14) – inklusive 2-Punkt-Smokes, Flashes, Molotovs, Jumpthrow-Wurflinien und 1-Klick-Discord-PNG-Export."
+                }
+              }
+            ]
           }
-        ],
-        "offers": {
-          "@type": "Offer",
-          "price": "0",
-          "priceCurrency": "EUR"
-        }
+        ]
       }
     </script>
     <meta name="mobile-web-app-capable" content="yes" />
@@ -121,12 +159,19 @@
   <body ontouchstart="" class="bg-zinc-950 text-zinc-100 antialiased selection:bg-zinc-200 selection:text-zinc-900 min-h-dvh">
     <div id="root"></div>
     <noscript>
-      <main style="max-width:800px;margin:2rem auto;padding:1.5rem;font-family:sans-serif;color:#f4f4f5;line-height:1.6">
+      <main style="max-width:860px;margin:2rem auto;padding:1.5rem;font-family:sans-serif;color:#f4f4f5;line-height:1.6">
         <h1>CS2Freitag – CS2 Callouts, Quiz, Taktik &amp; Utility</h1>
-        <p>Interaktives CS2 Callout-Quiz (inkl. 40-Sekunden-C4-Challenge &amp; Schwachstellen-Trainer) sowie Taktik- &amp; Utility-Planer für Counter-Strike 2 – kostenlos im Browser, als Offline-PWA und mit 1-Klick-Discord-PNG-Export.</p>
-        <h2>Unterstützte CS2 Maps &amp; Callouts</h2>
-        <p>Mirage Callouts, Dust2 Callouts, Inferno Callouts, Cobblestone Callouts, Italy Callouts, Nuke, Ancient, Anubis, Overpass, Train, Cache und Vertigo – inklusive 2-Punkt-Smokes, Flashes, Molotovs und Jumpthrow-Wurflinien.</p>
-        <p><a href="./callouts/" style="color:#34d399">CS2 Callouts &amp; Quiz Übersicht (Deutsch)</a> · <a href="./en/" style="color:#34d399">CS2 Callout Quiz &amp; Tactic Board (English)</a></p>
+        <p>Interaktives CS2 Callout-Quiz (5/10/Alle, Schwachstellen-Training &amp; 40-Sekunden-C4-Challenge) sowie Taktik- &amp; Utility-Planer für Counter-Strike 2 – kostenlos im Browser, als Offline-PWA und mit 1-Klick-Discord-PNG-Export (Deutsch &amp; English).</p>
+        <h2>CS2 Map Callouts &amp; Utility Lineups</h2>
+        <ul>
+          <li><strong>Cobblestone Callouts (31):</strong> Drop, Connector, Chicken, B Main, CT Ramp, Mid, A, B.</li>
+          <li><strong>Mirage Callouts (35):</strong> Palace, Ramp, Window, Connector, Jungle, Stairs, Top Mid, Apartments, Van, CT.</li>
+          <li><strong>Dust II Callouts (23):</strong> Long Doors, Pit, Goose, Catwalk, Xbox, Mid Doors, Upper Tunnels, B.</li>
+          <li><strong>Inferno Callouts (42):</strong> Banana, Car, Sandbags, Coffins, Dark (Emo), Construction, Pit, Apps, Library.</li>
+          <li><strong>Italy Callouts (14):</strong> T House, Balcony, Bridge, Kitchen, Connector, Wine Cellar, Market, Mid, Apartments, Long, Alley.</li>
+          <li><strong>Weitere CS2 Maps:</strong> Train (28), Cache (28), Ancient (27), Anubis (27), Vertigo (25), Overpass (15), Nuke (14), Shelter (10).</li>
+        </ul>
+        <p>Free CS2 Callout Quiz, 40s C4 Challenge, 2D Tactic Board, Smoke/Flash/Molotov Throw Lines (Left Click, Right Click, Jumpthrow, Run+Jumpthrow) &amp; Discord PNG Export.</p>
       </main>
     </noscript>
     <script type="module" src="/src/main.tsx"></script>
