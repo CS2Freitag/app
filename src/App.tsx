@@ -12,6 +12,7 @@ import {
   saveCustomGroups,
   resetToDefaults,
   saveDeletedMapId,
+  reconcileWithDefaultMaps,
 } from './services/storage';
 import { MapData, Theme, Language } from './types';
 import { Header } from './components/Header';
@@ -282,8 +283,9 @@ export default function App() {
           }
 
           if (cloudMaps && cloudMaps.length > 0) {
-            setMaps(cloudMaps);
-            saveStoredMaps(cloudMaps);
+            const reconciled = reconcileWithDefaultMaps(cloudMaps);
+            setMaps(reconciled);
+            saveStoredMaps(reconciled);
           }
         } catch (err) {
           console.warn('Auto cloud sync on startup/login failed or offline:', err);
@@ -313,8 +315,9 @@ export default function App() {
             }
           }
           if (cloudMaps && cloudMaps.length > 0) {
-            setMaps(cloudMaps);
-            saveStoredMaps(cloudMaps);
+            const reconciled = reconcileWithDefaultMaps(cloudMaps);
+            setMaps(reconciled);
+            saveStoredMaps(reconciled);
           }
         } catch (e) {
           console.warn('Initial download after login error:', e);
@@ -380,8 +383,9 @@ export default function App() {
       }
 
       if (cloudMaps && cloudMaps.length > 0) {
-        setMaps(cloudMaps);
-        saveStoredMaps(cloudMaps);
+        const reconciled = reconcileWithDefaultMaps(cloudMaps);
+        setMaps(reconciled);
+        saveStoredMaps(reconciled);
       }
     } catch (err) {
       console.error('Download failed:', err);
@@ -645,8 +649,9 @@ export default function App() {
     try {
       const parsed = JSON.parse(text);
       if (parsed && Array.isArray(parsed.maps)) {
-        setMaps(parsed.maps);
-        saveStoredMaps(parsed.maps);
+        const nextMaps = silent ? reconcileWithDefaultMaps(parsed.maps) : parsed.maps;
+        setMaps(nextMaps);
+        saveStoredMaps(nextMaps);
 
         if (Array.isArray(parsed.settings?.favorites)) {
           setFavorites(parsed.settings.favorites);

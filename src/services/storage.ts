@@ -174,6 +174,95 @@ function mergeDefaultCallouts(map: MapData, defaultMap?: MapData): MapData {
   };
 }
 
+export function reconcileWithDefaultMaps(inputMaps: MapData[]): MapData[] {
+  const deletedIds = loadDeletedMapIds();
+  const initialMapMap = new Map(INITIAL_MAPS.map((m) => [m.id, m]));
+
+  // Upgrade standard maps if defaultVersion is newer (or legacy Cobblestone/Italy), preserving user tactic presets
+  let parsed: MapData[] = (inputMaps || []).map((m) => {
+    const defaultVersion = initialMapMap.get(m.id);
+    const isOutdatedCobblestone =
+      m.id === 'cobblestone' &&
+      Boolean(defaultVersion) &&
+      (!m.image?.startsWith('data:image/jpeg') ||
+        (m.callouts || []).some((c) => c.id === 'cbble_sniper_tower'));
+    const isOutdatedItaly =
+      m.id === 'italy' &&
+      Boolean(defaultVersion) &&
+      (defaultVersion?.callouts?.length || 0) >= 10 &&
+      (m.callouts || []).length <= 3 &&
+      (m.callouts || []).every((c) =>
+        ['italy_market', 'italy_t_spawn', 'italy_ct_spawn'].includes(c.id)
+      );
+    const hasNewerDefault =
+      Boolean(defaultVersion) &&
+      (m.updatedAt || 0) < (defaultVersion?.updatedAt || 0);
+
+    if (defaultVersion && (hasNewerDefault || isOutdatedCobblestone || isOutdatedItaly)) {
+      const existingPresets = m.tacticData?.presets || [];
+      const defaultPresets = defaultVersion.tacticData?.presets || [];
+      const presetMap = new Map<string, any>();
+      for (const p of defaultPresets) {
+        presetMap.set(p.id, p);
+      }
+      for (const p of existingPresets) {
+        const prev = presetMap.get(p.id);
+        if (!prev || (p.updatedAt || 0) >= (prev.updatedAt || 0)) {
+          presetMap.set(p.id, p);
+        }
+      }
+      const mergedPresets = Array.from(presetMap.values());
+
+      return {
+        ...defaultVersion,
+        tacticData: {
+          drawings: (defaultVersion.tacticData?.drawings?.length ? defaultVersion.tacticData.drawings : m.tacticData?.drawings) || [],
+          utilities: (defaultVersion.tacticData?.utilities?.length ? defaultVersion.tacticData.utilities : m.tacticData?.utilities) || [],
+          players: (defaultVersion.tacticData?.players?.length ? defaultVersion.tacticData.players : m.tacticData?.players) || [],
+          layers: defaultVersion.tacticData?.layers || m.tacticData?.layers,
+          presets: mergedPresets,
+        },
+        image: defaultVersion.image && defaultVersion.image.startsWith('/') ? defaultVersion.image.substring(1) : defaultVersion.image,
+        lowerImage: defaultVersion.lowerImage && defaultVersion.lowerImage.startsWith('/') ? defaultVersion.lowerImage.substring(1) : defaultVersion.lowerImage,
+      };
+    }
+    const merged = defaultVersion ? mergeDefaultCallouts(m, defaultVersion) : m;
+    return {
+      ...merged,
+      image: merged.image && merged.image.startsWith('/') ? merged.image.substring(1) : merged.image,
+      lowerImage: merged.lowerImage && merged.lowerImage.startsWith('/') ? merged.lowerImage.substring(1) : merged.lowerImage,
+    };
+  });
+
+  // Add any missing maps from INITIAL_MAPS (e.g. newly added standard maps)
+  const existingIds = new Set(parsed.map((m) => m.id));
+  for (const defaultMap of INITIAL_MAPS) {
+    if (!existingIds.has(defaultMap.id) && !deletedIds.has(defaultMap.id)) {
+      parsed.push(defaultMap);
+    }
+  }
+
+  parsed = parsed.filter(
+    (m) =>
+      m.category !== 'armsrace' &&
+      m.id !== 'baggage' &&
+      m.id !== 'shoots' &&
+      m.id !== 'poseidon' &&
+      m.id !== 'custom_1793729592299' &&
+      !(m.name === 'Poseidon' && (!m.callouts || m.callouts.length === 0)) &&
+      !deletedIds.has(m.id)
+  );
+
+  parsed = parsed.map((m) => {
+    if (['office', 'italy', 'agency', 'assault'].includes(m.id)) {
+      return { ...m, category: 'hostage' };
+    }
+    return m;
+  });
+
+  return applyDefaultSpawnImages(parsed);
+}
+
 export function loadStoredMaps(): MapData[] {
   if (!isBrowser) {
     return applyDefaultSpawnImages(INITIAL_MAPS);
@@ -181,88 +270,13 @@ export function loadStoredMaps(): MapData[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.MAPS);
     const deletedIds = loadDeletedMapIds();
-    const initialMapMap = new Map(INITIAL_MAPS.map((m) => [m.id, m]));
 
     if (raw) {
-      let parsed: MapData[] = JSON.parse(raw);
+      const parsed: MapData[] = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        // Upgrade standard maps if defaultVersion has a newer updatedAt timestamp, while preserving user tactic presets
-        parsed = parsed.map((m) => {
-          const defaultVersion = initialMapMap.get(m.id);
-          const isOutdatedCobblestone =
-            m.id === 'cobblestone' &&
-            defaultVersion &&
-            (!m.image?.startsWith('data:image/jpeg') ||
-              (m.callouts || []).some((c) => c.id === 'cbble_sniper_tower'));
-          const hasNewerDefault =
-            Boolean(defaultVersion) &&
-            (m.updatedAt || 0) < (defaultVersion?.updatedAt || 0);
-
-          if (defaultVersion && (hasNewerDefault || isOutdatedCobblestone)) {
-            const existingPresets = m.tacticData?.presets || [];
-            const defaultPresets = defaultVersion.tacticData?.presets || [];
-            const presetMap = new Map<string, any>();
-            for (const p of defaultPresets) {
-              presetMap.set(p.id, p);
-            }
-            for (const p of existingPresets) {
-              const prev = presetMap.get(p.id);
-              if (!prev || (p.updatedAt || 0) >= (prev.updatedAt || 0)) {
-                presetMap.set(p.id, p);
-              }
-            }
-            const mergedPresets = Array.from(presetMap.values());
-
-            return {
-              ...defaultVersion,
-              tacticData: {
-                drawings: (defaultVersion.tacticData?.drawings?.length ? defaultVersion.tacticData.drawings : m.tacticData?.drawings) || [],
-                utilities: (defaultVersion.tacticData?.utilities?.length ? defaultVersion.tacticData.utilities : m.tacticData?.utilities) || [],
-                players: (defaultVersion.tacticData?.players?.length ? defaultVersion.tacticData.players : m.tacticData?.players) || [],
-                layers: defaultVersion.tacticData?.layers || m.tacticData?.layers,
-                presets: mergedPresets,
-              },
-              image: defaultVersion.image && defaultVersion.image.startsWith('/') ? defaultVersion.image.substring(1) : defaultVersion.image,
-              lowerImage: defaultVersion.lowerImage && defaultVersion.lowerImage.startsWith('/') ? defaultVersion.lowerImage.substring(1) : defaultVersion.lowerImage,
-            };
-          }
-          const merged = defaultVersion ? mergeDefaultCallouts(m, defaultVersion) : m;
-          return {
-            ...merged,
-            image: merged.image && merged.image.startsWith('/') ? merged.image.substring(1) : merged.image,
-            lowerImage: merged.lowerImage && merged.lowerImage.startsWith('/') ? merged.lowerImage.substring(1) : merged.lowerImage,
-          };
-        });
-
-        // Add any missing maps from INITIAL_MAPS (e.g. newly added standard maps)
-        const existingIds = new Set(parsed.map((m) => m.id));
-        for (const defaultMap of INITIAL_MAPS) {
-          if (!existingIds.has(defaultMap.id) && !deletedIds.has(defaultMap.id)) {
-            parsed.push(defaultMap);
-          }
-        }
-
-        parsed = parsed.filter(
-          (m) =>
-            m.category !== 'armsrace' &&
-            m.id !== 'baggage' &&
-            m.id !== 'shoots' &&
-            m.id !== 'poseidon' &&
-            m.id !== 'custom_1793729592299' &&
-            !(m.name === 'Poseidon' && (!m.callouts || m.callouts.length === 0)) &&
-            !deletedIds.has(m.id)
-        );
-
-        parsed = parsed.map((m) => {
-          if (['office', 'italy', 'agency', 'assault'].includes(m.id)) {
-            return { ...m, category: 'hostage' };
-          }
-          return m;
-        });
-
-        parsed = applyDefaultSpawnImages(parsed);
-        saveStoredMaps(parsed);
-        return parsed;
+        const reconciled = reconcileWithDefaultMaps(parsed);
+        saveStoredMaps(reconciled);
+        return reconciled;
       }
     }
 

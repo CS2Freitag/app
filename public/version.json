@@ -1,15 +1,24 @@
 {
-  "version": "3.130",
+  "version": "3.131",
   "major": 3,
-  "patch": 130,
+  "patch": 131,
   "releaseDate": "2026-11-20",
-  "title": "Update v3.130: Quiz-Filtereinstellungen dauerhaft gespeichert",
-  "description": "Der ausgewählte Quiz-Modus sowie die Kartenfilter („≥ 10 Callouts“ und „Nur Favoriten“) werden ab sofort dauerhaft lokal gespeichert.",
+  "title": "Update v3.131: Zuverlässige Übernahme neuer Standardkarten (inkl. Italy) auch bei Cloud- & Autosave-Sync",
+  "description": "Neue Standardkarten-Updates wie die 14 Callouts & Bereiche für Italy werden ab sofort auch dann sauber übernommen, wenn Cloud-Sync oder eine verknüpfte lokale Backup-Datei aktiv ist.",
   "changes": [
-    "Quiz-Trainer: Zuletzt gewählter Spielmodus bleibt beim nächsten Öffnen der App erhalten",
-    "Neue speicherbare Kartenfilter im Quiz: „≥ 10 Callouts“ und „Nur Favoriten“ bleiben ebenfalls dauerhaft gespeichert"
+    "Cloud-Sync & lokaler Autosave-Startabgleich übernehmen neuere Standardkarten (wie die 14 Callouts & Bereiche auf Italy) automatisch, ohne persönliche Taktik-Vorlagen zu verlieren",
+    "Zusätzliche Erkennung für das frühere 3-Callout-Italy sorgt dafür, dass bestehende Cloud-/Geräte-Stände zuverlässig auf die 14 Callouts aktualisiert werden"
   ],
   "history": [
+    {
+      "version": "3.131",
+      "releaseDate": "2026-11-20",
+      "title": "Zuverlässige Übernahme neuer Standardkarten (inkl. Italy) auch bei Cloud- & Autosave-Sync",
+      "changes": [
+        "Cloud-Sync & lokaler Autosave-Startabgleich übernehmen neuere Standardkarten (wie die 14 Callouts & Bereiche auf Italy) automatisch, ohne persönliche Taktik-Vorlagen zu verlieren",
+        "Zusätzliche Erkennung für das frühere 3-Callout-Italy sorgt dafür, dass bestehende Cloud-/Geräte-Stände zuverlässig auf die 14 Callouts aktualisiert werden"
+      ]
+    },
     {
       "version": "3.130",
       "releaseDate": "2026-11-20",
