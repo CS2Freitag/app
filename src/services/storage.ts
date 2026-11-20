@@ -98,9 +98,10 @@ function applyDefaultSpawnImages(maps: MapData[]): MapData[] {
         updated.pinOffsetX = 0;
         updated.pinOffsetY = 0;
       } else {
+        const hadExplicitPinOffset = updated.pinOffsetY !== undefined;
         updated.pinOffsetX = updated.pinOffsetX ?? 0;
         updated.pinOffsetY = updated.pinOffsetY ?? 25;
-        if (!(updated as any).__shifted) {
+        if (!(updated as any).__shifted && !hadExplicitPinOffset && !(updated.id || '').startsWith('callout_')) {
           updated.y = Math.round((updated.y - 1.5) * 10) / 10;
           if (updated.area) {
             updated.area = {
@@ -109,8 +110,8 @@ function applyDefaultSpawnImages(maps: MapData[]): MapData[] {
               points: updated.area.points ? updated.area.points.map(p => ({ ...p, y: Math.round((p.y - 1.5) * 10) / 10 })) : undefined
             };
           }
-          (updated as any).__shifted = true;
         }
+        (updated as any).__shifted = true;
       }
       const name = (updated.name || '').trim().toLowerCase();
       const id = updated.id || '';
@@ -185,30 +186,44 @@ export function loadStoredMaps(): MapData[] {
     if (raw) {
       let parsed: MapData[] = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        // Merge missing default callouts from INITIAL_MAPS into standard maps while preserving user custom edits
+        // Upgrade standard maps if defaultVersion has a newer updatedAt timestamp, while preserving user tactic presets
         parsed = parsed.map((m) => {
           const defaultVersion = initialMapMap.get(m.id);
-          // Upgrade outdated Cobblestone default map to the v3.110 radar + 23 callouts
-          if (
+          const isOutdatedCobblestone =
             m.id === 'cobblestone' &&
             defaultVersion &&
-            ((m.updatedAt || 0) < (defaultVersion.updatedAt || 0) ||
-              !m.image?.startsWith('data:image/jpeg') ||
-              (m.callouts || []).some((c) => c.id === 'cbble_sniper_tower'))
-          ) {
-            const existingPresets = m.tacticData?.presets;
+            (!m.image?.startsWith('data:image/jpeg') ||
+              (m.callouts || []).some((c) => c.id === 'cbble_sniper_tower'));
+          const hasNewerDefault =
+            Boolean(defaultVersion) &&
+            (m.updatedAt || 0) < (defaultVersion?.updatedAt || 0);
+
+          if (defaultVersion && (hasNewerDefault || isOutdatedCobblestone)) {
+            const existingPresets = m.tacticData?.presets || [];
+            const defaultPresets = defaultVersion.tacticData?.presets || [];
+            const presetMap = new Map<string, any>();
+            for (const p of defaultPresets) {
+              presetMap.set(p.id, p);
+            }
+            for (const p of existingPresets) {
+              const prev = presetMap.get(p.id);
+              if (!prev || (p.updatedAt || 0) >= (prev.updatedAt || 0)) {
+                presetMap.set(p.id, p);
+              }
+            }
+            const mergedPresets = Array.from(presetMap.values());
+
             return {
               ...defaultVersion,
               tacticData: {
-                drawings: defaultVersion.tacticData?.drawings || [],
-                utilities: defaultVersion.tacticData?.utilities || [],
-                players: defaultVersion.tacticData?.players || [],
+                drawings: (defaultVersion.tacticData?.drawings?.length ? defaultVersion.tacticData.drawings : m.tacticData?.drawings) || [],
+                utilities: (defaultVersion.tacticData?.utilities?.length ? defaultVersion.tacticData.utilities : m.tacticData?.utilities) || [],
+                players: (defaultVersion.tacticData?.players?.length ? defaultVersion.tacticData.players : m.tacticData?.players) || [],
                 layers: defaultVersion.tacticData?.layers || m.tacticData?.layers,
-                presets:
-                  existingPresets && existingPresets.length > 0
-                    ? existingPresets
-                    : defaultVersion.tacticData?.presets || [],
+                presets: mergedPresets,
               },
+              image: defaultVersion.image && defaultVersion.image.startsWith('/') ? defaultVersion.image.substring(1) : defaultVersion.image,
+              lowerImage: defaultVersion.lowerImage && defaultVersion.lowerImage.startsWith('/') ? defaultVersion.lowerImage.substring(1) : defaultVersion.lowerImage,
             };
           }
           const merged = defaultVersion ? mergeDefaultCallouts(m, defaultVersion) : m;
@@ -381,7 +396,7 @@ export function resetToDefaults(): MapData[] {
       //
     }
   }
-  const cleanDefaults = INITIAL_MAPS;
+  const cleanDefaults = applyDefaultSpawnImages(INITIAL_MAPS);
   saveStoredMaps(cleanDefaults);
   return cleanDefaults;
 }

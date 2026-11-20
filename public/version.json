@@ -1,16 +1,100 @@
 {
-  "version": "3.121",
+  "version": "3.130",
   "major": 3,
-  "patch": 121,
-  "releaseDate": "2026-11-19",
-  "title": "Update v3.121: Mobile „Prüfen“-Text, Gelb/Orange „Was ist neu“ & gehärtete Update-Sperre",
-  "description": "Der „Prüfen“-Button zeigt seinen Text jetzt auch auf Smartphones, „Was ist neu“ leuchtet im passenden Amber-Ton und der PWA-Update-Schutz prüft Cache-Einträge unabhängig von Proxy-Headern.",
+  "patch": 130,
+  "releaseDate": "2026-11-20",
+  "title": "Update v3.130: Quiz-Filtereinstellungen dauerhaft gespeichert",
+  "description": "Der ausgewählte Quiz-Modus sowie die Kartenfilter („≥ 10 Callouts“ und „Nur Favoriten“) werden ab sofort dauerhaft lokal gespeichert.",
   "changes": [
-    "Einstellungen: „Prüfen“-Text neben dem Aktualisierungs-Symbol jetzt auch in der mobilen Ansicht sichtbar",
-    "Einstellungen: „Was ist neu“-Link im gelb/orangen Amber-Stil hervorgehoben (passend zum Hilfe-Link darunter)",
-    "PWA-Update-Sperre weiter gehärtet: Service Worker vermeidet unnötige Re-Registrierungen beim App-Start und gleicht geschützte App-Shell-Caches mit ignoreVary/ignoreSearch ab"
+    "Quiz-Trainer: Zuletzt gewählter Spielmodus bleibt beim nächsten Öffnen der App erhalten",
+    "Neue speicherbare Kartenfilter im Quiz: „≥ 10 Callouts“ und „Nur Favoriten“ bleiben ebenfalls dauerhaft gespeichert"
   ],
   "history": [
+    {
+      "version": "3.130",
+      "releaseDate": "2026-11-20",
+      "title": "Quiz-Filtereinstellungen dauerhaft gespeichert",
+      "changes": [
+        "Quiz-Trainer: Zuletzt gewählter Spielmodus bleibt beim nächsten Öffnen der App erhalten",
+        "Neue speicherbare Kartenfilter im Quiz: „≥ 10 Callouts“ und „Nur Favoriten“ bleiben ebenfalls dauerhaft gespeichert"
+      ]
+    },
+    {
+      "version": "3.129",
+      "releaseDate": "2026-11-20",
+      "title": "Italy mit 14 präzisen Callouts & Bereichen",
+      "changes": [
+        "Italy: 14 übersichtliche Haupt-Callouts & Bereiche (T Spawn, T House, Balcony, Bridge, Kitchen, Connector, Wine Cellar, Market, Mid, Apartments, Stairs, Long, Alley, CT Spawn) passgenau auf das CS2-Radar gesetzt",
+        "Italy ist damit ab sofort auch im Klassik-Quiz und in der 40-Sekunden-C4-Challenge (ab 10 Callouts) spielbar"
+      ]
+    },
+    {
+      "version": "3.128",
+      "releaseDate": "2026-11-20",
+      "title": "C4-Challenge ab 10 Callouts & Highscore im Format „X von Y Richtig“",
+      "changes": [
+        "40-Sekunden-C4-Challenge: Kartenfilter auf mindestens 10 Callouts angehoben und Hinweistext auf „Rush unter Zeitdruck durch so viele Callouts wie möglich (Karten ab 10 Callouts)“ aktualisiert",
+        "C4-Highscore-Anzeige zeigt nun genau, wie viele der in 40 Sekunden gestellten Fragen richtig beantwortet wurden (z. B. „Highscore: 12 von 15 Richtig“)"
+      ]
+    },
+    {
+      "version": "3.127",
+      "releaseDate": "2026-11-20",
+      "title": "C4-Challenge Highscore nach richtigen Antworten",
+      "changes": [
+        "40-Sekunden-C4-Challenge: Kartenübersicht und Ergebnis zeigen den persönlichen Highscore als Anzahl richtiger Antworten in 40 Sekunden (z. B. „Highscore: 14 Richtig • 35 Gesamt“)",
+        "Anzeige bleibt weiterhin exklusiv auf den Modus „40-Sekunden-C4-Challenge“ beschränkt"
+      ]
+    },
+    {
+      "version": "3.126",
+      "releaseDate": "2026-11-20",
+      "title": "C4-Highscore-Zeit, neuer Standard-Kartenstand & Auto-Backup-Ordner",
+      "changes": [
+        "40-Sekunden-C4-Challenge: Persönlicher Highscore je Karte als gemessene Zeit (MM:SS Min.) und Trefferquote direkt bei den Karten angezeigt (exklusiv in diesem Modus)",
+        "Neuer Standard-Kartenstand (inkl. aktualisierter Mirage- & Cobblestone-Callouts und Bereiche) übernommen",
+        "Automatischer Standard-Backup-Ordner (standard-backup/): Hochgeladene JSON- oder ZIP-Backups werden beim Build automatisch als neuer Standard übernommen"
+      ]
+    },
+    {
+      "version": "3.125",
+      "releaseDate": "2026-11-19",
+      "title": "Fehleranzeige exklusiv im Schwachstellen-Modus",
+      "changes": [
+        "Kartenübersicht im Quiz: Fehlermenge wird gezielt und exklusiv im Modus „Schwachstellen“ angezeigt",
+        "Standard-Modi 1–5: Klassische Anzeige der Callout-Anzahl ohne Fehlerhinweise beibehalten"
+      ]
+    },
+    {
+      "version": "3.124",
+      "releaseDate": "2026-11-19",
+      "title": "Schwachstellen-Sperre gegen Kartensprung, 3x-Meister-Regel & Fehleranzeige",
+      "changes": [
+        "Schwachstellen-Quiz: Kartensprung mitten im Quiz behoben (aktive Karte bleibt bis zum Rundenende stabil gelockt)",
+        "3x-Meister-Regel: Ein fehlerhafter Callout wird erst nach 3 aufeinanderfolgenden richtigen Antworten (ohne Fehler) aus der Schwachstellen-Liste entfernt",
+        "Fehler-Zähler: Karten zeigen übersichtlich die genaue Anzahl fehlerhafter Callouts (Anzahl falscher Stellen, nicht Fehlerhäufigkeit)"
+      ]
+    },
+    {
+      "version": "3.123",
+      "releaseDate": "2026-11-19",
+      "title": "Statische Ebenenanzeige im Quiz & präzise 2-Ebenen-Erkennung",
+      "changes": [
+        "Multiple-Choice-Quiz: Reiner Ebenen-Statusindikator (nicht klickbar) anstelle von Umschalt-Buttons, sodass die korrekte Kartenebene immer automatisch passend angezeigt wird",
+        "2-Ebenen-Erkennung weiter gehärtet: Einzelne Ansagen wie „B“ oder Bombenplatz-Zonen schalten auf Nuke und Vertigo zuverlässig auf die Unterebene",
+        "Optimierter Spielfluss im Quiz-Trainer ohne störende manuelle Eingriffe"
+      ]
+    },
+    {
+      "version": "3.122",
+      "releaseDate": "2026-11-19",
+      "title": "Automatischer Sprung in C4-Challenge & robuste Quiz-Sicherheit",
+      "changes": [
+        "C4-Challenge: Nach dem Klicken einer Position wird automatisch zur nächsten Frage gewechselt für maximalen Zeitdruck-Fluß",
+        "C4-Challenge: Bei Ablauf der Zeit (Detonation) wird keine Gewinner-Animation mehr ausgelöst",
+        "Quiz-Modal: Startfehler durch Vorab-Initialisierung von isC4Mode behoben"
+      ]
+    },
     {
       "version": "3.121",
       "releaseDate": "2026-11-19",

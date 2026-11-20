@@ -4,7 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "sync-backup": "node scripts/sync-default-backup.mjs",
+    "predev": "node scripts/sync-default-backup.mjs",
     "dev": "tsx server.ts",
+    "prebuild": "node scripts/sync-default-backup.mjs",
     "build": "vite build && node scripts/build-ico.cjs && cp dist/index.html dist/404.html",
     "start": "node server.ts",
     "preview": "vite preview",
