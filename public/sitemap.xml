@@ -1,9 +1,136 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset
+  xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+  xmlns:xhtml="http://www.w3.org/1999/xhtml"
+  xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
+>
   <url>
     <loc>https://cs2freitag.github.io/app/</loc>
-    <lastmod>2026-11-16</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="de" href="https://cs2freitag.github.io/app/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://cs2freitag.github.io/app/en/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cs2freitag.github.io/app/en/" />
+    <image:image>
+      <image:loc>https://cs2freitag.github.io/app/screenshot-desktop.png</image:loc>
+      <image:title>CS2Freitag – CS2 Callouts, Quiz, Taktik &amp; Utility Planer</image:title>
+      <image:caption>Interaktives CS2 Callout-Quiz, Taktik-Board und Utility-Lineups als Web-App</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://cs2freitag.github.io/app/screenshot-mobile.png</image:loc>
+      <image:title>CS2Freitag Mobile – CS2 Callout Quiz &amp; Radar</image:title>
+      <image:caption>Mobile Ansicht des CS2 Callout-Trainers und Taktik-Boards</image:caption>
+    </image:image>
+  </url>
+
+  <url>
+    <loc>https://cs2freitag.github.io/app/callouts/</loc>
+    <lastmod>2026-11-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="de" href="https://cs2freitag.github.io/app/callouts/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://cs2freitag.github.io/app/en/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cs2freitag.github.io/app/en/" />
+    <image:image>
+      <image:loc>https://cs2freitag.github.io/app/maps/cobblestone.png</image:loc>
+      <image:title>CS2 Cobblestone Callouts Radar Karte</image:title>
+      <image:caption>Cobblestone Callouts inkl. Drop, Connector, Chicken, B Main und CT Ramp</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://cs2freitag.github.io/app/maps/mirage.png</image:loc>
+      <image:title>CS2 Mirage Callouts &amp; Utility Taktik Radar</image:title>
+      <image:caption>Mirage Callouts inkl. Palace, Window, Connector, Jungle, Stairs und Apartments</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://cs2freitag.github.io/app/maps/dust2.png</image:loc>
+      <image:title>CS2 Dust2 Callouts Radar Karte</image:title>
+      <image:caption>Dust II Callouts inkl. Long Doors, Pit, Catwalk, Xbox und Upper Tunnels</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://cs2freitag.github.io/app/maps/inferno.png</image:loc>
+      <image:title>CS2 Inferno Callouts &amp; Banana Utility Radar</image:title>
+      <image:caption>Inferno Callouts inkl. Banana, Car, Coffins, Construction, Pit und Apps</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://cs2freitag.github.io/app/maps/italy.png</image:loc>
+      <image:title>CS2 Italy Callouts Radar Karte</image:title>
+      <image:caption>Italy Callouts inkl. T House, Balcony, Bridge, Wine Cellar, Market und Apartments</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://cs2freitag.github.io/app/maps/nuke.png</image:loc>
+      <image:title>CS2 Nuke Callouts Radar Karte</image:title>
+      <image:caption>Nuke Callouts inkl. Outside, Secret, Hut, Ramp und Silo</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://cs2freitag.github.io/app/maps/ancient.png</image:loc>
+      <image:title>CS2 Ancient Callouts Radar Karte</image:title>
+      <image:caption>Ancient Callouts inkl. Mid, Donut, Temple, Cave und B Site</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://cs2freitag.github.io/app/maps/anubis.png</image:loc>
+      <image:title>CS2 Anubis Callouts Radar Karte</image:title>
+      <image:caption>Anubis Callouts inkl. Canal, Bridge, Connector, Catwalk und Ruins</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://cs2freitag.github.io/app/maps/overpass.png</image:loc>
+      <image:title>CS2 Overpass Callouts Radar Karte</image:title>
+      <image:caption>Overpass Callouts inkl. Monster, Connector, Toilets und Fountain</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://cs2freitag.github.io/app/maps/train.png</image:loc>
+      <image:title>CS2 Train Callouts Radar Karte</image:title>
+      <image:caption>Train Callouts inkl. Popdog, Ivy, Heaven, Hell und Connector</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://cs2freitag.github.io/app/maps/cache.png</image:loc>
+      <image:title>CS2 Cache Callouts Radar Karte</image:title>
+      <image:caption>Cache Callouts inkl. A Long, Garage, Red, Truck und Connector</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://cs2freitag.github.io/app/maps/vertigo.png</image:loc>
+      <image:title>CS2 Vertigo Callouts Radar Karte</image:title>
+      <image:caption>Vertigo Callouts inkl. A Ramp, Mid, Elevator, Stairs und B Site</image:caption>
+    </image:image>
+  </url>
+
+  <url>
+    <loc>https://cs2freitag.github.io/app/en/</loc>
+    <lastmod>2026-11-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cs2freitag.github.io/app/en/" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://cs2freitag.github.io/app/callouts/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cs2freitag.github.io/app/en/" />
+    <image:image>
+      <image:loc>https://cs2freitag.github.io/app/screenshot-desktop.png</image:loc>
+      <image:title>CS2 Callout Quiz, Map Callouts, Tactics &amp; Utility Board</image:title>
+      <image:caption>Free Counter-Strike 2 Callout Quiz and Tactic Board with Discord PNG Export</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://cs2freitag.github.io/app/maps/cobblestone.png</image:loc>
+      <image:title>CS2 Cobblestone Callouts Radar Map</image:title>
+      <image:caption>Cobblestone Callouts with Drop, Chicken, Connector, B Main and Long A</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://cs2freitag.github.io/app/maps/mirage.png</image:loc>
+      <image:title>CS2 Mirage Callouts Radar Map</image:title>
+      <image:caption>Mirage Callouts with Palace, Window, Connector, Jungle, Stairs and Van</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://cs2freitag.github.io/app/maps/dust2.png</image:loc>
+      <image:title>CS2 Dust2 Callouts Radar Map</image:title>
+      <image:caption>Dust2 Callouts with Long Doors, Pit, Catwalk, Xbox and Upper Tunnels</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://cs2freitag.github.io/app/maps/inferno.png</image:loc>
+      <image:title>CS2 Inferno Callouts Radar Map</image:title>
+      <image:caption>Inferno Callouts with Banana, Car, Sandbags, Coffins, Pit and Apartments</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://cs2freitag.github.io/app/maps/italy.png</image:loc>
+      <image:title>CS2 Italy Callouts Radar Map</image:title>
+      <image:caption>Italy Callouts with T House, Balcony, Bridge, Wine Cellar and Market</image:caption>
+    </image:image>
   </url>
 </urlset>

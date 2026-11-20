@@ -1,15 +1,26 @@
 {
-  "version": "3.131",
+  "version": "3.132",
   "major": 3,
-  "patch": 131,
+  "patch": 132,
   "releaseDate": "2026-11-20",
-  "title": "Update v3.131: Zuverlässige Übernahme neuer Standardkarten (inkl. Italy) auch bei Cloud- & Autosave-Sync",
-  "description": "Neue Standardkarten-Updates wie die 14 Callouts & Bereiche für Italy werden ab sofort auch dann sauber übernommen, wenn Cloud-Sync oder eine verknüpfte lokale Backup-Datei aktiv ist.",
+  "title": "Update v3.132: Google-SEO für Callouts, Quiz, Taktik & Utility + Englische Seite & Bilder-Sitemap",
+  "description": "Verbesserte Auffindbarkeit bei Google (DE & EN) inklusive Callout-Quiz, Taktik- & Utility-Infos, eigener englischer Seite (/en/), deutscher Map-Übersicht (/callouts/) und Google Bilder-Sitemap.",
   "changes": [
-    "Cloud-Sync & lokaler Autosave-Startabgleich übernehmen neuere Standardkarten (wie die 14 Callouts & Bereiche auf Italy) automatisch, ohne persönliche Taktik-Vorlagen zu verlieren",
-    "Zusätzliche Erkennung für das frühere 3-Callout-Italy sorgt dafür, dass bestehende Cloud-/Geräte-Stände zuverlässig auf die 14 Callouts aktualisiert werden"
+    "Seitentitel, Meta-Beschreibung, Schema.org & hreflang auf „CS2 Callouts, Quiz, Taktik & Utility“ optimiert",
+    "Saubere englische Seite (/en/) und deutsche Karten-Übersicht (/callouts/) mit Cobblestone, Mirage, Dust2, Inferno, Italy & weiteren Maps ergänzt",
+    "Google Bilder-Sitemap für Screenshots und CS2-Map-Radare hinzugefügt"
   ],
   "history": [
+    {
+      "version": "3.132",
+      "releaseDate": "2026-11-20",
+      "title": "Google-SEO für Callouts, Quiz, Taktik & Utility + Englische Seite & Bilder-Sitemap",
+      "changes": [
+        "Seitentitel, Meta-Beschreibung, Schema.org & hreflang auf „CS2 Callouts, Quiz, Taktik & Utility“ optimiert",
+        "Saubere englische Seite (/en/) und deutsche Karten-Übersicht (/callouts/) mit Cobblestone, Mirage, Dust2, Inferno, Italy & weiteren Maps ergänzt",
+        "Google Bilder-Sitemap für Screenshots und CS2-Map-Radare hinzugefügt"
+      ]
+    },
     {
       "version": "3.131",
       "releaseDate": "2026-11-20",
