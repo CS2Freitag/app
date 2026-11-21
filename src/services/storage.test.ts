@@ -47,3 +47,36 @@ test('reconcileWithDefaultMaps upgrades legacy 3-callout Italy even if cloud tim
   const loadedItaly = loaded.find((m) => m.id === 'italy');
   assert.equal(loadedItaly?.callouts.length, 14);
 });
+
+test('INITIAL_MAPS contains corrected Anubis T Spawn and reconcileWithDefaultMaps upgrades legacy misplaced Anubis', () => {
+  const anubis = INITIAL_MAPS.find((m) => m.id === 'anubis');
+  assert.ok(anubis, 'Anubis map must exist in INITIAL_MAPS');
+  assert.equal(anubis.callouts.length, 27);
+  const tSpawn = anubis.callouts.find((c) => c.id === 'anubis_t_spawn');
+  assert.ok(tSpawn, 'anubis_t_spawn must exist');
+  assert.equal(tSpawn.x, 0.5);
+  assert.equal(tSpawn.y, 43.2);
+
+  const legacyAnubis = {
+    ...anubis,
+    updatedAt: Date.now() + 100000, // simulates previous cloud upload timestamp
+    tacticData: {
+      drawings: [],
+      utilities: [],
+      players: [],
+      presets: [{ id: 'user_anubis_preset', name: 'A Split', updatedAt: 456, drawings: [], utilities: [], players: [] }],
+    },
+    callouts: anubis.callouts.map((c) =>
+      c.id === 'anubis_t_spawn' ? { ...c, x: 51.1, y: 47.9 } : c
+    ),
+  } as any;
+
+  const reconciled = reconcileWithDefaultMaps([legacyAnubis]);
+  const upgradedAnubis = reconciled.find((m) => m.id === 'anubis');
+  assert.ok(upgradedAnubis);
+  const upgradedTSpawn = upgradedAnubis.callouts.find((c) => c.id === 'anubis_t_spawn');
+  assert.equal(upgradedTSpawn?.x, 0.5);
+  assert.equal(upgradedTSpawn?.y, 43.2);
+  assert.equal(upgradedAnubis.tacticData?.presets?.[0]?.id, 'user_anubis_preset');
+});
+

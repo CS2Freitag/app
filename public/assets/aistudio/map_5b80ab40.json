@@ -1,0 +1,1087 @@
+{
+  "type": "cs2freitag_single_map",
+  "version": 1,
+  "exportedAt": "2026-11-21T14:59:22.541Z",
+  "map": {
+    "isCenteredCoords": true,
+    "name": "Anubis",
+    "updatedAtClient": 1795093289688,
+    "category": "active",
+    "descriptionDe": "Ägyptische Stadt am Nil mit Wasserkanälen, Holzbrücke und vielen vertikalen Winkeln.",
+    "updatedAt": 1795273133226,
+    "slug": "anubis",
+    "descriptionEn": "Egyptian settlement along the Nile featuring waterways, central bridge, and vertical angles.",
+    "id": "anubis",
+    "callouts": [
+      {
+        "imageSize": 36,
+        "commonAnglesEn": "Canal, Double Doors, Window, Connector",
+        "textRotation": -90,
+        "danger": "high",
+        "rotation": 0,
+        "x": 0.3,
+        "displayMode": "text",
+        "pinOffsetX": 0,
+        "commonAnglesDe": "Canal, Double Doors, Window, Connector",
+        "zone": "mid",
+        "id": "anubis_bridge",
+        "pinOffsetY": 0,
+        "tacticalTipEn": "Holding Bridge allows rapid cuts to both A and B sites.",
+        "name": "Bridge",
+        "y": 8.1,
+        "hidePin": true,
+        "descriptionEn": "The central wooden bridge overlooking canals and mid.",
+        "fontSize": 14,
+        "fontFamily": "mono",
+        "descriptionDe": "Die Holzbrücke, die das Zentrum der Karte dominiert.",
+        "tacticalTipDe": "Wer Bridge hält, kontrolliert die Rotationen beider Teams."
+      },
+      {
+        "name": "Canal (Water)",
+        "x": 8.5,
+        "tacticalTipEn": "Water footsteps reveal position; great for silent shift lurks.",
+        "zone": "mid",
+        "descriptionDe": "Der Wasserlauf unterhalb der Brücke.",
+        "descriptionEn": "The waterways underneath the bridge.",
+        "rotation": 0,
+        "tacticalTipDe": "Plätschern verrät Schritte; gut für heimliche Flanken mit Shift-Walking.",
+        "commonAnglesEn": "Bridge drop, B Connector, A Connector",
+        "danger": "medium",
+        "pinOffsetX": 0,
+        "imageSize": 36,
+        "hidePin": true,
+        "id": "anubis_canal",
+        "pinOffsetY": 0,
+        "textRotation": 0,
+        "displayMode": "text",
+        "fontFamily": "mono",
+        "fontSize": 12,
+        "y": 7.8,
+        "commonAnglesDe": "Bridge drop, B Connector, A Connector"
+      },
+      {
+        "tacticalTipDe": "Heaven smoken und auf Plate pflanzen; Cave/Main flankieren.",
+        "pinOffsetX": 0,
+        "descriptionDe": "Offener Bombenplatz mit Säulen und Blick auf Heaven.",
+        "fontSize": 16,
+        "descriptionEn": "Expansive bombsite with pillars and high-angle Heaven overview.",
+        "pinOffsetY": 0,
+        "y": -23.6,
+        "tacticalTipEn": "Smoke Heaven and plant on plateau; watch out for CT retakes from Walkway.",
+        "commonAnglesEn": "Heaven, A Main, Connector, Fountain",
+        "danger": "high",
+        "fontFamily": "mono",
+        "textRotation": 0,
+        "imageSize": 36,
+        "rotation": 0,
+        "displayMode": "text",
+        "area": {
+          "y": -30.1,
+          "height": 10.6,
+          "shape": "polygon",
+          "points": [
+            {
+              "y": -30.1,
+              "x": 30.8
+            },
+            {
+              "y": -30.1,
+              "x": 26.3
+            },
+            {
+              "y": -26.9,
+              "x": 26.4
+            },
+            {
+              "y": -26.9,
+              "x": 23
+            },
+            {
+              "x": 21.9,
+              "y": -26.4
+            },
+            {
+              "y": -25.4,
+              "x": 21.2
+            },
+            {
+              "y": -24.7,
+              "x": 20.6
+            },
+            {
+              "y": -23.5,
+              "x": 20.2
+            },
+            {
+              "y": -22.2,
+              "x": 19.9
+            },
+            {
+              "y": -19.9,
+              "x": 20
+            },
+            {
+              "y": -19.5,
+              "x": 19.9
+            },
+            {
+              "y": -19.5,
+              "x": 23.9
+            },
+            {
+              "x": 25.2,
+              "y": -19.8
+            },
+            {
+              "x": 25.9,
+              "y": -20.4
+            },
+            {
+              "x": 26.6,
+              "y": -21.1
+            },
+            {
+              "x": 27,
+              "y": -21.7
+            },
+            {
+              "y": -22.4,
+              "x": 27.2
+            },
+            {
+              "x": 27.2,
+              "y": -23.3
+            },
+            {
+              "y": -24.6,
+              "x": 27.2
+            },
+            {
+              "y": -24.7,
+              "x": 30.9
+            }
+          ],
+          "width": 11,
+          "x": 19.9
+        },
+        "commonAnglesDe": "Heaven, A Main, Connector, Fountain",
+        "name": "A",
+        "zone": "a_site",
+        "id": "anubis_a_site",
+        "x": 24,
+        "hidePin": true
+      },
+      {
+        "zone": "b_site",
+        "area": {
+          "x": -20.6,
+          "y": -4,
+          "points": [
+            {
+              "x": -20.6,
+              "y": 2.5
+            },
+            {
+              "y": -4,
+              "x": -20.6
+            },
+            {
+              "x": -16.4,
+              "y": -4
+            },
+            {
+              "x": -13.7,
+              "y": -1.6
+            },
+            {
+              "y": 2.6,
+              "x": -13.7
+            }
+          ],
+          "shape": "polygon",
+          "width": 6.9,
+          "height": 6.6
+        },
+        "name": "B",
+        "commonAnglesDe": "B Main, Canal, CT Connector, Back Site",
+        "danger": "high",
+        "rotation": 0,
+        "textRotation": 0,
+        "id": "anubis_b_site",
+        "y": -0.6,
+        "displayMode": "text",
+        "imageSize": 36,
+        "x": -17,
+        "tacticalTipDe": "Molotov auf Dark/Back Site; Rauch auf Street/CT.",
+        "fontFamily": "mono",
+        "commonAnglesEn": "B Main, Canal, CT Connector, Back Site",
+        "hidePin": true,
+        "descriptionDe": "Bombenplatz B mit zentraler Plattform und Säulen.",
+        "descriptionEn": "Bombsite B surrounding elevated platform and columns.",
+        "fontSize": 16,
+        "pinOffsetY": 0,
+        "tacticalTipEn": "Molotov dark corners and smoke CT spawn exit for secure plant.",
+        "pinOffsetX": 0
+      },
+      {
+        "customImage": "T.png",
+        "y": 43.2,
+        "displayMode": "image",
+        "imageSize": 36,
+        "id": "anubis_t_spawn",
+        "__shifted": true,
+        "commonAnglesEn": "Alley, Ruins",
+        "pinOffsetX": 0,
+        "tacticalTipDe": "Schneller Zugang zu B Main, Boat/Canal und A Main.",
+        "pinOffsetY": 25,
+        "descriptionDe": "Startpunkt der Terroristen.",
+        "descriptionEn": "Terrorist spawn area near ruins.",
+        "tacticalTipEn": "Quick paths branching to B Main, Canal/Boat, and A Main.",
+        "danger": "low",
+        "name": "T Spawn",
+        "commonAnglesDe": "Alley, Ruins",
+        "zone": "t_spawn",
+        "x": 0.5
+      },
+      {
+        "displayMode": "image",
+        "tacticalTipEn": "Central access point to A Walkway and B Alley.",
+        "y": -28.5,
+        "customImage": "ct.png",
+        "commonAnglesEn": "A Heaven, B Connector",
+        "__shifted": true,
+        "zone": "ct_spawn",
+        "tacticalTipDe": "Zentral gelegen zwischen A Walkway und B Connector.",
+        "descriptionEn": "Counter-Terrorist base spawn.",
+        "descriptionDe": "Startpunkt der Spezialeinheit.",
+        "name": "CT Spawn",
+        "imageSize": 36,
+        "id": "anubis_ct_spawn",
+        "commonAnglesDe": "A Heaven, B Connector",
+        "pinOffsetX": 0,
+        "x": -6.9,
+        "pinOffsetY": 25,
+        "danger": "low"
+      },
+      {
+        "danger": "medium",
+        "commonAnglesEn": "Main approaches",
+        "name": "Connector",
+        "descriptionEn": "Connector position",
+        "fontFamily": "mono",
+        "textRotation": 0,
+        "descriptionDe": "E BOX\nConnector Position",
+        "imageSize": 36,
+        "tacticalTipDe": "Winkel beachten und Granaten nutzen.",
+        "zone": "a_site",
+        "rotation": 0,
+        "id": "callout_1793705791912",
+        "hidePin": true,
+        "pinOffsetX": 0,
+        "y": 9.8,
+        "pinOffsetY": 0,
+        "tacticalTipEn": "Check crossfire angles and use utility.",
+        "commonAnglesDe": "Haupteingänge",
+        "fontSize": 12,
+        "x": -7.2,
+        "displayMode": "text",
+        "isCustom": true
+      },
+      {
+        "tacticalTipDe": "Winkel beachten und Granaten nutzen.",
+        "fontFamily": "mono",
+        "imageSize": 36,
+        "descriptionEn": "B Long position",
+        "id": "callout_1794315750801",
+        "y": 14.1,
+        "commonAnglesEn": "Main approaches",
+        "descriptionDe": "B Long Position",
+        "textRotation": 45,
+        "tacticalTipEn": "Check crossfire angles and use utility.",
+        "rotation": 0,
+        "pinOffsetX": 0,
+        "pinOffsetY": 0,
+        "name": "B Long",
+        "area": {
+          "y": 4.9,
+          "height": 17.1,
+          "shape": "polygon",
+          "points": [
+            {
+              "y": 4.9,
+              "x": -30.1
+            },
+            {
+              "x": -32.9,
+              "y": 7.4
+            },
+            {
+              "x": -33.8,
+              "y": 8.2
+            },
+            {
+              "x": -32.7,
+              "y": 9.2
+            },
+            {
+              "y": 15.1,
+              "x": -32.4
+            },
+            {
+              "x": -25.9,
+              "y": 15.2
+            },
+            {
+              "x": -21.4,
+              "y": 15.3
+            },
+            {
+              "y": 18.3,
+              "x": -21.4
+            },
+            {
+              "x": -16.9,
+              "y": 22
+            },
+            {
+              "y": 20.6,
+              "x": -15
+            },
+            {
+              "x": -16.2,
+              "y": 19.5
+            },
+            {
+              "y": 10.6,
+              "x": -16.4
+            },
+            {
+              "x": -23.2,
+              "y": 10.7
+            }
+          ],
+          "x": -33.8,
+          "width": 18.8
+        },
+        "commonAnglesDe": "Haupteingänge",
+        "hidePin": true,
+        "zone": "mid",
+        "isCustom": true,
+        "fontSize": 14,
+        "danger": "medium",
+        "displayMode": "text",
+        "x": -20.3
+      },
+      {
+        "isCustom": true,
+        "textRotation": 45,
+        "danger": "medium",
+        "commonAnglesDe": "Haupteingänge",
+        "y": 19.3,
+        "fontSize": 12,
+        "__shifted": true,
+        "descriptionEn": "Heaven position",
+        "x": -22.2,
+        "descriptionDe": "Heaven Position",
+        "displayMode": "text",
+        "name": "Catwalk",
+        "zone": "mid",
+        "commonAnglesEn": "Main approaches",
+        "fontFamily": "mono",
+        "tacticalTipDe": "Winkel beachten und Granaten nutzen.",
+        "imageSize": 36,
+        "hidePin": false,
+        "id": "callout_1794315928545",
+        "pinOffsetY": 15,
+        "tacticalTipEn": "Check crossfire angles and use utility.",
+        "rotation": 0,
+        "pinOffsetX": -15
+      },
+      {
+        "x": -14,
+        "fontFamily": "mono",
+        "displayMode": "text",
+        "fontSize": 14,
+        "imageSize": 36,
+        "isCustom": true,
+        "pinOffsetX": 0,
+        "id": "callout_1794316049745",
+        "commonAnglesDe": "Haupteingänge",
+        "pinOffsetY": 0,
+        "textRotation": 0,
+        "tacticalTipEn": "Check crossfire angles and use utility.",
+        "rotation": 0,
+        "danger": "medium",
+        "hidePin": true,
+        "zone": "mid",
+        "descriptionDe": "Ruins Position",
+        "y": 25.8,
+        "descriptionEn": "Ruins position",
+        "area": {
+          "points": [
+            {
+              "x": -14.6,
+              "y": 38.2
+            },
+            {
+              "x": -13.5,
+              "y": 34.4
+            },
+            {
+              "x": -16.1,
+              "y": 31.8
+            },
+            {
+              "x": -5.1,
+              "y": 20.6
+            },
+            {
+              "y": 18.2,
+              "x": -7.8
+            },
+            {
+              "y": 22.8,
+              "x": -12.4
+            },
+            {
+              "y": 20.6,
+              "x": -15.2
+            },
+            {
+              "y": 22.4,
+              "x": -17.5
+            },
+            {
+              "y": 18.2,
+              "x": -21.8
+            },
+            {
+              "y": 15.7,
+              "x": -21.6
+            },
+            {
+              "x": -25.4,
+              "y": 15.7
+            },
+            {
+              "x": -25.6,
+              "y": 18.7
+            },
+            {
+              "y": 27.1,
+              "x": -17.6
+            },
+            {
+              "y": 30.6,
+              "x": -20.9
+            },
+            {
+              "x": -19,
+              "y": 32.6
+            },
+            {
+              "y": 33.5,
+              "x": -19.8
+            }
+          ],
+          "height": 22.5,
+          "shape": "polygon",
+          "x": -25.6,
+          "width": 20.5,
+          "y": 15.7
+        },
+        "tacticalTipDe": "Winkel beachten und Granaten nutzen.",
+        "commonAnglesEn": "Main approaches",
+        "name": "Ruins"
+      },
+      {
+        "imageSize": 36,
+        "commonAnglesEn": "Main approaches",
+        "fontSize": 16,
+        "hidePin": true,
+        "isCustom": true,
+        "y": 17.2,
+        "id": "callout_1794316092633",
+        "textRotation": 0,
+        "pinOffsetX": 0,
+        "descriptionDe": "Top Mid Position",
+        "zone": "a_site",
+        "x": -1.9,
+        "descriptionEn": "Top Mid position",
+        "commonAnglesDe": "Haupteingänge",
+        "pinOffsetY": 0,
+        "danger": "medium",
+        "rotation": 0,
+        "name": "Top Mid",
+        "tacticalTipDe": "Winkel beachten und Granaten nutzen.",
+        "fontFamily": "mono",
+        "tacticalTipEn": "Check crossfire angles and use utility.",
+        "displayMode": "text"
+      },
+      {
+        "tacticalTipEn": "Check crossfire angles and use utility.",
+        "imageSize": 36,
+        "x": 13.2,
+        "fontSize": 14,
+        "commonAnglesEn": "Main approaches",
+        "id": "callout_1794316137083",
+        "tacticalTipDe": "Winkel beachten und Granaten nutzen.",
+        "descriptionDe": "Alley Position",
+        "isCustom": true,
+        "descriptionEn": "Alley position",
+        "hidePin": true,
+        "rotation": 0,
+        "fontFamily": "mono",
+        "displayMode": "text",
+        "danger": "medium",
+        "commonAnglesDe": "Haupteingänge",
+        "area": {
+          "height": 18,
+          "width": 16.2,
+          "points": [
+            {
+              "x": 8.7,
+              "y": 17.8
+            },
+            {
+              "x": 4.7,
+              "y": 22
+            },
+            {
+              "x": 6.1,
+              "y": 23.2
+            },
+            {
+              "x": 6.3,
+              "y": 25.8
+            },
+            {
+              "y": 25.8,
+              "x": 10.4
+            },
+            {
+              "x": 10.7,
+              "y": 34.9
+            },
+            {
+              "y": 35.8,
+              "x": 15.4
+            },
+            {
+              "x": 16.8,
+              "y": 35.8
+            },
+            {
+              "y": 32.9,
+              "x": 16.8
+            },
+            {
+              "x": 15.5,
+              "y": 32.9
+            },
+            {
+              "x": 15.6,
+              "y": 26.8
+            },
+            {
+              "y": 26.9,
+              "x": 18.3
+            },
+            {
+              "y": 24.7,
+              "x": 18.3
+            },
+            {
+              "y": 22.2,
+              "x": 20.9
+            },
+            {
+              "y": 19.7,
+              "x": 18.1
+            },
+            {
+              "y": 22.2,
+              "x": 15.7
+            },
+            {
+              "y": 22,
+              "x": 9.4
+            }
+          ],
+          "shape": "polygon",
+          "x": 4.7,
+          "y": 17.8
+        },
+        "y": 24.2,
+        "name": "Alley",
+        "pinOffsetX": 0,
+        "zone": "mid",
+        "textRotation": 0,
+        "pinOffsetY": 0
+      },
+      {
+        "x": 29.5,
+        "displayMode": "text",
+        "pinOffsetX": 0,
+        "imageSize": 36,
+        "tacticalTipEn": "Check crossfire angles and use utility.",
+        "fontSize": 14,
+        "pinOffsetY": 0,
+        "commonAnglesDe": "Haupteingänge",
+        "descriptionEn": "Upper position",
+        "descriptionDe": "Upper Position",
+        "isCustom": true,
+        "fontFamily": "mono",
+        "danger": "medium",
+        "tacticalTipDe": "Winkel beachten und Granaten nutzen.",
+        "id": "callout_1794316178277",
+        "commonAnglesEn": "Main approaches",
+        "rotation": 0,
+        "textRotation": -90,
+        "name": "Upper",
+        "y": 10,
+        "hidePin": true,
+        "zone": "a_site"
+      },
+      {
+        "textRotation": 0,
+        "id": "callout_1794316230245",
+        "zone": "b_site",
+        "isCustom": true,
+        "name": "Corner",
+        "x": -26.4,
+        "fontSize": 14,
+        "commonAnglesEn": "Main approaches",
+        "pinOffsetX": -44,
+        "descriptionDe": "Corner Position",
+        "descriptionEn": "Corner position",
+        "pinOffsetY": 1,
+        "displayMode": "text",
+        "tacticalTipDe": "Winkel beachten und Granaten nutzen.",
+        "fontFamily": "mono",
+        "danger": "high",
+        "imageSize": 36,
+        "commonAnglesDe": "Haupteingänge",
+        "rotation": 0,
+        "tacticalTipEn": "Check crossfire angles and use utility.",
+        "hidePin": false,
+        "__shifted": true,
+        "y": -2.7
+      },
+      {
+        "pinOffsetX": 0,
+        "imageSize": 36,
+        "rotation": 0,
+        "displayMode": "text",
+        "pinOffsetY": 0,
+        "commonAnglesEn": "Main approaches",
+        "fontFamily": "mono",
+        "x": 33.1,
+        "y": -6.3,
+        "textRotation": -45,
+        "fontSize": 16,
+        "tacticalTipEn": "Check crossfire angles and use utility.",
+        "id": "callout_1794316308573",
+        "descriptionEn": "Main position",
+        "commonAnglesDe": "Haupteingänge",
+        "descriptionDe": "Main Position",
+        "zone": "mid",
+        "danger": "medium",
+        "isCustom": true,
+        "name": "Main",
+        "tacticalTipDe": "Winkel beachten und Granaten nutzen.",
+        "hidePin": true
+      },
+      {
+        "x": -12.1,
+        "pinOffsetY": 0,
+        "id": "callout_1794316698939",
+        "tacticalTipDe": "Winkel beachten und Granaten nutzen.",
+        "commonAnglesDe": "Haupteingänge",
+        "fontSize": 14,
+        "descriptionDe": "Cave Position",
+        "descriptionEn": "Cave position",
+        "pinOffsetX": 0,
+        "displayMode": "text",
+        "textRotation": -45,
+        "tacticalTipEn": "Check crossfire angles and use utility.",
+        "zone": "a_site",
+        "isCustom": true,
+        "name": "Cave",
+        "fontFamily": "mono",
+        "imageSize": 36,
+        "rotation": 0,
+        "commonAnglesEn": "Main approaches",
+        "danger": "medium",
+        "y": -16.5,
+        "hidePin": true
+      },
+      {
+        "displayMode": "text",
+        "commonAnglesEn": "Main approaches",
+        "danger": "medium",
+        "rotation": 0,
+        "y": -8.9,
+        "id": "callout_1794316803659",
+        "tacticalTipDe": "Winkel beachten und Granaten nutzen.",
+        "pinOffsetY": 0,
+        "hidePin": true,
+        "x": -2.4,
+        "zone": "mid",
+        "isCustom": true,
+        "area": {
+          "x": -16.4,
+          "points": [
+            {
+              "y": -6.1,
+              "x": -0.3
+            },
+            {
+              "y": -6.3,
+              "x": -6.6
+            },
+            {
+              "x": -6.6,
+              "y": -6.9
+            },
+            {
+              "y": -6.8,
+              "x": -12
+            },
+            {
+              "y": -7.6,
+              "x": -11.8
+            },
+            {
+              "x": -13.3,
+              "y": -7.7
+            },
+            {
+              "x": -13.6,
+              "y": -5.6
+            },
+            {
+              "y": -7.4,
+              "x": -16.4
+            },
+            {
+              "y": -9.8,
+              "x": -16.4
+            },
+            {
+              "y": -9.6,
+              "x": -12.3
+            },
+            {
+              "y": -10.2,
+              "x": -12.2
+            },
+            {
+              "x": -6.9,
+              "y": -10.2
+            },
+            {
+              "y": -12.5,
+              "x": -6.9
+            },
+            {
+              "x": -3.2,
+              "y": -12.5
+            },
+            {
+              "y": -21.9,
+              "x": -3.1
+            },
+            {
+              "y": -21.9,
+              "x": 0.1
+            },
+            {
+              "x": 0.1,
+              "y": -18.6
+            },
+            {
+              "x": 2.1,
+              "y": -18.6
+            },
+            {
+              "x": 1.9,
+              "y": -15.2
+            },
+            {
+              "x": -0.1,
+              "y": -15.2
+            }
+          ],
+          "height": 16.3,
+          "y": -21.9,
+          "width": 18.5,
+          "shape": "polygon"
+        },
+        "pinOffsetX": 0,
+        "descriptionEn": "Palace position",
+        "name": "Palace",
+        "commonAnglesDe": "Haupteingänge",
+        "descriptionDe": "Palace Position",
+        "imageSize": 36,
+        "textRotation": 0,
+        "fontSize": 14,
+        "tacticalTipEn": "Check crossfire angles and use utility.",
+        "fontFamily": "mono"
+      },
+      {
+        "tacticalTipEn": "Check crossfire angles and use utility.",
+        "zone": "a_site",
+        "textRotation": -90,
+        "imageSize": 36,
+        "commonAnglesEn": "Main approaches",
+        "name": "Middle",
+        "danger": "medium",
+        "y": -8.4,
+        "rotation": 0,
+        "tacticalTipDe": "Winkel beachten und Granaten nutzen.",
+        "descriptionDe": "Middle Position",
+        "descriptionEn": "Middle position",
+        "pinOffsetX": 0,
+        "x": 7,
+        "pinOffsetY": 0,
+        "hidePin": true,
+        "commonAnglesDe": "Haupteingänge",
+        "isCustom": true,
+        "displayMode": "text",
+        "fontSize": 14,
+        "fontFamily": "mono",
+        "id": "callout_1794316837013"
+      },
+      {
+        "zone": "a_site",
+        "textRotation": 0,
+        "fontSize": 14,
+        "commonAnglesEn": "Main approaches",
+        "fontFamily": "mono",
+        "hidePin": false,
+        "y": -25.1,
+        "name": "Fountain",
+        "pinOffsetX": 49,
+        "danger": "high",
+        "pinOffsetY": 0,
+        "isCustom": true,
+        "rotation": 0,
+        "commonAnglesDe": "Haupteingänge",
+        "__shifted": true,
+        "imageSize": 36,
+        "tacticalTipEn": "Check crossfire angles and use utility.",
+        "descriptionDe": "Fountain Position",
+        "descriptionEn": "Fountain position",
+        "id": "callout_1794316886367",
+        "tacticalTipDe": "Winkel beachten und Granaten nutzen.",
+        "displayMode": "text",
+        "x": 34.7
+      },
+      {
+        "textRotation": 45,
+        "rotation": 0,
+        "imageSize": 36,
+        "y": -24.8,
+        "tacticalTipEn": "Check crossfire angles and use utility.",
+        "commonAnglesDe": "Haupteingänge",
+        "descriptionDe": "Tunnel Position",
+        "name": "Tunnel",
+        "descriptionEn": "Tunnel position",
+        "zone": "a_site",
+        "tacticalTipDe": "Winkel beachten und Granaten nutzen.",
+        "displayMode": "text",
+        "fontSize": 14,
+        "fontFamily": "mono",
+        "hidePin": true,
+        "x": 9.9,
+        "commonAnglesEn": "Main approaches",
+        "pinOffsetX": 0,
+        "danger": "high",
+        "isCustom": true,
+        "id": "callout_1794316953647",
+        "pinOffsetY": 0
+      },
+      {
+        "x": 18.1,
+        "commonAnglesEn": "Main approaches",
+        "rotation": 0,
+        "fontFamily": "mono",
+        "textRotation": -55,
+        "displayMode": "text",
+        "pinOffsetX": 0,
+        "pinOffsetY": 0,
+        "hidePin": true,
+        "commonAnglesDe": "Haupteingänge",
+        "tacticalTipDe": "Winkel beachten und Granaten nutzen.",
+        "fontSize": 14,
+        "imageSize": 36,
+        "descriptionEn": "Heaven position",
+        "descriptionDe": "Heaven Position",
+        "danger": "medium",
+        "tacticalTipEn": "Check crossfire angles and use utility.",
+        "y": -29.4,
+        "name": "Heaven",
+        "id": "callout_1794317048829",
+        "isCustom": true,
+        "zone": "a_site"
+      },
+      {
+        "rotation": 0,
+        "fontFamily": "mono",
+        "id": "callout_1794317150623",
+        "commonAnglesEn": "Main approaches",
+        "danger": "medium",
+        "pinOffsetX": -30,
+        "x": -32.5,
+        "pinOffsetY": -17,
+        "fontSize": 16,
+        "descriptionEn": "Ivy position",
+        "__shifted": true,
+        "descriptionDe": "Ivy Position",
+        "textRotation": 0,
+        "imageSize": 36,
+        "tacticalTipDe": "Winkel beachten und Granaten nutzen.",
+        "commonAnglesDe": "Haupteingänge",
+        "hidePin": false,
+        "y": 3.9,
+        "displayMode": "text",
+        "zone": "b_site",
+        "name": "Ivy",
+        "tacticalTipEn": "Check crossfire angles and use utility.",
+        "isCustom": true
+      },
+      {
+        "pinOffsetX": 0,
+        "tacticalTipDe": "Winkel beachten und Granaten nutzen.",
+        "id": "callout_1794317256793",
+        "pinOffsetY": 0,
+        "descriptionEn": "Boat position",
+        "descriptionDe": "Boat Position",
+        "displayMode": "text",
+        "fontFamily": "mono",
+        "tacticalTipEn": "Check crossfire angles and use utility.",
+        "rotation": 0,
+        "commonAnglesEn": "Main approaches",
+        "textRotation": -90,
+        "x": 20.7,
+        "danger": "medium",
+        "imageSize": 36,
+        "name": "Boat",
+        "hidePin": true,
+        "y": 1.6,
+        "isCustom": true,
+        "zone": "mid",
+        "fontSize": 18,
+        "commonAnglesDe": "Haupteingänge"
+      },
+      {
+        "name": "Street",
+        "isCustom": true,
+        "zone": "ct_spawn",
+        "commonAnglesEn": "Main approaches",
+        "danger": "medium",
+        "displayMode": "text",
+        "y": -11.2,
+        "fontSize": 16,
+        "customImage": "ct.png",
+        "imageSize": 36,
+        "textRotation": -90,
+        "descriptionEn": "Street position",
+        "x": -20.5,
+        "descriptionDe": "Street Position",
+        "pinOffsetY": 0,
+        "commonAnglesDe": "Haupteingänge",
+        "tacticalTipDe": "Winkel beachten und Granaten nutzen.",
+        "pinOffsetX": 0,
+        "id": "callout_1794318732616",
+        "tacticalTipEn": "Check crossfire angles and use utility.",
+        "rotation": 0,
+        "hidePin": true,
+        "fontFamily": "mono"
+      },
+      {
+        "tacticalTipDe": "Winkel beachten und Granaten nutzen.",
+        "x": 12.9,
+        "descriptionEn": "A Connector position",
+        "commonAnglesEn": "Main approaches",
+        "isCustom": true,
+        "descriptionDe": "A Connector Position",
+        "fontSize": 14,
+        "tacticalTipEn": "Check crossfire angles and use utility.",
+        "id": "callout_1794318825125",
+        "textRotation": 0,
+        "danger": "high",
+        "displayMode": "text",
+        "zone": "a_site",
+        "pinOffsetX": 32,
+        "__shifted": true,
+        "hidePin": false,
+        "imageSize": 36,
+        "commonAnglesDe": "Haupteingänge",
+        "name": "A Connector",
+        "pinOffsetY": 27,
+        "rotation": 0,
+        "y": -13.2,
+        "fontFamily": "mono"
+      },
+      {
+        "name": "Back Site",
+        "textRotation": 0,
+        "x": -9.8,
+        "zone": "b_site",
+        "fontFamily": "mono",
+        "danger": "high",
+        "pinOffsetY": 20,
+        "pinOffsetX": 32,
+        "rotation": 0,
+        "commonAnglesDe": "Haupteingänge",
+        "imageSize": 36,
+        "isCustom": true,
+        "tacticalTipEn": "Check crossfire angles and use utility.",
+        "__shifted": true,
+        "id": "callout_1794318954095",
+        "descriptionEn": "Back Site position",
+        "displayMode": "text",
+        "descriptionDe": "Back Site Position",
+        "fontSize": 14,
+        "tacticalTipDe": "Winkel beachten und Granaten nutzen.",
+        "commonAnglesEn": "Main approaches",
+        "hidePin": false,
+        "y": -6
+      },
+      {
+        "pinOffsetY": 19,
+        "fontSize": 12,
+        "danger": "medium",
+        "pinOffsetX": 2,
+        "commonAnglesDe": "Haupteingänge",
+        "isCustom": true,
+        "x": -18.9,
+        "fontFamily": "mono",
+        "descriptionDe": "Pillar Position",
+        "descriptionEn": "Pillar position",
+        "rotation": 0,
+        "hidePin": false,
+        "textRotation": 0,
+        "y": 4.8,
+        "tacticalTipDe": "Winkel beachten und Granaten nutzen.",
+        "zone": "b_site",
+        "__shifted": true,
+        "commonAnglesEn": "Main approaches",
+        "tacticalTipEn": "Check crossfire angles and use utility.",
+        "id": "callout_1794319049909",
+        "imageSize": 36,
+        "displayMode": "text",
+        "name": "Pillar"
+      }
+    ],
+    "image": "maps/anubis.png",
+    "tacticData": {
+      "drawings": [],
+      "utilities": [],
+      "players": [],
+      "presets": []
+    }
+  }
+}

@@ -194,11 +194,19 @@ export function reconcileWithDefaultMaps(inputMaps: MapData[]): MapData[] {
       (m.callouts || []).every((c) =>
         ['italy_market', 'italy_t_spawn', 'italy_ct_spawn'].includes(c.id)
       );
+    const oldAnubisTSpawn =
+      m.id === 'anubis'
+        ? (m.callouts || []).find((c) => c.id === 'anubis_t_spawn')
+        : undefined;
+    const isOutdatedAnubis =
+      m.id === 'anubis' &&
+      Boolean(defaultVersion) &&
+      Boolean(oldAnubisTSpawn && oldAnubisTSpawn.x > 40 && oldAnubisTSpawn.y > 40);
     const hasNewerDefault =
       Boolean(defaultVersion) &&
       (m.updatedAt || 0) < (defaultVersion?.updatedAt || 0);
 
-    if (defaultVersion && (hasNewerDefault || isOutdatedCobblestone || isOutdatedItaly)) {
+    if (defaultVersion && (hasNewerDefault || isOutdatedCobblestone || isOutdatedItaly || isOutdatedAnubis)) {
       const existingPresets = m.tacticData?.presets || [];
       const defaultPresets = defaultVersion.tacticData?.presets || [];
       const presetMap = new Map<string, any>();

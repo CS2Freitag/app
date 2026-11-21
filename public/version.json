@@ -1,16 +1,24 @@
 {
-  "version": "3.134",
+  "version": "3.135",
   "major": 3,
-  "patch": 134,
+  "patch": 135,
   "releaseDate": "2026-11-21",
-  "title": "Update v3.134: 5er/6er-Kartenraster auf großen Monitoren & Header über volle Breite",
-  "description": "Nutzt breite Monitore in der Kartenübersicht optimal aus: 5 Karten pro Reihe ab Full-HD (6 pro Reihe auf sehr großen Monitoren bis 1800 px Breite) sowie Logo links und Aktionsbuttons rechts über die volle Kopfzeilenbreite.",
+  "title": "Update v3.135: Korrigierte Anubis-Standardkarte (T-Spawn-Position)",
+  "description": "Übernimmt die korrigierte Anubis-Version (inklusive richtiger T-Spawn-Position) in die Standardkarten und aktualisiert bestehende Stände automatisch.",
   "changes": [
-    "Schnellzugriff Favoriten & Kartenübersicht zeigen auf breiten Monitoren (ab 1536 px) nun 5 Karten pro Reihe und auf sehr großen Bildschirmen (ab 2100 px) 6 Karten pro Reihe",
-    "Inhaltsbreite der Kartenübersicht von 1280 px auf 1800 px erweitert für bessere Platznutzung",
-    "Obere Kopfzeile nutzt nun die volle Bildschirmbreite (Logo immer ganz links, Quiz/Hilfe/Einstellungen/Sprache immer ganz rechts)"
+    "Anubis in den Standardkarten auf die korrigierte Version aktualisiert (T Spawn wieder exakt platziert)",
+    "Automatischer Abgleich aktualisiert ältere Anubis-Stände (auch bei Cloud-/Autosave-Sync), ohne persönliche Taktik-Presets zu verlieren"
   ],
   "history": [
+    {
+      "version": "3.135",
+      "releaseDate": "2026-11-21",
+      "title": "Korrigierte Anubis-Standardkarte (T-Spawn-Position)",
+      "changes": [
+        "Anubis in den Standardkarten auf die korrigierte Version aktualisiert (T Spawn wieder exakt platziert)",
+        "Automatischer Abgleich aktualisiert ältere Anubis-Stände (auch bei Cloud-/Autosave-Sync), ohne persönliche Taktik-Presets zu verlieren"
+      ]
+    },
     {
       "version": "3.134",
       "releaseDate": "2026-11-21",

@@ -1,7 +1,7 @@
 {
   "type": "cs2freitag_full_backup",
   "version": 1,
-  "exportedAt": "2026-11-20T08:37:46.702Z",
+  "exportedAt": "2026-11-21T14:59:22.541Z",
   "app": "CS2Freitag",
   "settings": {
     "theme": "dark",
@@ -845,7 +845,7 @@
       "updatedAtClient": 1795093289688,
       "category": "active",
       "descriptionDe": "Ägyptische Stadt am Nil mit Wasserkanälen, Holzbrücke und vielen vertikalen Winkeln.",
-      "updatedAt": 1795093289688,
+      "updatedAt": 1795273133226,
       "slug": "anubis",
       "descriptionEn": "Egyptian settlement along the Nile featuring waterways, central bridge, and vertical angles.",
       "id": "anubis",
@@ -1062,7 +1062,7 @@
         },
         {
           "customImage": "T.png",
-          "y": 47.9,
+          "y": 43.2,
           "displayMode": "image",
           "imageSize": 36,
           "id": "anubis_t_spawn",
@@ -1078,7 +1078,7 @@
           "name": "T Spawn",
           "commonAnglesDe": "Alley, Ruins",
           "zone": "t_spawn",
-          "x": 51.1
+          "x": 0.5
         },
         {
           "displayMode": "image",
@@ -1913,7 +1913,13 @@
           "name": "Pillar"
         }
       ],
-      "image": "maps/anubis.png"
+      "image": "maps/anubis.png",
+      "tacticData": {
+        "drawings": [],
+        "utilities": [],
+        "players": [],
+        "presets": []
+      }
     },
     {
       "image": "maps/assault.png",
