@@ -1,16 +1,26 @@
 {
-  "version": "3.133",
+  "version": "3.134",
   "major": 3,
-  "patch": 133,
-  "releaseDate": "2026-11-20",
-  "title": "Update v3.133: Direktes App-SEO auf Hauptseite & neues Desktop-Vorschaubild",
-  "description": "Entfernt die separaten Vorschaltseiten (/en/ & /callouts/), bündelt alle Callout-, Quiz-, Taktik- & Utility-Infos direkt auf der Hauptseite und ersetzt das veraltete Desktop-Vorschaubild.",
+  "patch": 134,
+  "releaseDate": "2026-11-21",
+  "title": "Update v3.134: 5er/6er-Kartenraster auf großen Monitoren & Header über volle Breite",
+  "description": "Nutzt breite Monitore in der Kartenübersicht optimal aus: 5 Karten pro Reihe ab Full-HD (6 pro Reihe auf sehr großen Monitoren bis 1800 px Breite) sowie Logo links und Aktionsbuttons rechts über die volle Kopfzeilenbreite.",
   "changes": [
-    "Separate /en/ und /callouts/ Vorschaltseiten entfernt, damit Google-Treffer und PWA-Links immer direkt in die eigentliche App führen",
-    "Callouts-, Quiz-, Taktik-, Utility- und Map-Daten (Cobblestone, Mirage, Dust2, Inferno, Italy u. v. m.) direkt in Hauptseite & Bilder-Sitemap gebündelt",
-    "Veraltetes Desktop-Vorschaubild (screenshot-desktop.png) durch einen sauberen 1280×720-App-Screenshot ersetzt"
+    "Schnellzugriff Favoriten & Kartenübersicht zeigen auf breiten Monitoren (ab 1536 px) nun 5 Karten pro Reihe und auf sehr großen Bildschirmen (ab 2100 px) 6 Karten pro Reihe",
+    "Inhaltsbreite der Kartenübersicht von 1280 px auf 1800 px erweitert für bessere Platznutzung",
+    "Obere Kopfzeile nutzt nun die volle Bildschirmbreite (Logo immer ganz links, Quiz/Hilfe/Einstellungen/Sprache immer ganz rechts)"
   ],
   "history": [
+    {
+      "version": "3.134",
+      "releaseDate": "2026-11-21",
+      "title": "5er/6er-Kartenraster auf großen Monitoren & Header über volle Breite",
+      "changes": [
+        "Schnellzugriff Favoriten & Kartenübersicht zeigen auf breiten Monitoren (ab 1536 px) nun 5 Karten pro Reihe und auf sehr großen Bildschirmen (ab 2100 px) 6 Karten pro Reihe",
+        "Inhaltsbreite der Kartenübersicht von 1280 px auf 1800 px erweitert für bessere Platznutzung",
+        "Obere Kopfzeile nutzt nun die volle Bildschirmbreite (Logo immer ganz links, Quiz/Hilfe/Einstellungen/Sprache immer ganz rechts)"
+      ]
+    },
     {
       "version": "3.133",
       "releaseDate": "2026-11-20",

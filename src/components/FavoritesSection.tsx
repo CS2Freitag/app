@@ -248,7 +248,7 @@ export const FavoritesSection: React.FC<FavoritesSectionProps> = ({
       </div>
 
       {!isCollapsed && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 min-[2100px]:grid-cols-6 gap-3">
           {favoriteMaps.map((map) => {
             const isDraggingThis = draggedId === map.id;
             const isDragOverThis = dragOverId === map.id;

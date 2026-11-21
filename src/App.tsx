@@ -1194,7 +1194,7 @@ export default function App() {
           />
 
           {/* Main Content Area */}
-          <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <main className="flex-1 max-w-[1800px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
             {/* 1. Favorites Section at top */}
             <FavoritesSection
               favoriteMaps={favoriteMaps}
@@ -1236,7 +1236,7 @@ export default function App() {
 
           {/* Footer */}
           <footer className="mt-auto border-t border-zinc-800/80 bg-zinc-950/60 py-6 text-xs text-zinc-400 dark:border-zinc-800/80 dark:bg-zinc-950/60 light:border-zinc-200 light:bg-white print:hidden">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
               <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 text-center sm:text-left">
                 <div className="flex items-center justify-center sm:justify-start gap-2">
                   <span className="font-bold text-zinc-300 dark:text-zinc-300 light:text-zinc-700">
