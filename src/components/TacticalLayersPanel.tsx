@@ -20,6 +20,11 @@ import {
   PanelRightClose,
   Spline,
   RotateCcw,
+  ArrowLeftRight,
+  Copy,
+  Info,
+  Move,
+  Palette,
 } from 'lucide-react';
 import {
   Callout,
@@ -29,23 +34,48 @@ import {
   PlayerToken,
   TacticLayer,
   TacticalDrawingLine,
+  UtilityAimSlotId,
   UtilityMarker,
   UtilityThrowType,
+  UtilityType,
   ZoneType,
 } from '../types';
 import { playTTS } from '../utils/tts';
-import { THROW_TYPE_META, UTILITY_THROW_TYPES, formatThrowTypeFull } from '../utils/utilityThrowGeometry';
+import {
+  DEFAULT_UTILITY_LINE_SCALE,
+  DEFAULT_UTILITY_SPOT_SCALE,
+  getEffectiveUtilityLineScale,
+  getEffectiveUtilitySpotScale,
+} from '../utils/utilityDisplay';
+import {
+  THROW_TYPE_META,
+  UTILITY_THROW_TYPES,
+  formatThrowTypeFull,
+  getDefaultCurveBend,
+} from '../utils/utilityThrowGeometry';
+import { UTILITY_META, UtilitySymbol } from './UtilitySymbol';
 
 export interface SelectedElementsPatch {
+  type?: UtilityType;
   color?: string;
+  resetColor?: boolean;
   opacity?: number;
   locked?: boolean;
   throwType?: UtilityThrowType;
   label?: string;
+  notes?: string;
   curveBend?: number;
+  lineScale?: number;
+  resetLineScale?: boolean;
+  spotScale?: number;
+  resetSpotScale?: boolean;
   removeThrowFrom?: boolean;
   addDefaultThrowFrom?: boolean;
   resetCurve?: boolean;
+  aimSpots?: UtilityMarker['aimSpots'];
+  activeAimSpot?: UtilityAimSlotId;
+  fontSize?: number;
+  skipHistory?: boolean;
 }
 
 interface TacticalLayersPanelProps {
@@ -67,6 +97,15 @@ interface TacticalLayersPanelProps {
   onSelectElements: (ids: string[]) => void;
   onUpdateSelectedElementsProps: (patch: SelectedElementsPatch) => void;
   onDeleteElement: (id: string) => void;
+  globalUtilityLineScale?: number;
+  globalUtilitySpotScale?: number;
+  colors?: string[];
+  utilityEditTrigger?: number;
+  onOpenUtilityInfo?: (util: UtilityMarker) => void;
+  onOpenCustomColor?: (util: UtilityMarker) => void;
+  onMoveUtility?: (util: UtilityMarker) => void;
+  onBranchFromUtilityOrigin?: (origin: { x: number; y: number }, utilType: UtilityType) => void;
+  onDuplicateSelected?: () => void;
   // Callouts visibility & inspector
   showAreas: boolean;
   onToggleShowAreas: () => void;
@@ -81,6 +120,8 @@ interface TacticalLayersPanelProps {
   onCloseDrawer?: () => void;
   // Optional minimalist collapse handler for desktop right panel
   onCollapsePanel?: () => void;
+  // Phone-only fallback: right-side PC/Tablet sidebars keep Utility editing in Left Sidebar
+  allowUtilityTab?: boolean;
 }
 
 const LAYER_COLORS = ['#eab308', '#3b82f6', '#22c55e', '#f97316', '#a855f7', '#ef4444', '#ffffff'];
@@ -103,6 +144,15 @@ export const TacticalLayersPanel: React.FC<TacticalLayersPanelProps> = ({
   onSelectElements,
   onUpdateSelectedElementsProps,
   onDeleteElement,
+  globalUtilityLineScale = DEFAULT_UTILITY_LINE_SCALE,
+  globalUtilitySpotScale = DEFAULT_UTILITY_SPOT_SCALE,
+  colors = LAYER_COLORS,
+  utilityEditTrigger = 0,
+  onOpenUtilityInfo,
+  onOpenCustomColor,
+  onMoveUtility,
+  onBranchFromUtilityOrigin,
+  onDuplicateSelected,
   showAreas,
   onToggleShowAreas,
   showCalloutLabels,
@@ -113,37 +163,49 @@ export const TacticalLayersPanel: React.FC<TacticalLayersPanelProps> = ({
   getDangerBadge,
   onCloseDrawer,
   onCollapsePanel,
+  allowUtilityTab = false,
 }) => {
   const isDe = lang === 'de';
-  const [activeTab, setActiveTab] = useState<'layers' | 'callout'>('layers');
+  const [activeTab, setActiveTab] = useState<'layers' | 'callout' | 'utility'>('layers');
   const [isAddingLayer, setIsAddingLayer] = useState(false);
   const [newLayerName, setNewLayerName] = useState('');
   const [newLayerColor, setNewLayerColor] = useState('#38bdf8');
-
-  // Auto-switch to Callout tab when a new callout is selected
-  React.useEffect(() => {
-    if (selectedCallout) {
-      setActiveTab('callout');
-    } else {
-      setActiveTab('layers');
-    }
-  }, [selectedCallout?.id]);
-
-  const activeLayer = layers.find((l) => l.id === activeLayerId) || layers[0];
 
   // Determine properties target: selected elements on map vs active layer
   const selectedDrawings = drawings.filter((d) => selectedElementIds.includes(d.id));
   const selectedUtilities = utilities.filter((u) => selectedElementIds.includes(u.id));
   const selectedPlayers = players.filter((p) => selectedElementIds.includes(p.id));
   const hasSelection = selectedElementIds.length > 0;
+  const selectedSingleUtility =
+    selectedUtilities.length === 1 &&
+    selectedDrawings.length === 0 &&
+    selectedPlayers.length === 0
+      ? selectedUtilities[0]
+      : null;
+
+  // Auto-switch right panel tab when Callout is selected (or single Utility on mobile-only sheet)
+  React.useEffect(() => {
+    if (selectedCallout) {
+      setActiveTab('callout');
+    } else if (allowUtilityTab && selectedSingleUtility) {
+      setActiveTab('utility');
+    } else {
+      setActiveTab('layers');
+    }
+  }, [selectedCallout?.id, selectedSingleUtility?.id, utilityEditTrigger, allowUtilityTab]);
+
+  const activeLayer = layers.find((l) => l.id === activeLayerId) || layers[0];
 
   const currentOpacity = hasSelection
     ? selectedDrawings[0]?.opacity ?? selectedUtilities[0]?.opacity ?? selectedPlayers[0]?.opacity ?? activeLayer?.opacity ?? 1
     : activeLayer?.opacity ?? 1;
 
-  const currentColor = hasSelection && selectedDrawings.length > 0
-    ? selectedDrawings[0].color
-    : activeLayer?.color || '#eab308';
+  const currentColor =
+    hasSelection && selectedDrawings.length > 0
+      ? selectedDrawings[0].color
+      : hasSelection && selectedUtilities.length > 0
+      ? selectedUtilities[0].color || UTILITY_META[selectedUtilities[0].type]?.colorHex || '#38bdf8'
+      : activeLayer?.color || '#eab308';
 
   const getLayerItems = (layerId: string) => {
     const items: { id: string; label: string; kind: 'line' | 'arrow' | 'util' | 'player'; color: string; locked?: boolean }[] = [];
@@ -166,7 +228,10 @@ export const TacticalLayersPanel: React.FC<TacticalLayersPanelProps> = ({
           id: u.id,
           label: `${prefix}${suffix}`,
           kind: 'util',
-          color: u.type === 'smoke' ? '#38bdf8' : u.type === 'flash' ? '#facc15' : u.type === 'molotov' ? '#f97316' : u.type === 'he' ? '#ef4444' : '#a855f7',
+          color:
+            u.color ||
+            UTILITY_META[u.type]?.colorHex ||
+            '#38bdf8',
           locked: u.locked,
         });
       }
@@ -211,6 +276,31 @@ export const TacticalLayersPanel: React.FC<TacticalLayersPanelProps> = ({
               }`}
             >
               {isDe ? 'Callout-Info' : 'Callout'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('layers')}
+              className={`px-2.5 py-1 text-[11px] font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap ${
+                activeTab === 'layers'
+                  ? 'bg-zinc-100 text-zinc-950'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              {isDe ? 'Ebenen' : 'Layers'}
+            </button>
+          </div>
+        ) : allowUtilityTab && selectedSingleUtility ? (
+          <div className="flex items-center gap-1 p-0.5 bg-zinc-900 rounded-lg border border-zinc-800">
+            <button
+              type="button"
+              onClick={() => setActiveTab('utility')}
+              className={`px-2.5 py-1 text-[11px] font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap ${
+                activeTab === 'utility'
+                  ? 'bg-emerald-400 text-zinc-950'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              {isDe ? 'Utility' : 'Utility'}
             </button>
             <button
               type="button"
@@ -361,6 +451,489 @@ export const TacticalLayersPanel: React.FC<TacticalLayersPanelProps> = ({
             </button>
           </div>
         </div>
+      ) : allowUtilityTab && activeTab === 'utility' && selectedSingleUtility ? (
+        /* FULL-HEIGHT SINGLE UTILITY EDITOR IN RIGHT SIDEBAR */
+        (() => {
+          const su = selectedSingleUtility;
+          const uMeta = UTILITY_META[su.type] || UTILITY_META.smoke;
+          const hasThrow = Boolean(su.throwFrom);
+          const effLineScale = getEffectiveUtilityLineScale(su, globalUtilityLineScale);
+          const effSpotScale = getEffectiveUtilitySpotScale(su, globalUtilitySpotScale);
+          const currentBend = su.throwFrom
+            ? su.curveBend !== undefined
+              ? su.curveBend
+              : getDefaultCurveBend(su.throwFrom, su)
+            : 0;
+          const activeColor = su.color || uMeta.colorHex || '#38bdf8';
+          const paletteColors = colors && colors.length > 0 ? colors : LAYER_COLORS;
+
+          return (
+            <div className="flex-1 overflow-y-auto p-3.5 space-y-3.5">
+              {/* Summary Header + Utility-Info Button */}
+              <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-zinc-800">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div
+                    className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 ${uMeta.bgClass} ${uMeta.borderClass}`}
+                  >
+                    <UtilitySymbol type={su.type} size="sm" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-white truncate">
+                        {isDe ? uMeta.labelDe : uMeta.labelEn}
+                      </span>
+                      {su.locked && <Lock className="w-3 h-3 text-amber-400 shrink-0" />}
+                    </div>
+                    <span className="text-[10px] text-zinc-400 block truncate">
+                      {su.label || (hasThrow ? (isDe ? '2-Punkt-Lineup' : '2-point lineup') : isDe ? 'Einzelner Spot' : 'Single spot')}
+                    </span>
+                  </div>
+                </div>
+                {onOpenUtilityInfo && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenUtilityInfo(su)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 text-sky-300 text-[11px] font-semibold cursor-pointer transition-colors shrink-0"
+                    title={isDe ? 'Utility-Info & Screenshots öffnen' : 'Open Utility Info & Screenshots'}
+                  >
+                    <Info className="w-3.5 h-3.5" />
+                    <span>{isDe ? 'Info' : 'Info'}</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Utility Type Switcher */}
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-semibold text-zinc-400">
+                  {isDe ? 'Utility-Typ' : 'Utility Type'}
+                </span>
+                <div className="grid grid-cols-5 gap-1">
+                  {(['smoke', 'flash', 'molotov', 'he', 'decoy'] as UtilityType[]).map((uType) => {
+                    const tMeta = UTILITY_META[uType];
+                    const isAct = su.type === uType;
+                    return (
+                      <button
+                        key={uType}
+                        type="button"
+                        onClick={() => onUpdateSelectedElementsProps({ type: uType })}
+                        className={`flex flex-col items-center justify-center gap-0.5 py-1.5 px-0.5 rounded-lg border text-[9px] font-bold uppercase cursor-pointer transition-colors ${
+                          isAct
+                            ? `${tMeta.bgClass} ${tMeta.borderClass}`
+                            : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white'
+                        }`}
+                      >
+                        <UtilitySymbol type={uType} size="sm" />
+                        <span>{uType === 'molotov' ? 'Molo' : uType}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Label & Notes */}
+              <div className="space-y-2 pt-2 border-t border-zinc-800/70">
+                <div>
+                  <span className="text-[11px] font-semibold text-zinc-400 block mb-1">
+                    {isDe ? 'Name / Beschriftung (auf Karte sichtbar)' : 'Label (shown on map)'}
+                  </span>
+                  <input
+                    type="text"
+                    maxLength={32}
+                    value={su.label || ''}
+                    onChange={(e) => onUpdateSelectedElementsProps({ label: e.target.value })}
+                    placeholder={isDe ? 'z. B. CT Smoke von T-Ramp' : 'e.g. CT Smoke from T Ramp'}
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between text-[11px] mb-1">
+                    <span className="text-zinc-400">{isDe ? 'Schriftgröße' : 'Font Size'}</span>
+                    <span className="font-mono text-xs text-zinc-300">{su.fontSize || 12}px</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {[10, 12, 14, 16, 18, 22, 28].map((fs) => {
+                      const active = (su.fontSize || 12) === fs;
+                      return (
+                        <button
+                          key={fs}
+                          type="button"
+                          onClick={() => onUpdateSelectedElementsProps({ fontSize: fs })}
+                          className={`flex-1 py-1 rounded text-[10px] font-mono font-bold border cursor-pointer transition-colors ${
+                            active
+                              ? 'bg-sky-500/25 text-sky-200 border-sky-400'
+                              : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white'
+                          }`}
+                        >
+                          {fs}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-[11px] font-semibold text-zinc-400 block mb-1">
+                    {isDe ? 'Notiz / Lineup-Anleitung' : 'Lineup Notes'}
+                  </span>
+                  <textarea
+                    rows={2}
+                    maxLength={400}
+                    value={su.notes || ''}
+                    onChange={(e) => onUpdateSelectedElementsProps({ notes: e.target.value })}
+                    placeholder={
+                      isDe
+                        ? 'Standpunkt, Zielpunkt, Timing oder Hinweise...'
+                        : 'Standpoint, aim point, timing...'
+                    }
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-sky-500 resize-y"
+                  />
+                </div>
+              </div>
+
+              {/* Color Swatches + Standard + Custom */}
+              <div className="space-y-1.5 pt-2 border-t border-zinc-800/70">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-zinc-400">
+                    {isDe ? 'Farbe' : 'Color'}
+                  </span>
+                  {su.color && (
+                    <button
+                      type="button"
+                      onClick={() => onUpdateSelectedElementsProps({ resetColor: true })}
+                      className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-[10px] font-semibold text-amber-300 cursor-pointer"
+                      title={isDe ? 'Standardfarbe wiederherstellen' : 'Reset to default color'}
+                    >
+                      <RotateCcw className="w-2.5 h-2.5" />
+                      <span>{isDe ? 'Standard' : 'Default'}</span>
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {paletteColors.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => onUpdateSelectedElementsProps({ color: c })}
+                      className={`w-5 h-5 rounded-full border transition-transform hover:scale-110 cursor-pointer ${
+                        activeColor.toLowerCase() === c.toLowerCase()
+                          ? 'ring-2 ring-white ring-offset-1 ring-offset-zinc-950 border-white scale-110'
+                          : 'border-zinc-700'
+                      }`}
+                      style={{ backgroundColor: c }}
+                      title={c}
+                    />
+                  ))}
+                  {onOpenCustomColor && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenCustomColor(su)}
+                      className="px-2 h-5 rounded-full bg-zinc-900 hover:bg-zinc-800 text-amber-300 border border-zinc-700 text-[10px] font-bold cursor-pointer flex items-center gap-1"
+                    >
+                      <Palette className="w-3 h-3" />
+                      <span>{isDe ? 'Eigene' : 'Custom'}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Opacity, Spot Size & Line Thickness */}
+              <div className="space-y-2.5 pt-2 border-t border-zinc-800/70">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-zinc-400">{isDe ? 'Deckkraft' : 'Opacity'}</span>
+                    <span className="font-mono font-bold tabular-nums text-zinc-200">
+                      {Math.round((su.opacity ?? 1) * 100)} %
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="10"
+                    max="100"
+                    step="5"
+                    value={Math.round((su.opacity ?? 1) * 100)}
+                    onChange={(e) =>
+                      onUpdateSelectedElementsProps({
+                        opacity: Number(e.target.value) / 100,
+                        skipHistory: true,
+                      })
+                    }
+                    className="w-full h-1.5 bg-zinc-800 rounded-lg accent-sky-400 cursor-pointer"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-semibold text-zinc-300">
+                      {isDe ? 'Spot-Größe' : 'Spot Size'}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono font-bold text-emerald-300 tabular-nums">
+                        {Math.round(effSpotScale * 100)}%
+                      </span>
+                      {su.spotScale !== undefined && (
+                        <button
+                          type="button"
+                          onClick={() => onUpdateSelectedElementsProps({ resetSpotScale: true })}
+                          className="px-1.5 py-0.5 rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-[9px] text-amber-300 cursor-pointer"
+                        >
+                          Global
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <input
+                    type="range"
+                    min={50}
+                    max={500}
+                    step={1}
+                    aria-label={isDe ? 'Utility Spot-Größe rechts' : 'Right panel spot size'}
+                    value={Math.round(effSpotScale * 100)}
+                    onChange={(e) =>
+                      onUpdateSelectedElementsProps({
+                        spotScale: Number(e.target.value) / 100,
+                        skipHistory: true,
+                      })
+                    }
+                    className="w-full accent-emerald-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
+                  />
+                </div>
+
+                {hasThrow && (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="font-semibold text-zinc-300">
+                        {isDe ? 'Linienstärke' : 'Line Width'}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono font-bold text-sky-300 tabular-nums">
+                          {Math.round(effLineScale * 100)}%
+                        </span>
+                        {su.lineScale !== undefined && (
+                          <button
+                            type="button"
+                            onClick={() => onUpdateSelectedElementsProps({ resetLineScale: true })}
+                            className="px-1.5 py-0.5 rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-[9px] text-amber-300 cursor-pointer"
+                          >
+                            Global
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <input
+                      type="range"
+                      min={20}
+                      max={200}
+                      step={1}
+                      aria-label={isDe ? 'Utility Linienstärke rechts' : 'Right panel line width'}
+                      value={Math.round(effLineScale * 100)}
+                      onChange={(e) =>
+                        onUpdateSelectedElementsProps({
+                          lineScale: Number(e.target.value) / 100,
+                          skipHistory: true,
+                        })
+                      }
+                      className="w-full accent-sky-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Throw Curve & Throw Type */}
+              <div className="pt-2 border-t border-zinc-800/70 space-y-2.5">
+                <div className="flex items-center justify-between gap-1.5">
+                  <span className="text-[11px] font-semibold text-emerald-300 flex items-center gap-1.5">
+                    <Spline className="w-3.5 h-3.5" />
+                    <span>{isDe ? 'Wurflinie' : 'Throw Curve'}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onUpdateSelectedElementsProps(
+                        hasThrow ? { removeThrowFrom: true } : { addDefaultThrowFrom: true }
+                      )
+                    }
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer transition-colors ${
+                      hasThrow
+                        ? 'bg-red-500/15 text-red-300 border-red-500/40 hover:bg-red-500/25'
+                        : 'bg-emerald-500/20 text-emerald-200 border-emerald-500/50 hover:bg-emerald-500/30'
+                    }`}
+                  >
+                    {hasThrow
+                      ? isDe
+                        ? 'Entfernen'
+                        : 'Remove'
+                      : isDe
+                      ? '+ Hinzufügen'
+                      : '+ Add Line'}
+                  </button>
+                </div>
+
+                {hasThrow && (
+                  <>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-zinc-400">{isDe ? 'Kurvenbogen' : 'Curve Arc'}</span>
+                        <span className="font-mono font-bold text-zinc-200 tabular-nums">
+                          {currentBend > 0 ? `+${currentBend}` : currentBend}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={-45}
+                        max={45}
+                        step={0.5}
+                        aria-label={isDe ? 'Kurvenbogen rechts' : 'Right panel curve arc'}
+                        value={currentBend}
+                        onChange={(e) =>
+                          onUpdateSelectedElementsProps({
+                            curveBend: Number(e.target.value),
+                            skipHistory: true,
+                          })
+                        }
+                        className="w-full accent-sky-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
+                      />
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onUpdateSelectedElementsProps({
+                              curveBend: Math.round(-currentBend * 10) / 10,
+                            })
+                          }
+                          className="flex-1 flex items-center justify-center gap-1 py-1 rounded text-[10px] font-semibold bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 cursor-pointer"
+                        >
+                          <ArrowLeftRight className="w-2.5 h-2.5 text-sky-400" />
+                          <span>{isDe ? 'Umkehren' : 'Flip'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onUpdateSelectedElementsProps({ curveBend: 0 })}
+                          className="flex-1 py-1 rounded text-[10px] font-semibold bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 cursor-pointer"
+                        >
+                          {isDe ? 'Gerade' : 'Straight'}
+                        </button>
+                        {su.curveBend !== undefined && (
+                          <button
+                            type="button"
+                            onClick={() => onUpdateSelectedElementsProps({ resetCurve: true })}
+                            className="px-2 py-1 rounded text-[10px] font-semibold bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-amber-300 cursor-pointer"
+                            title={isDe ? 'Bogen zurücksetzen' : 'Reset curve arc'}
+                          >
+                            <RotateCcw className="w-2.5 h-2.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between gap-1 text-[11px]">
+                        <span className="text-zinc-400">{isDe ? 'Wurfart' : 'Throw Type'}</span>
+                        <span className="font-semibold text-sky-300 truncate">
+                          {formatThrowTypeFull(su.throwType || 'left', lang)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {UTILITY_THROW_TYPES.map((tt) => {
+                          const meta = THROW_TYPE_META[tt];
+                          const active = (su.throwType || 'left') === tt;
+                          return (
+                            <button
+                              key={tt}
+                              type="button"
+                              onClick={() => onUpdateSelectedElementsProps({ throwType: tt })}
+                              className={`flex-1 py-1 rounded text-[10px] font-mono font-bold border cursor-pointer transition-colors ${
+                                active
+                                  ? 'bg-sky-500/25 text-sky-200 border-sky-400'
+                                  : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white'
+                              }`}
+                              title={formatThrowTypeFull(tt, lang)}
+                            >
+                              {meta.short}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Quick Utility Actions */}
+              <div className="pt-2 border-t border-zinc-800/70 space-y-1.5">
+                {onOpenUtilityInfo && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenUtilityInfo(su)}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 text-sky-300 text-xs font-semibold cursor-pointer transition-colors"
+                  >
+                    <Info className="w-3.5 h-3.5" />
+                    <span>
+                      {isDe ? 'Utility-Info & Screenshots' : 'Utility Info & Screenshots'}
+                    </span>
+                  </button>
+                )}
+
+                <div className="grid grid-cols-2 gap-1.5">
+                  {onMoveUtility && !su.locked && (
+                    <button
+                      type="button"
+                      onClick={() => onMoveUtility(su)}
+                      className="flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-amber-300 text-[11px] font-semibold cursor-pointer transition-colors"
+                    >
+                      <Move className="w-3.5 h-3.5" />
+                      <span>{isDe ? 'Verschieben' : 'Move'}</span>
+                    </button>
+                  )}
+
+                  {hasThrow && onBranchFromUtilityOrigin && (
+                    <button
+                      type="button"
+                      onClick={() => onBranchFromUtilityOrigin(su.throwFrom!, su.type)}
+                      className="flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 text-[11px] font-semibold cursor-pointer transition-colors"
+                    >
+                      <Spline className="w-3.5 h-3.5" />
+                      <span>{isDe ? '+ Wurf von hier' : '+ Throw here'}</span>
+                    </button>
+                  )}
+
+                  {onDuplicateSelected && (
+                    <button
+                      type="button"
+                      onClick={onDuplicateSelected}
+                      className="flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 text-[11px] font-semibold cursor-pointer transition-colors"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                      <span>{isDe ? 'Duplizieren' : 'Duplicate'}</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => onUpdateSelectedElementsProps({ locked: !su.locked })}
+                    className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg border text-[11px] font-semibold cursor-pointer transition-colors ${
+                      su.locked
+                        ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
+                        : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-200'
+                    }`}
+                  >
+                    {su.locked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5 text-zinc-400" />}
+                    <span>{su.locked ? (isDe ? 'Entsperren' : 'Unlock') : isDe ? 'Sperren' : 'Lock'}</span>
+                  </button>
+                </div>
+
+                {!su.locked && (
+                  <button
+                    type="button"
+                    onClick={() => onDeleteElement(su.id)}
+                    className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-lg bg-red-950/40 hover:bg-red-900/50 border border-red-800/50 text-red-300 text-[11px] font-semibold cursor-pointer transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{isDe ? 'Utility löschen' : 'Delete Utility'}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })()
       ) : (
         /* LAYERS & PROPERTIES VIEW */
         <div className="flex-1 flex flex-col min-h-0">
@@ -583,7 +1156,7 @@ export const TacticalLayersPanel: React.FC<TacticalLayersPanelProps> = ({
             })}
           </div>
 
-          {/* PROPERTIES PANEL (Deckkraft & Farbe) */}
+          {/* PROPERTIES PANEL (Deckkraft & Farbe für aktive Ebene oder Mehrfachauswahl) */}
           <div className="p-3.5 border-t border-zinc-800 bg-zinc-950 space-y-3 shrink-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-200">
@@ -626,130 +1199,43 @@ export const TacticalLayersPanel: React.FC<TacticalLayersPanelProps> = ({
             </div>
 
             {/* Color Swatches */}
-            <div className="flex items-center justify-between gap-2 pt-0.5">
-              <span className="text-[11px] text-zinc-400 shrink-0">{isDe ? 'Farbe' : 'Color'}</span>
-              <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                {LAYER_COLORS.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => {
-                      if (hasSelection) {
-                        onUpdateSelectedElementsProps({ color: c });
-                      } else if (activeLayer) {
-                        onUpdateLayerProps(activeLayer.id, { color: c });
-                      }
-                    }}
-                    className={`w-4.5 h-4.5 rounded-full border transition-transform hover:scale-110 cursor-pointer ${
-                      currentColor.toLowerCase() === c.toLowerCase()
-                        ? 'ring-2 ring-white ring-offset-1 ring-offset-zinc-950 border-white scale-110'
-                        : 'border-zinc-700'
-                    }`}
-                    style={{ backgroundColor: c }}
-                    title={c}
-                  />
-                ))}
+            <div className="space-y-1 pt-0.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] text-zinc-400 shrink-0">{isDe ? 'Farbe' : 'Color'}</span>
+                <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                  {LAYER_COLORS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => {
+                        if (hasSelection) {
+                          onUpdateSelectedElementsProps({ color: c });
+                        } else if (activeLayer) {
+                          onUpdateLayerProps(activeLayer.id, { color: c });
+                        }
+                      }}
+                      className={`w-4.5 h-4.5 rounded-full border transition-transform hover:scale-110 cursor-pointer ${
+                        currentColor.toLowerCase() === c.toLowerCase()
+                          ? 'ring-2 ring-white ring-offset-1 ring-offset-zinc-950 border-white scale-110'
+                          : 'border-zinc-700'
+                      }`}
+                      style={{ backgroundColor: c }}
+                      title={c}
+                    />
+                  ))}
+                  {selectedUtilities.length > 0 && selectedUtilities.some((u) => u.color) && (
+                    <button
+                      type="button"
+                      onClick={() => onUpdateSelectedElementsProps({ resetColor: true })}
+                      className="px-1.5 py-0.5 rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-[9px] font-semibold text-amber-300 cursor-pointer"
+                      title={isDe ? 'Standardfarbe wiederherstellen' : 'Reset to default color'}
+                    >
+                      Std
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
-            {/* Single Selected Utility Throw-Line & Lineup Controls */}
-            {selectedUtilities.length === 1 &&
-              selectedDrawings.length === 0 &&
-              selectedPlayers.length === 0 && (() => {
-                const su = selectedUtilities[0];
-                const hasThrow = Boolean(su.throwFrom);
-                return (
-                  <div className="pt-2 border-t border-zinc-800/80 space-y-2">
-                    <div className="flex items-center justify-between gap-1.5">
-                      <span className="text-[11px] font-semibold text-emerald-300 flex items-center gap-1">
-                        <Spline className="w-3.5 h-3.5" />
-                        <span>{isDe ? 'Wurflinie' : 'Throw Curve'}</span>
-                      </span>
-                      <div className="flex items-center gap-1">
-                        {hasThrow && su.curveBend !== undefined && (
-                          <button
-                            type="button"
-                            onClick={() => onUpdateSelectedElementsProps({ resetCurve: true })}
-                            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-700 cursor-pointer"
-                            title={isDe ? 'Bogen auf Standard zurücksetzen' : 'Reset curve arc'}
-                          >
-                            <RotateCcw className="w-2.5 h-2.5" />
-                            <span>Reset</span>
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onUpdateSelectedElementsProps(
-                              hasThrow ? { removeThrowFrom: true } : { addDefaultThrowFrom: true }
-                            )
-                          }
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer transition-colors ${
-                            hasThrow
-                              ? 'bg-red-500/15 text-red-300 border-red-500/40 hover:bg-red-500/25'
-                              : 'bg-emerald-500/20 text-emerald-200 border-emerald-500/50 hover:bg-emerald-500/30'
-                          }`}
-                        >
-                          {hasThrow
-                            ? isDe
-                              ? 'Entfernen'
-                              : 'Remove'
-                            : isDe
-                            ? '+ Hinzufügen'
-                            : '+ Add Line'}
-                        </button>
-                      </div>
-                    </div>
-
-                    {hasThrow && (
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between gap-1">
-                          <span className="text-[10px] text-zinc-400">
-                            {isDe ? 'Wurfart' : 'Throw Type'}
-                          </span>
-                          <span className="text-[10px] font-semibold text-sky-300 truncate">
-                            {formatThrowTypeFull(su.throwType || 'left', lang)}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          {UTILITY_THROW_TYPES.map((tt) => {
-                            const meta = THROW_TYPE_META[tt];
-                            const active = (su.throwType || 'left') === tt;
-                            return (
-                              <button
-                                key={tt}
-                                type="button"
-                                onClick={() => onUpdateSelectedElementsProps({ throwType: tt })}
-                                className={`flex-1 py-1 rounded text-[10px] font-mono font-bold border cursor-pointer transition-colors ${
-                                  active
-                                    ? 'bg-sky-500/25 text-sky-200 border-sky-400'
-                                    : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white'
-                                }`}
-                                title={formatThrowTypeFull(tt, lang)}
-                              >
-                                {meta.short}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="space-y-1">
-                      <span className="text-[10px] text-zinc-400">
-                        {isDe ? 'Lineup-Notiz' : 'Lineup Note'}
-                      </span>
-                      <input
-                        type="text"
-                        maxLength={28}
-                        value={su.label || ''}
-                        onChange={(e) => onUpdateSelectedElementsProps({ label: e.target.value })}
-                        placeholder={isDe ? 'z.B. T-Spawn → CT' : 'e.g. T Spawn → CT'}
-                        className="w-full px-2 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-sky-500"
-                      />
-                    </div>
-                  </div>
-                );
-              })()}
           </div>
         </div>
       )}

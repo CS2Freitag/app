@@ -10,6 +10,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { Language } from '../types';
+import { UtilitySymbol } from './UtilitySymbol';
 
 interface TacticalMobileBottomBarProps {
   lang: Language;
@@ -22,6 +23,8 @@ interface TacticalMobileBottomBarProps {
   onToggleAreas: () => void;
   showGrid: boolean;
   onToggleGrid: () => void;
+  showUtilities: boolean;
+  onToggleUtilities: () => void;
   showCalloutLabels: boolean;
   onToggleLabels: () => void;
   calloutScale: number;
@@ -42,6 +45,8 @@ export const TacticalMobileBottomBar: React.FC<TacticalMobileBottomBarProps> = (
   onToggleAreas,
   showGrid,
   onToggleGrid,
+  showUtilities,
+  onToggleUtilities,
   showCalloutLabels,
   onToggleLabels,
   calloutScale,
@@ -127,6 +132,20 @@ export const TacticalMobileBottomBar: React.FC<TacticalMobileBottomBarProps> = (
             title={isDe ? 'Raster' : 'Grid'}
           >
             <Grid3X3 className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            aria-pressed={showUtilities}
+            aria-label={isDe ? 'Utilitys ein-/ausblenden' : 'Toggle utilities'}
+            onClick={onToggleUtilities}
+            className={`w-6 h-7 flex items-center justify-center rounded-lg border transition-colors cursor-pointer shrink-0 ${
+              showUtilities
+                ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800'
+            }`}
+            title={isDe ? 'Utilitys ein-/ausblenden' : 'Toggle utilities'}
+          >
+            <UtilitySymbol type="smoke" size="xs" />
           </button>
         </div>
 

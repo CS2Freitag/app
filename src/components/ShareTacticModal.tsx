@@ -3,7 +3,11 @@ import QRCode from 'qrcode';
 import JSZip from 'jszip';
 import jsQR from 'jsqr';
 import LZString from 'lz-string';
-import { decodeCompactTactic } from '../utils/tacticCodec';
+import {
+  decodeCompactTactic,
+  decodeSingleUtilityPackage,
+  encodeCompactTactic,
+} from '../utils/tacticCodec';
 import { 
   X, 
   Copy, 
@@ -16,13 +20,34 @@ import {
   Camera, 
   Upload, 
   ArrowRight,
-  RefreshCw,
   FolderOpen,
   Image as ImageIcon,
-  Download
+  Download,
+  Eye,
+  EyeOff,
+  SlidersHorizontal,
+  ZoomIn
 } from 'lucide-react';
 import { generateTacticSheetPng } from '../utils/tacticSheetExport';
 import { Language, MapData, TacticalDrawingLine, UtilityMarker, PlayerToken } from '../types';
+
+interface ShareContentFilter {
+  areas: boolean;
+  callouts: boolean;
+  utilities: boolean;
+  drawings: boolean;
+  players: boolean;
+}
+
+const DEFAULT_SHARE_FILTER: ShareContentFilter = {
+  areas: true,
+  callouts: true,
+  utilities: true,
+  drawings: true,
+  players: true,
+};
+
+type SharePresetKey = 'all' | 'only_callouts' | 'areas_callouts' | 'only_utilities' | 'custom';
 
 interface ShareTacticModalProps {
   isOpen: boolean;
@@ -35,8 +60,27 @@ interface ShareTacticModalProps {
     utilities: UtilityMarker[];
     players: PlayerToken[];
   };
-  onSaveAsMyTactic: (tacticTitle: string) => void;
-  onLoadTacticState?: (tacticState: { drawings: TacticalDrawingLine[]; utilities: UtilityMarker[]; players: PlayerToken[] }, tacticTitle?: string) => void;
+  utilityLineScale?: number;
+  utilitySpotScale?: number;
+  onSaveAsMyTactic: (
+    tacticTitle: string,
+    filteredState?: {
+      drawings: TacticalDrawingLine[];
+      utilities: UtilityMarker[];
+      players: PlayerToken[];
+    }
+  ) => void;
+  onLoadTacticState?: (
+    tacticState: {
+      drawings: TacticalDrawingLine[];
+      utilities: UtilityMarker[];
+      players: PlayerToken[];
+      showAreas?: boolean;
+      showCallouts?: boolean;
+    },
+    tacticTitle?: string
+  ) => void;
+  onLoadSingleUtility?: (utility: UtilityMarker, mapName?: string) => void;
   lang: Language;
 }
 
@@ -47,8 +91,11 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
   shareUrl,
   defaultTitle,
   tacticState,
+  utilityLineScale,
+  utilitySpotScale,
   onSaveAsMyTactic,
   onLoadTacticState,
+  onLoadSingleUtility,
   lang,
 }) => {
   const isDe = lang === 'de';
@@ -59,12 +106,113 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [isExportingZip, setIsExportingZip] = useState(false);
   const [isExportingPng, setIsExportingPng] = useState(false);
+  const [isSharingSheet, setIsSharingSheet] = useState(false);
+  const [sharedSheetFeedback, setSharedSheetFeedback] = useState<string | null>(null);
+  const [shareFilter, setShareFilter] = useState<ShareContentFilter>(DEFAULT_SHARE_FILTER);
+  const [previewDataUrl, setPreviewDataUrl] = useState<string>('');
+  const [isGeneratingPreview, setIsGeneratingPreview] = useState<boolean>(false);
+  const [isPreviewZoomOpen, setIsPreviewZoomOpen] = useState<boolean>(false);
+
+  const hasHiddenElements =
+    !shareFilter.areas ||
+    !shareFilter.callouts ||
+    !shareFilter.utilities ||
+    !shareFilter.drawings ||
+    (tacticState.players.length > 0 && !shareFilter.players);
+
+  const activePreset: SharePresetKey = (() => {
+    const { areas, callouts, utilities, drawings, players } = shareFilter;
+    if (areas && callouts && utilities && drawings && players) return 'all';
+    if (!areas && callouts && !utilities && !drawings && !players) return 'only_callouts';
+    if (areas && callouts && !utilities && !drawings && !players) return 'areas_callouts';
+    if (!areas && !callouts && utilities && !drawings && !players) return 'only_utilities';
+    return 'custom';
+  })();
+
+  const applySharePreset = (preset: Exclude<SharePresetKey, 'custom'>) => {
+    if (preset === 'all') {
+      setShareFilter({ areas: true, callouts: true, utilities: true, drawings: true, players: true });
+    } else if (preset === 'only_callouts') {
+      setShareFilter({ areas: false, callouts: true, utilities: false, drawings: false, players: false });
+    } else if (preset === 'areas_callouts') {
+      setShareFilter({ areas: true, callouts: true, utilities: false, drawings: false, players: false });
+    } else if (preset === 'only_utilities') {
+      setShareFilter({ areas: false, callouts: false, utilities: true, drawings: false, players: false });
+    }
+  };
+
+  const filteredTacticState = React.useMemo(
+    () => ({
+      drawings: shareFilter.drawings ? tacticState.drawings : [],
+      utilities: shareFilter.utilities ? tacticState.utilities : [],
+      players: shareFilter.players ? tacticState.players : [],
+    }),
+    [shareFilter, tacticState]
+  );
+
+  const filteredMapData = React.useMemo<MapData>(() => {
+    const callouts = (mapData.callouts || [])
+      .map((c) => {
+        if (!shareFilter.areas && !shareFilter.callouts) return null;
+        if (!shareFilter.areas && shareFilter.callouts) {
+          return { ...c, area: undefined };
+        }
+        if (shareFilter.areas && !shareFilter.callouts) {
+          if (!c.area) return null;
+          return {
+            ...c,
+            name: '',
+            hidePin: true,
+            customImage: undefined,
+            displayMode: 'text' as const,
+          };
+        }
+        return c;
+      })
+      .filter((c): c is NonNullable<typeof c> => c !== null);
+
+    return {
+      ...mapData,
+      callouts,
+    };
+  }, [mapData, shareFilter.areas, shareFilter.callouts]);
+
+  const effectiveShareUrl = React.useMemo(() => {
+    if (!shareUrl || !shareUrl.includes('#')) {
+      return shareUrl;
+    }
+    const compressed = encodeCompactTactic(
+      mapData.id,
+      tacticName.trim() || mapData.name,
+      filteredTacticState.drawings,
+      filteredTacticState.utilities,
+      filteredTacticState.players,
+      {
+        showAreas: shareFilter.areas,
+        showCallouts: shareFilter.callouts,
+      }
+    );
+    return `${window.location.origin}${window.location.pathname}#t=${compressed}`;
+  }, [
+    shareUrl,
+    mapData.id,
+    mapData.name,
+    tacticName,
+    filteredTacticState,
+    shareFilter.areas,
+    shareFilter.callouts,
+  ]);
 
   const handleExportPngSheet = async () => {
     try {
       setIsExportingPng(true);
       const title = tacticName.trim() || defaultTitle || mapData.name;
-      const dataUrl = await generateTacticSheetPng(mapData, tacticState, title);
+      const dataUrl = await generateTacticSheetPng(mapData, filteredTacticState, title, {
+        utilityLineScale,
+        utilitySpotScale,
+        showAreas: shareFilter.areas,
+        showCallouts: shareFilter.callouts,
+      });
       const a = document.createElement('a');
       a.href = dataUrl;
       const safeName = title.toLowerCase().replace(/[^a-z0-9]+/g, '_');
@@ -75,6 +223,93 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
       alert(isDe ? 'Fehler beim Erstellen des Taktik-Bildes.' : 'Error generating tactic image.');
     } finally {
       setIsExportingPng(false);
+    }
+  };
+
+  const handleNativeSharePngSheet = async () => {
+    try {
+      setIsSharingSheet(true);
+      const title = tacticName.trim() || defaultTitle || mapData.name;
+      const safeName = title.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+      const dataUrl = await generateTacticSheetPng(mapData, filteredTacticState, title, {
+        utilityLineScale,
+        utilitySpotScale,
+        showAreas: shareFilter.areas,
+        showCallouts: shareFilter.callouts,
+      });
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      const fileName = `CS2Freitag_${safeName}_TacticSheet.png`;
+      const file = new File([blob], fileName, {
+        type: 'image/png',
+      });
+
+      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+        try {
+          const canFiles =
+            typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] });
+          if (canFiles) {
+            await navigator.share({
+              title: `CS2Freitag – ${title}`,
+              text: `${mapData.name} – ${title}`,
+              files: [file],
+            });
+          } else {
+            await navigator.share({
+              title: `CS2Freitag – ${title}`,
+              url: effectiveShareUrl,
+            });
+          }
+          setSharedSheetFeedback(isDe ? 'Geteilt!' : 'Shared!');
+          setTimeout(() => setSharedSheetFeedback(null), 2400);
+          return;
+        } catch (shareErr) {
+          if ((shareErr as Error)?.name === 'AbortError') {
+            return;
+          }
+          // Fall through to clipboard / download fallbacks if Web Share fails
+        }
+      }
+
+      if (
+        typeof navigator !== 'undefined' &&
+        navigator.clipboard &&
+        typeof navigator.clipboard.write === 'function' &&
+        typeof ClipboardItem !== 'undefined'
+      ) {
+        try {
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+          setSharedSheetFeedback(isDe ? 'PNG-Bild kopiert!' : 'PNG copied!');
+          setTimeout(() => setSharedSheetFeedback(null), 2400);
+          return;
+        } catch {
+          // Clipboard image write denied (e.g. iframe / async gesture timeout) -> try link copy
+        }
+      }
+
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(effectiveShareUrl);
+          setSharedSheetFeedback(isDe ? 'Link kopiert!' : 'Link copied!');
+          setTimeout(() => setSharedSheetFeedback(null), 2400);
+          return;
+        } catch {
+          // Clipboard text write denied -> fall back to PNG download
+        }
+      }
+
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = fileName;
+      a.click();
+      setSharedSheetFeedback(isDe ? 'PNG gespeichert!' : 'PNG saved!');
+      setTimeout(() => setSharedSheetFeedback(null), 2400);
+    } catch (err) {
+      if ((err as Error)?.name !== 'AbortError') {
+        console.error('Direct share error:', err);
+      }
+    } finally {
+      setIsSharingSheet(false);
     }
   };
 
@@ -99,6 +334,9 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
     setLoadError(null);
     setLoadSuccess(null);
     setManualCodeInput('');
+    setShareFilter(DEFAULT_SHARE_FILTER);
+    setPreviewDataUrl('');
+    setIsPreviewZoomOpen(false);
   }, [defaultTitle, isOpen]);
 
   // Stop camera on modal close or tab switch
@@ -112,9 +350,9 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
   }, [isOpen, activeTab]);
 
   useEffect(() => {
-    if (shareUrl && isOpen) {
+    if (effectiveShareUrl && isOpen) {
       // Use ErrorCorrectionLevel 'L' (Low) to make the QR matrix as coarse, clear, and easy to scan as possible!
-      QRCode.toDataURL(shareUrl, {
+      QRCode.toDataURL(effectiveShareUrl, {
         width: 260,
         margin: 1,
         errorCorrectionLevel: 'L',
@@ -126,7 +364,51 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
         .then((url) => setQrCodeDataUrl(url))
         .catch((err) => console.error('QR code generation error:', err));
     }
-  }, [shareUrl, isOpen]);
+  }, [effectiveShareUrl, isOpen]);
+
+  // Live preview below QR code whenever any category is hidden
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'share' || !hasHiddenElements) {
+      setPreviewDataUrl('');
+      setIsGeneratingPreview(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsGeneratingPreview(true);
+    const title = tacticName.trim() || defaultTitle || mapData.name;
+    generateTacticSheetPng(mapData, filteredTacticState, title, {
+      utilityLineScale,
+      utilitySpotScale,
+      showAreas: shareFilter.areas,
+      showCallouts: shareFilter.callouts,
+      size: 640,
+      includeHeader: false,
+    })
+      .then((url) => {
+        if (!cancelled) setPreviewDataUrl(url);
+      })
+      .catch((err) => console.warn('Share preview generation error:', err))
+      .finally(() => {
+        if (!cancelled) setIsGeneratingPreview(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isOpen,
+    activeTab,
+    hasHiddenElements,
+    mapData,
+    filteredTacticState,
+    shareFilter.areas,
+    shareFilter.callouts,
+    tacticName,
+    defaultTitle,
+    utilityLineScale,
+    utilitySpotScale,
+  ]);
 
   const stopCamera = () => {
     if (animationFrameRef.current) {
@@ -261,10 +543,25 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
     e.target.value = '';
   };
 
-  // Process and apply extracted string (URL, compressed code, or raw JSON)
+  // Process and apply extracted string (URL, compressed code, single utility, or raw JSON)
   const applyExtractedTactic = (rawString: string) => {
     setLoadError(null);
     setLoadSuccess(null);
+
+    const singleUtilPkg = decodeSingleUtilityPackage(rawString);
+    if (singleUtilPkg && onLoadSingleUtility) {
+      onLoadSingleUtility(singleUtilPkg.utility, singleUtilPkg.mapName);
+      const uName = singleUtilPkg.utility.label || singleUtilPkg.utility.type.toUpperCase();
+      setLoadSuccess(
+        isDe
+          ? `Utility "${uName}" (inkl. Bilder & Farben) hinzugefügt!`
+          : `Utility "${uName}" added!`
+      );
+      setTimeout(() => {
+        onClose();
+      }, 1100);
+      return;
+    }
 
     const decoded = decodeCompactTactic(rawString);
 
@@ -288,6 +585,8 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
           drawings: loadedDrawings,
           utilities: loadedUtilities,
           players: loadedPlayers,
+          showAreas: decoded.showAreas,
+          showCallouts: decoded.showCallouts,
         },
         title
       );
@@ -326,7 +625,9 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
         const text = await jsonEntry.async('text');
         const parsed = JSON.parse(text);
         const mapObj = parsed?.map || (parsed?.callouts ? parsed : undefined);
-        if (mapObj && mapObj.tacticData) {
+        if (parsed?.type === 'cs2freitag_single_utility' && parsed?.utility) {
+          applyExtractedTactic(text);
+        } else if (mapObj && mapObj.tacticData) {
           applyExtractedTactic(JSON.stringify(mapObj.tacticData));
         } else {
           setLoadError(isDe ? 'Keine Taktik-Zeichnungen in dieser Datei gefunden.' : 'No tactics found in file.');
@@ -335,9 +636,11 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
         const text = await file.text();
         const parsed = JSON.parse(text);
         const mapObj = parsed?.map || (parsed?.callouts ? parsed : undefined);
-        if (mapObj && mapObj.tacticData) {
+        if (parsed?.type === 'cs2freitag_single_utility' && parsed?.utility) {
+          applyExtractedTactic(text);
+        } else if (mapObj && mapObj.tacticData) {
           applyExtractedTactic(JSON.stringify(mapObj.tacticData));
-        } else if (parsed?.drawings || parsed?.d) {
+        } else if (parsed?.drawings || parsed?.d || parsed?.utilities || parsed?.u) {
           applyExtractedTactic(text);
         } else {
           setLoadError(isDe ? 'Keine Taktikdaten in der JSON-Datei.' : 'No tactic data in JSON.');
@@ -355,10 +658,10 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
   const handleCopy = async () => {
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(shareUrl);
+        await navigator.clipboard.writeText(effectiveShareUrl);
       } else {
         const textarea = document.createElement('textarea');
-        textarea.value = shareUrl;
+        textarea.value = effectiveShareUrl;
         document.body.appendChild(textarea);
         textarea.select();
         document.execCommand('copy');
@@ -373,7 +676,7 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
 
   const handleSave = () => {
     if (!tacticName.trim()) return;
-    onSaveAsMyTactic(tacticName.trim());
+    onSaveAsMyTactic(tacticName.trim(), filteredTacticState);
     setSavedSuccess(true);
     setTimeout(() => {
       setSavedSuccess(false);
@@ -381,12 +684,16 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
     }, 1200);
   };
 
-  // Export current map & tactical state as JSON file
+  // Export current filtered map & tactical state as JSON file
   const handleExportJson = () => {
     const mapWithTactics: MapData = {
-      ...mapData,
-      name: tacticName.trim() || mapData.name,
-      tacticData: tacticState,
+      ...filteredMapData,
+      name: tacticName.trim() || filteredMapData.name,
+      tacticData: {
+        ...filteredTacticState,
+        showAreas: shareFilter.areas,
+        showCallouts: shareFilter.callouts,
+      },
       updatedAt: Date.now(),
     };
     const exportPayload = {
@@ -407,15 +714,19 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  // Export current map & tactical state as ZIP file with radar images
+  // Export current filtered map & tactical state as ZIP file with radar images
   const handleExportZip = async () => {
     try {
       setIsExportingZip(true);
       const zip = new JSZip();
       const mapWithTactics: MapData = {
-        ...mapData,
-        name: tacticName.trim() || mapData.name,
-        tacticData: tacticState,
+        ...filteredMapData,
+        name: tacticName.trim() || filteredMapData.name,
+        tacticData: {
+          ...filteredTacticState,
+          showAreas: shareFilter.areas,
+          showCallouts: shareFilter.callouts,
+        },
         updatedAt: Date.now(),
       };
       const exportPayload = {
@@ -477,7 +788,7 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
   return (
     <div
       data-no-map-click="true"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-150 overflow-y-auto"
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-150 overflow-y-auto"
       onClick={onClose}
     >
       <div
@@ -556,6 +867,96 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
         {/* TAB 1: TEILEN & EXPORTIEREN */}
         {activeTab === 'share' ? (
           <div className="space-y-4">
+            {/* FILTER: WAS SOLL GETEILT / EXPORTIERT WERDEN? */}
+            <div className="p-3 bg-zinc-950/90 rounded-xl border border-zinc-800 space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-bold text-zinc-200 flex items-center gap-1.5">
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-sky-400" />
+                  <span>{isDe ? 'Auswahl für Teilen & Export:' : 'Content to Share & Export:'}</span>
+                </span>
+                {hasHiddenElements && (
+                  <button
+                    type="button"
+                    onClick={() => applySharePreset('all')}
+                    className="text-[10px] font-semibold text-sky-400 hover:text-sky-300 cursor-pointer"
+                  >
+                    {isDe ? 'Alles einblenden' : 'Show all'}
+                  </button>
+                )}
+              </div>
+
+              {/* 1-4 Quick Selection Presets */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                {[
+                  { key: 'all' as const, label: isDe ? '1. Alles' : '1. Everything' },
+                  { key: 'only_callouts' as const, label: isDe ? '2. Nur Callouts' : '2. Callouts only' },
+                  { key: 'areas_callouts' as const, label: isDe ? '3. Bereiche & Callouts' : '3. Areas & Callouts' },
+                  { key: 'only_utilities' as const, label: isDe ? '4. Nur Utilitys' : '4. Utilities only' },
+                ].map((preset) => {
+                  const isAct = activePreset === preset.key;
+                  return (
+                    <button
+                      key={preset.key}
+                      type="button"
+                      onClick={() => applySharePreset(preset.key)}
+                      aria-pressed={isAct}
+                      className={`px-2 py-1.5 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer text-center ${
+                        isAct
+                          ? 'bg-sky-500 text-zinc-950 border-sky-400 shadow-sm'
+                          : 'bg-zinc-900 text-zinc-300 border-zinc-700 hover:border-zinc-500 hover:text-white'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Individual Hide/Show Toggles */}
+              <div className="pt-1 border-t border-zinc-800/80 flex flex-wrap items-center gap-1.5">
+                {[
+                  { key: 'areas' as const, label: isDe ? 'Bereiche' : 'Areas' },
+                  { key: 'callouts' as const, label: isDe ? 'Callouts' : 'Callouts' },
+                  { key: 'utilities' as const, label: isDe ? 'Utilitys' : 'Utilities' },
+                  { key: 'drawings' as const, label: isDe ? 'Pfeile & Linien' : 'Arrows & Lines' },
+                  { key: 'players' as const, label: isDe ? 'Spieler' : 'Players' },
+                ].map((item) => {
+                  const visible = shareFilter[item.key];
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() =>
+                        setShareFilter((prev) => ({ ...prev, [item.key]: !prev[item.key] }))
+                      }
+                      aria-pressed={visible}
+                      className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold border transition-colors cursor-pointer ${
+                        visible
+                          ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-200 hover:bg-emerald-500/25'
+                          : 'bg-zinc-900 border-zinc-800 text-zinc-500 line-through hover:text-zinc-300'
+                      }`}
+                      title={
+                        visible
+                          ? isDe
+                            ? `${item.label} ausblenden`
+                            : `Hide ${item.label}`
+                          : isDe
+                          ? `${item.label} einblenden`
+                          : `Show ${item.label}`
+                      }
+                    >
+                      {visible ? (
+                        <Eye className="w-3 h-3 text-emerald-400 shrink-0" />
+                      ) : (
+                        <EyeOff className="w-3 h-3 text-zinc-500 shrink-0" />
+                      )}
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* 1. Link Section with Copy Button */}
             <div>
               <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
@@ -565,7 +966,7 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
                 <input
                   type="text"
                   readOnly
-                  value={shareUrl}
+                  value={effectiveShareUrl}
                   className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-xs font-mono text-zinc-300 select-all focus:outline-none focus:border-sky-400 truncate"
                   onClick={(e) => (e.target as HTMLInputElement).select()}
                 />
@@ -584,12 +985,12 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
               </div>
               <p className="text-[11px] text-zinc-400 mt-1">
                 {isDe
-                  ? 'Enthält Karte, Callouts, Zeichnungen & Aufstellungen komprimiert im Link für Discord.'
-                  : 'Contains map, callouts, drawings & utility compressed in URL.'}
+                  ? 'Enthält Karte und alle aktuell eingeblendeten Elemente komprimiert im Link.'
+                  : 'Contains map and all currently enabled elements compressed in URL.'}
               </p>
             </div>
 
-            {/* 2. QR Code Section */}
+            {/* 2. QR Code Section + Live Preview below when anything is hidden */}
             <div className="flex flex-col items-center justify-center p-3 bg-zinc-950/80 rounded-xl border border-zinc-800">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-300 mb-2">
                 <QrCode className="w-4 h-4 text-amber-400" />
@@ -609,6 +1010,57 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
               <span className="text-[10px] text-zinc-400 mt-1.5 text-center">
                 {isDe ? 'Mit dem Handy scannen und direkt loslegen' : 'Scan with phone camera to load'}
               </span>
+
+              {/* LIVE PREVIEW BELOW QR CODE WHEN ANY ELEMENT CATEGORY IS HIDDEN */}
+              {hasHiddenElements && (
+                <div className="w-full mt-3 pt-3 border-t border-zinc-800 space-y-2">
+                  <div className="flex items-center justify-between gap-2 text-[11px]">
+                    <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                      <ImageIcon className="w-3.5 h-3.5" />
+                      <span>
+                        {isDe
+                          ? 'Vorschau (wird geteilt / exportiert)'
+                          : 'Preview (will be shared / exported)'}
+                      </span>
+                    </span>
+                    <span className="text-[10px] text-zinc-400">
+                      {[
+                        shareFilter.areas && (isDe ? 'Bereiche' : 'Areas'),
+                        shareFilter.callouts && 'Callouts',
+                        shareFilter.utilities && (isDe ? 'Utilitys' : 'Utilities'),
+                        shareFilter.drawings && (isDe ? 'Pfeile & Linien' : 'Lines'),
+                        shareFilter.players && tacticState.players.length > 0 && (isDe ? 'Spieler' : 'Players'),
+                      ]
+                        .filter(Boolean)
+                        .join(' · ') || (isDe ? 'Nur Radar-Karte' : 'Radar only')}
+                    </span>
+                  </div>
+
+                  <div className="relative rounded-xl bg-zinc-900 border border-zinc-700/80 overflow-hidden aspect-square max-h-64 mx-auto flex items-center justify-center group">
+                    {isGeneratingPreview ? (
+                      <span className="text-xs text-zinc-400">
+                        {isDe ? 'Aktualisiere Vorschau...' : 'Updating preview...'}
+                      </span>
+                    ) : previewDataUrl ? (
+                      <button
+                        type="button"
+                        onClick={() => setIsPreviewZoomOpen(true)}
+                        className="w-full h-full block relative cursor-zoom-in"
+                        title={isDe ? 'Vorschau vergrößern' : 'Enlarge preview'}
+                      >
+                        <img
+                          src={previewDataUrl}
+                          alt={isDe ? 'Teilen-Vorschau' : 'Share preview'}
+                          className="w-full h-full object-contain"
+                        />
+                        <span className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-zinc-950/85 border border-zinc-700 text-zinc-200 opacity-80 group-hover:opacity-100 transition-opacity">
+                          <ZoomIn className="w-3.5 h-3.5" />
+                        </span>
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* 3. Save to "Eigene Taktiken" Section */}
@@ -645,29 +1097,68 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
               </p>
             </div>
 
-            {/* 4. Export Tactic Sheet as PNG Image (for Discord/Teams) */}
+            {/* 4. Export / Direct Share Tactic Sheet as PNG Image (for Discord/Teams) */}
             <div className="p-3.5 bg-zinc-950/80 rounded-xl border border-amber-500/40 space-y-2">
               <label className="block text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
                 <ImageIcon className="w-4 h-4 text-amber-400" />
-                <span>{isDe ? '4. Taktik-Sheet als PNG-Bild exportieren:' : '4. Export Tactic Sheet as PNG Image:'}</span>
-              </label>
-              <button
-                type="button"
-                onClick={handleExportPngSheet}
-                disabled={isExportingPng}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-black transition-all shadow-lg active:scale-[0.98] cursor-pointer disabled:opacity-50 uppercase tracking-wider"
-              >
-                <Download className="w-4 h-4" />
                 <span>
-                  {isExportingPng
-                    ? isDe ? 'Erstelle PNG-Bild...' : 'Generating PNG...'
-                    : isDe ? 'Taktik-Sheet als PNG herunterladen' : 'Download Tactic Sheet as PNG'}
+                  {isDe
+                    ? '4. Taktik-Sheet als PNG-Bild exportieren & direkt teilen:'
+                    : '4. Export & Direct Share Tactic Sheet PNG:'}
                 </span>
-              </button>
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleExportPngSheet}
+                  disabled={isExportingPng || isSharingSheet}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-black transition-all shadow-lg active:scale-[0.98] cursor-pointer disabled:opacity-50 uppercase tracking-wider whitespace-nowrap"
+                >
+                  <Download className="w-4 h-4 shrink-0" />
+                  <span>
+                    {isExportingPng
+                      ? isDe
+                        ? 'Erstelle PNG-Bild...'
+                        : 'Generating PNG...'
+                      : isDe
+                      ? 'PNG herunterladen'
+                      : 'Download PNG'}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleNativeSharePngSheet}
+                  disabled={isExportingPng || isSharingSheet}
+                  className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-black transition-all shadow-lg active:scale-[0.98] cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                  title={
+                    isDe
+                      ? 'Taktik-Sheet direkt über System-Teilen oder Zwischenablage teilen'
+                      : 'Share tactic sheet directly via native share or clipboard'
+                  }
+                >
+                  {sharedSheetFeedback ? (
+                    <Check className="w-4 h-4 shrink-0" />
+                  ) : (
+                    <Share2 className="w-4 h-4 shrink-0" />
+                  )}
+                  <span>
+                    {sharedSheetFeedback
+                      ? sharedSheetFeedback
+                      : isSharingSheet
+                      ? isDe
+                        ? 'Bereite vor...'
+                        : 'Preparing...'
+                      : isDe
+                      ? 'Direkt teilen'
+                      : 'Direct Share'}
+                  </span>
+                </button>
+              </div>
               <p className="text-[11px] text-zinc-400 leading-relaxed">
                 {isDe
-                  ? 'Generiert ein hochauflösendes Bild deiner Karte inklusive aller Callouts, Aufstellungen und Zeichnungen – perfekt zum Teilen auf Discord.'
-                  : 'Generates a high-res image of your map with all callouts, utilities & drawings – perfect for Discord.'}
+                  ? 'Generiert ein hochauflösendes Bild deiner Karte inklusive aller Callouts, Aufstellungen und Zeichnungen – perfekt zum Teilen auf Discord oder direkt per Teilen-Menü.'
+                  : 'Generates a high-res image of your map with all callouts, utilities & drawings – ready to download or share directly.'}
               </p>
             </div>
 
@@ -859,6 +1350,37 @@ export const ShareTacticModal: React.FC<ShareTacticModalProps> = ({
           </div>
         )}
       </div>
+
+      {/* Enlarged Preview Lightbox */}
+      {isPreviewZoomOpen && previewDataUrl && (
+        <div
+          onClick={() => setIsPreviewZoomOpen(false)}
+          className="fixed inset-0 z-[130] bg-black/85 backdrop-blur-xs flex items-center justify-center p-4 cursor-zoom-out"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-w-[92vw] max-h-[88dvh] bg-zinc-950 border border-zinc-700 rounded-2xl p-3 shadow-2xl flex flex-col gap-2 cursor-default"
+          >
+            <div className="flex items-center justify-between px-1">
+              <span className="text-xs font-bold text-amber-300">
+                {isDe ? 'Vorschau (wird geteilt / exportiert)' : 'Preview (shared / exported)'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsPreviewZoomOpen(false)}
+                className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <img
+              src={previewDataUrl}
+              alt="Share preview zoom"
+              className="max-w-full max-h-[78dvh] object-contain rounded-xl"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

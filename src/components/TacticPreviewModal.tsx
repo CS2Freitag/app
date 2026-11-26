@@ -13,6 +13,8 @@ interface TacticPreviewModalProps {
     players: PlayerToken[];
   };
   tacticTitle: string;
+  utilityLineScale?: number;
+  utilitySpotScale?: number;
   lang: Language;
 }
 
@@ -22,17 +24,22 @@ export const TacticPreviewModal: React.FC<TacticPreviewModalProps> = ({
   mapData,
   tacticState,
   tacticTitle,
+  utilityLineScale,
+  utilitySpotScale,
   lang,
 }) => {
-  if (!isOpen) return null;
   const isDe = lang === 'de';
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState<boolean>(true);
 
   useEffect(() => {
+    if (!isOpen) return;
     let isMounted = true;
     setIsGenerating(true);
-    generateTacticSheetPng(mapData, tacticState, tacticTitle)
+    generateTacticSheetPng(mapData, tacticState, tacticTitle, {
+      utilityLineScale,
+      utilitySpotScale,
+    })
       .then((url) => {
         if (isMounted) {
           setPreviewUrl(url);
@@ -46,7 +53,9 @@ export const TacticPreviewModal: React.FC<TacticPreviewModalProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [mapData, tacticState, tacticTitle]);
+  }, [isOpen, mapData, tacticState, tacticTitle, utilityLineScale, utilitySpotScale]);
+
+  if (!isOpen) return null;
 
   return (
     <div

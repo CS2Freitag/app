@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { User } from 'firebase/auth';
 import { getCloudMap, smartMergeMap, syncUserMap } from '../services/firebase';
 import { getFontFamilyStyle } from '../utils/calloutFonts';
@@ -32,7 +32,7 @@ import {
   Crosshair,
 } from 'lucide-react';
 import { UtilitySymbol, UTILITY_META } from './UtilitySymbol';
-import { TacticalLayersPanel } from './TacticalLayersPanel';
+import { TacticalLayersPanel, SelectedElementsPatch } from './TacticalLayersPanel';
 import { TacticalHistoryPanel } from './TacticalHistoryPanel';
 import { HelpDocsModal } from './HelpDocsModal';
 import { CustomColorModal } from './CustomColorModal';
@@ -47,10 +47,11 @@ import { TacticalBottomBar } from './TacticalBottomBar';
 import { TacticalMobileBottomBar } from './TacticalMobileBottomBar';
 import { TacticalLegendModal } from './TacticalLegendModal';
 import { CalloutEditorModal } from './CalloutEditorModal';
+import { UtilityInfoModal } from './UtilityInfoModal';
 import { SyncPromptModal } from './SyncPromptModal';
 import { TacticalHeaderBar } from './TacticalHeaderBar';
 import { TacticalMobileToolbar } from './TacticalMobileToolbar';
-import { TacticalLeftSidebar } from './TacticalLeftSidebar';
+import { TacticalLeftSidebar, UtilityDraftConfig } from './TacticalLeftSidebar';
 import { TacticalMobileSheet } from './TacticalMobileSheet';
 import {
   computeCurveBendFromHandlePoint,
@@ -60,6 +61,22 @@ import {
   getThrowGeometry,
   THROW_TYPE_META,
 } from '../utils/utilityThrowGeometry';
+import {
+  clampUtilityLineScale,
+  clampUtilitySpotScale,
+  DEFAULT_UTILITY_LINE_SCALE,
+  DEFAULT_UTILITY_SPOT_SCALE,
+  findCoLocatedOriginUtilityIds,
+  findSnapThrowOrigin,
+  getEffectiveUtilityLineScale,
+  getEffectiveUtilitySpotScale,
+  getUtilityColor,
+  getUtilitySpotPixelSize,
+  getUtilityThrowSvgMetrics,
+  loadUtilityDisplaySettings,
+  saveUtilityDisplaySettings,
+  shouldIgnoreCalloutInteractions,
+} from '../utils/utilityDisplay';
 import { useTacticPresets } from '../hooks/useTacticPresets';
 import { useTacticHistory } from '../hooks/useTacticHistory';
 import { useTacticSelectionActions } from '../hooks/useTacticSelectionActions';
@@ -147,6 +164,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   // Tracking unsynced cloud changes and snapshot for discarding
   const initialMapDataRef = useRef<MapData>(mapData);
   const initialMapTimestampRef = useRef<number>(mapData.updatedAt || Date.now());
+  const isDiscardingRef = useRef<boolean>(false);
+  const isTacticsSyncInitRef = useRef<boolean>(true);
   const [hasChangesInSession, setHasChangesInSession] = useState(false);
   const [showSyncPrompt, setShowSyncPrompt] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -174,7 +193,9 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const handleShareTactics = () => {
     try {
       const visibleDrawings = drawings.filter((d) => isLayerVisible(d.layerId, 'layer_t'));
-      const visibleUtilities = utilities.filter((u) => isLayerVisible(u.layerId, 'layer_util'));
+      const visibleUtilities = utilities.filter(
+        (u) => showUtilities && isLayerVisible(u.layerId, 'layer_util')
+      );
       const visiblePlayers = players.filter((p) =>
         isLayerVisible(p.layerId, p.side === 'ct' ? 'layer_ct' : 'layer_t')
       );
@@ -247,13 +268,15 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const [colorMode, setColorMode] = useState<ColorMode>('zone');
 
   // Toggle TotalCSGO-style areas overlay
-  const [showAreas, setShowAreas] = useState<boolean>(true);
+  const [showAreas, setShowAreas] = useState<boolean>(
+    () => mapData.tacticData?.showAreas ?? true
+  );
 
   // Color Legend Modal/Panel & Help Guides Modal
   const [showLegend, setShowLegend] = useState<boolean>(false);
   const [isHelpDocsOpen, setIsHelpDocsOpen] = useState<boolean>(false);
   const [isCustomColorModalOpen, setIsCustomColorModalOpen] = useState<boolean>(false);
-  const [customColorTarget, setCustomColorTarget] = useState<'pen' | 'selection'>('pen');
+  const [customColorTarget, setCustomColorTarget] = useState<'pen' | 'selection' | 'utilityDraft' | { utilityId: string }>('pen');
   const [isTacticPreviewOpen, setIsTacticPreviewOpen] = useState<boolean>(false);
   const [previewSnapshot, setPreviewSnapshot] = useState<TacticSnapshot | null>(null);
 
@@ -262,13 +285,60 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const [selectedUtility, setSelectedUtility] = useState<UtilityType>('smoke');
   const [utilityPlacementMode, setUtilityPlacementMode] = useState<UtilityPlacementMode>('throw');
   const [selectedThrowType, setSelectedThrowType] = useState<UtilityThrowType>('left');
+  const [utilityDraft, setUtilityDraft] = useState<UtilityDraftConfig>({
+    label: '',
+    fontSize: 12,
+    notes: '',
+    color: undefined,
+    opacity: 1,
+  });
   const [pendingUtilityThrowOrigin, setPendingUtilityThrowOrigin] = useState<{ x: number; y: number } | null>(null);
   const [utilityHoverCoord, setUtilityHoverCoord] = useState<{ x: number; y: number } | null>(null);
+  const [hoveredSnapOrigin, setHoveredSnapOrigin] = useState<{ x: number; y: number } | null>(null);
+  const [keepUtilityOrigin, setKeepUtilityOrigin] = useState<boolean>(false);
+  const [showUtilities, setShowUtilities] = useState<boolean>(() => loadUtilityDisplaySettings().showUtilities);
+  const [utilityLineScale, setUtilityLineScale] = useState<number>(() => loadUtilityDisplaySettings().lineScale);
+  const [utilitySpotScale, setUtilitySpotScale] = useState<number>(() => loadUtilityDisplaySettings().spotScale);
   const [hoveredUtilityId, setHoveredUtilityId] = useState<string | null>(null);
+  const [infoUtilityId, setInfoUtilityId] = useState<string | null>(null);
+  const [utilityEditTrigger, setUtilityEditTrigger] = useState<number>(0);
+  const switchUtilityToolToSelect = useCallback(() => {
+    setPendingUtilityThrowOrigin(null);
+    setUtilityHoverCoord(null);
+    setHoveredSnapOrigin(null);
+    setActiveTool('select');
+  }, []);
+
+  const openUtilityEditorInLeftPanel = (util: UtilityMarker) => {
+    if (activeTool === 'utility') {
+      switchUtilityToolToSelect();
+    }
+    setSelectedCallout(null);
+    setSelectedCalloutIds([]);
+    setSelectedElementIds([util.id]);
+    setInfoUtilityId(null);
+    setUtilityEditTrigger((prev) => prev + 1);
+    if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+      setIsToolbarVisible(true);
+    } else if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setMobileSheetTab('layers');
+      setIsMobileSheetOpen(true);
+    }
+  };
+  const [movingUtilityId, setMovingUtilityId] = useState<string | null>(null);
+  const [movingUtilityTarget, setMovingUtilityTarget] = useState<'origin' | 'landing' | 'both'>('landing');
+  const [moveTargetPromptUtility, setMoveTargetPromptUtility] = useState<UtilityMarker | null>(null);
   const [draggingUtilityHandle, setDraggingUtilityHandle] = useState<{
     utilId: string;
-    mode: 'origin' | 'curve' | 'landing';
+    mode: 'origin' | 'curve' | 'landing' | 'both';
     tileEl: HTMLElement | null;
+    coLocatedUtilIds?: string[];
+    startClientX: number;
+    startClientY: number;
+    startCoord: { x: number; y: number };
+    initFrom?: { x: number; y: number };
+    initTo?: { x: number; y: number };
+    movedPastThreshold: boolean;
   } | null>(null);
   const [selectedPlayerSide, setSelectedPlayerSide] = useState<'ct' | 't'>('ct');
   const [penColor, setPenColor] = useState<string>('#ffffff');
@@ -276,11 +346,21 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const [showColorPicker, setShowColorPicker] = useState(false);
   const pressTimer = useRef<number | null>(null);
 
-  // Clear pending throw origin when switching away from utility throw mode
+  // Persist utility display settings (line thickness, spot size, visibility)
+  useEffect(() => {
+    saveUtilityDisplaySettings({
+      lineScale: utilityLineScale,
+      spotScale: utilitySpotScale,
+      showUtilities,
+    });
+  }, [utilityLineScale, utilitySpotScale, showUtilities]);
+
+  // Clear pending throw origin & snap indicator when switching away from utility throw mode
   useEffect(() => {
     if (activeTool !== 'utility' || utilityPlacementMode !== 'throw') {
       setPendingUtilityThrowOrigin(null);
       setUtilityHoverCoord(null);
+      setHoveredSnapOrigin(null);
     }
   }, [activeTool, utilityPlacementMode]);
 
@@ -363,7 +443,9 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   const [hoveredCallout, setHoveredCallout] = useState<Callout | null>(null);
   const [selectedCallout, setSelectedCallout] = useState<Callout | null>(null);
   const [selectedZoneFilter, setSelectedZoneFilter] = useState<ZoneType | 'all'>('all');
-  const [showCalloutLabels, setShowCalloutLabels] = useState<boolean>(true);
+  const [showCalloutLabels, setShowCalloutLabels] = useState<boolean>(
+    () => mapData.tacticData?.showCallouts ?? true
+  );
   const [highlightedCalloutId, setHighlightedCalloutId] = useState<string | undefined>(
     initialHighlightedCalloutId
   );
@@ -462,6 +544,41 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   });
   pushHistorySnapshotRef.current = () => pushHistorySnapshot();
 
+  const buildUpdatedMapWithTactics = useCallback(
+    (baseMap: MapData = mapData): MapData => ({
+      ...baseMap,
+      tacticData: {
+        ...(baseMap.tacticData || {}),
+        drawings,
+        utilities,
+        players,
+        layers,
+        presets: tacticPresets,
+      },
+      updatedAt: Date.now(),
+    }),
+    [mapData, drawings, utilities, players, layers, tacticPresets]
+  );
+
+  // Keep mapData.tacticData synchronized with local drawings/utilities/players/layers edits & deletions
+  useEffect(() => {
+    if (isTacticsSyncInitRef.current) {
+      isTacticsSyncInitRef.current = false;
+      return;
+    }
+    if (isDiscardingRef.current) return;
+    const prevTactic = mapData.tacticData;
+    const sameDrawings = JSON.stringify(prevTactic?.drawings || []) === JSON.stringify(drawings);
+    const sameUtilities = JSON.stringify(prevTactic?.utilities || []) === JSON.stringify(utilities);
+    const samePlayers = JSON.stringify(prevTactic?.players || []) === JSON.stringify(players);
+    const sameLayers =
+      JSON.stringify(prevTactic?.layers && prevTactic.layers.length > 0 ? prevTactic.layers : defaultLayers) ===
+      JSON.stringify(layers);
+    if (sameDrawings && sameUtilities && samePlayers && sameLayers) return;
+
+    onUpdateMap(buildUpdatedMapWithTactics(mapData), true);
+  }, [drawings, utilities, players, layers, mapData, buildUpdatedMapWithTactics, onUpdateMap]);
+
   // Multi-element & callout selection / manipulation actions
   const {
     handleSelectElement,
@@ -495,11 +612,73 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     onUpdateMap,
   });
 
-  // Edit mode, Options Modal & Single Callout Edit states
+  const selectedSingleUtility = useMemo(() => {
+    if (selectedElementIds.length !== 1) return null;
+    return utilities.find((u) => u.id === selectedElementIds[0]) || null;
+  }, [selectedElementIds, utilities]);
+
+  const handleDeleteSingleElement = useCallback(
+    (id: string) => {
+      pushHistorySnapshot();
+      setDrawings((prev) =>
+        prev.filter((d) => !(d.id === id && !d.locked && !isLayerLocked(d.layerId)))
+      );
+      setUtilities((prev) =>
+        prev.filter(
+          (u) => !(u.id === id && !u.locked && !isLayerLocked(u.layerId || 'layer_util'))
+        )
+      );
+      setPlayers((prev) =>
+        prev.filter(
+          (p) =>
+            !(
+              p.id === id &&
+              !p.locked &&
+              !isLayerLocked(p.layerId || (p.side === 'ct' ? 'layer_ct' : 'layer_t'))
+            )
+        )
+      );
+      setSelectedElementIds((prev) => prev.filter((sid) => sid !== id));
+      setSingleEditUtilityId((prev) => (prev === id ? null : prev));
+      setHasChangesInSession(true);
+    },
+    [pushHistorySnapshot, isLayerLocked]
+  );
+
+  const handleSelectTool = useCallback(
+    (tool: TacticalTool) => {
+      if (tool === 'utility') {
+        setSelectedElementIds([]);
+        setSelectedCallout(null);
+        setSelectedCalloutIds([]);
+        setInfoUtilityId(null);
+        setMovingUtilityId(null);
+        setUtilityEditTrigger((prev) => prev + 1);
+        setActiveTool('utility');
+        return;
+      }
+      if (activeTool === 'utility') {
+        setPendingUtilityThrowOrigin(null);
+        setUtilityHoverCoord(null);
+        setHoveredSnapOrigin(null);
+      }
+      setActiveTool(tool);
+    },
+    [activeTool]
+  );
+
+  // Edit mode, Options Modal & Single Callout/Utility Edit states
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
   const [isEditOptionsModalOpen, setIsEditOptionsModalOpen] = useState<boolean>(false);
   const [singleEditCalloutId, setSingleEditCalloutId] = useState<string | null>(null);
+  const [singleEditUtilityId, setSingleEditUtilityId] = useState<string | null>(null);
   const [singleEditSearchQuery, setSingleEditSearchQuery] = useState<string>('');
+
+  useEffect(() => {
+    if (singleEditUtilityId && !utilities.some((u) => u.id === singleEditUtilityId)) {
+      setSingleEditUtilityId(null);
+    }
+  }, [singleEditUtilityId, utilities]);
 
   // Meine Callout-Auswahl (Custom Selection) states per map
   const [customSelectedCalloutIds, setCustomSelectedCalloutIds] = useState<string[]>(() => {
@@ -831,6 +1010,22 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       if (isInput) return;
 
       if (e.key === 'Escape') {
+        if (moveTargetPromptUtility) {
+          e.preventDefault();
+          setMoveTargetPromptUtility(null);
+          return;
+        }
+
+        if (movingUtilityId) {
+          e.preventDefault();
+          setMovingUtilityId(null);
+          return;
+        }
+        if (infoUtilityId) {
+          e.preventDefault();
+          setInfoUtilityId(null);
+          return;
+        }
         if (moveTargetPromptCallout) {
           e.preventDefault();
           setMoveTargetPromptCallout(null);
@@ -882,6 +1077,11 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           handleFinishPolygonAreaRef.current(calloutFormAreaPoints);
           return;
         }
+        if (movingUtilityId) {
+          e.preventDefault();
+          setMovingUtilityId(null);
+          return;
+        }
         if (movingAreaCalloutId) {
           e.preventDefault();
           setMovingAreaCalloutId(null);
@@ -921,7 +1121,11 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     isDrawingPolygonArea,
     calloutFormAreaPoints,
     movingAreaCalloutId,
+    movingUtilityId,
     moveTargetPromptCallout,
+    moveTargetPromptUtility,
+
+    infoUtilityId,
     createAreaPromptCallout,
     deleteTargetPromptCallout,
   ]);
@@ -1061,15 +1265,31 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
     const coords = getCoordinatesFromEvent(e);
 
-    // Utility placement tool (1-click Spot OR 2-click Throw Curve)
+    // Utility placement tool (1-click Spot OR 2-click Throw Curve, supporting multi-lineups from one origin)
     if (activeTool === 'utility') {
       const targetLayerId = activeLayerId || 'layer_util';
       if (isLayerLocked(targetLayerId)) return;
+      if (!showUtilities) {
+        setShowUtilities(true);
+      }
+
+      const draftLabel = utilityDraft.label.trim();
+      const draftNotes = utilityDraft.notes.trim();
+      const draftFontSize =
+        utilityDraft.fontSize && utilityDraft.fontSize !== 12 ? utilityDraft.fontSize : undefined;
+      const draftColor = utilityDraft.color || undefined;
+      const draftOpacity = utilityDraft.opacity < 0.99 ? utilityDraft.opacity : undefined;
 
       if (utilityPlacementMode === 'throw') {
         if (!pendingUtilityThrowOrigin) {
-          setPendingUtilityThrowOrigin(coords);
-          setUtilityHoverCoord(coords);
+          const visibleThrowUtilities = utilities.filter(
+            (u) => u.throwFrom && isLayerVisible(u.layerId, 'layer_util')
+          );
+          const snappedOrigin = findSnapThrowOrigin(coords, visibleThrowUtilities);
+          const origin = snappedOrigin || coords;
+          setPendingUtilityThrowOrigin(origin);
+          setUtilityHoverCoord(origin);
+          setHoveredSnapOrigin(null);
           return;
         }
         const dist = Math.hypot(
@@ -1088,11 +1308,22 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                 throwType: selectedThrowType,
               }
             : {}),
+          ...(draftLabel ? { label: draftLabel } : {}),
+          ...(draftFontSize ? { fontSize: draftFontSize } : {}),
+          ...(draftNotes ? { notes: draftNotes } : {}),
+          ...(draftColor ? { color: draftColor } : {}),
+          ...(draftOpacity !== undefined ? { opacity: draftOpacity } : {}),
           layerId: targetLayerId,
         };
         setUtilities((prev) => [...prev, newMarker]);
-        setPendingUtilityThrowOrigin(null);
-        setUtilityHoverCoord(null);
+        setUtilityDraft((prev) => ({ ...prev, label: '', notes: '' }));
+        if (keepUtilityOrigin && dist >= 1.2) {
+          setUtilityHoverCoord(coords);
+        } else {
+          setPendingUtilityThrowOrigin(null);
+          setUtilityHoverCoord(null);
+        }
+        setHoveredSnapOrigin(null);
         setHasChangesInSession(true);
         return;
       }
@@ -1103,9 +1334,15 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         type: selectedUtility,
         x: coords.x,
         y: coords.y,
+        ...(draftLabel ? { label: draftLabel } : {}),
+        ...(draftFontSize ? { fontSize: draftFontSize } : {}),
+        ...(draftNotes ? { notes: draftNotes } : {}),
+        ...(draftColor ? { color: draftColor } : {}),
+        ...(draftOpacity !== undefined ? { opacity: draftOpacity } : {}),
         layerId: targetLayerId,
       };
       setUtilities((prev) => [...prev, newMarker]);
+      setUtilityDraft((prev) => ({ ...prev, label: '', notes: '' }));
       setHasChangesInSession(true);
       return;
     }
@@ -1137,6 +1374,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       if (!isMultiSelectMode) {
         setSelectedElementIds([]);
         setSelectedCalloutIds([]);
+        setInfoUtilityId(null);
       }
       setContextMenu(null);
       setShowContextColorSubmenu(false);
@@ -1146,10 +1384,10 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
   const startUtilityHandleDrag = (
     util: UtilityMarker,
-    mode: 'origin' | 'curve' | 'landing',
+    mode: 'origin' | 'curve' | 'landing' | 'both',
     e: React.MouseEvent | React.TouchEvent
   ) => {
-    if (activeTool !== 'select') return;
+    if (activeTool !== 'select' && movingUtilityId !== util.id) return;
     if ('button' in e && e.button !== 0) return;
     const isLockedEl = Boolean(util.locked || isLayerLocked(util.layerId || 'layer_util'));
     if (isLockedEl) return;
@@ -1157,7 +1395,27 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     dragInitialHistoryRef.current = createEditorSnapshot();
     const targetEl = e.currentTarget as HTMLElement | null;
     const tileEl = (targetEl?.closest('.map-canvas-tile') as HTMLElement) || null;
-    setDraggingUtilityHandle({ utilId: util.id, mode, tileEl });
+    const { clientX, clientY } = getClientCoords(e);
+    const startCoord = getCoordinatesFromClient(clientX, clientY, tileEl);
+    let coLocatedUtilIds: string[] | undefined;
+    if (mode === 'origin' && util.throwFrom && !selectedElementIds.includes(util.id) && movingUtilityId !== util.id) {
+      coLocatedUtilIds = findCoLocatedOriginUtilityIds(utilities, util.throwFrom).filter((id) => {
+        const match = utilities.find((u) => u.id === id);
+        return match && !match.locked && !isLayerLocked(match.layerId || 'layer_util');
+      });
+    }
+    setDraggingUtilityHandle({
+      utilId: util.id,
+      mode,
+      tileEl,
+      coLocatedUtilIds,
+      startClientX: clientX,
+      startClientY: clientY,
+      startCoord,
+      initFrom: util.throwFrom ? { ...util.throwFrom } : undefined,
+      initTo: { x: util.x, y: util.y },
+      movedPastThreshold: false,
+    });
   };
 
   // Mouse & Dragging handling
@@ -1245,15 +1503,49 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   }, [isPanning]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    // 0a. Dragging utility throw handle (1. origin, 2. landing, or 3. Bezier curve bend)
+    // 0a. Dragging utility throw handle (1. origin, 2. landing, 3. both together, or 4. Bezier curve bend)
     if (draggingUtilityHandle) {
+      if (!draggingUtilityHandle.movedPastThreshold) {
+        const movePx = Math.hypot(
+          e.clientX - draggingUtilityHandle.startClientX,
+          e.clientY - draggingUtilityHandle.startClientY
+        );
+        if (movePx <= 4) {
+          return;
+        }
+        setDraggingUtilityHandle((prev) =>
+          prev ? { ...prev, movedPastThreshold: true } : null
+        );
+      }
       const coords = getCoordinatesFromClient(e.clientX, e.clientY, draggingUtilityHandle.tileEl);
       setHasMovedDistance(true);
       setUtilities((prev) =>
         prev.map((u) => {
-          if (u.id !== draggingUtilityHandle.utilId) return u;
           if (draggingUtilityHandle.mode === 'origin') {
+            const shouldMoveOrigin =
+              u.id === draggingUtilityHandle.utilId ||
+              Boolean(draggingUtilityHandle.coLocatedUtilIds?.includes(u.id));
+            if (!shouldMoveOrigin) return u;
             return { ...u, throwFrom: coords };
+          }
+          if (u.id !== draggingUtilityHandle.utilId) return u;
+          if (draggingUtilityHandle.mode === 'both' && draggingUtilityHandle.initTo) {
+            const dx = Math.round((coords.x - draggingUtilityHandle.startCoord.x) * 10) / 10;
+            const dy = Math.round((coords.y - draggingUtilityHandle.startCoord.y) * 10) / 10;
+            const nextX = Math.max(-80, Math.min(80, Math.round((draggingUtilityHandle.initTo.x + dx) * 10) / 10));
+            const nextY = Math.max(-80, Math.min(80, Math.round((draggingUtilityHandle.initTo.y + dy) * 10) / 10));
+            const nextFrom = draggingUtilityHandle.initFrom
+              ? {
+                  x: Math.max(-80, Math.min(80, Math.round((draggingUtilityHandle.initFrom.x + dx) * 10) / 10)),
+                  y: Math.max(-80, Math.min(80, Math.round((draggingUtilityHandle.initFrom.y + dy) * 10) / 10)),
+                }
+              : u.throwFrom;
+            return {
+              ...u,
+              x: nextX,
+              y: nextY,
+              ...(nextFrom ? { throwFrom: nextFrom } : {}),
+            };
           }
           if (draggingUtilityHandle.mode === 'landing') {
             return { ...u, x: coords.x, y: coords.y };
@@ -1292,9 +1584,20 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       return;
     }
 
-    // 0d. Live curved throw preview while Step 2 landing spot is pending
-    if (activeTool === 'utility' && utilityPlacementMode === 'throw' && pendingUtilityThrowOrigin) {
-      setUtilityHoverCoord(getCoordinatesFromEvent(e));
+    // 0d. Live curved throw preview or origin snap highlight while in utility throw mode
+    if (activeTool === 'utility' && utilityPlacementMode === 'throw') {
+      const hoverCoord = getCoordinatesFromEvent(e);
+      if (pendingUtilityThrowOrigin) {
+        setUtilityHoverCoord(hoverCoord);
+        if (hoveredSnapOrigin) setHoveredSnapOrigin(null);
+      } else if (showUtilities) {
+        const visibleThrowUtilities = utilities.filter(
+          (u) => u.throwFrom && isLayerVisible(u.layerId, 'layer_util')
+        );
+        setHoveredSnapOrigin(findSnapThrowOrigin(hoverCoord, visibleThrowUtilities));
+      } else if (hoveredSnapOrigin) {
+        setHoveredSnapOrigin(null);
+      }
     }
 
     if (isDrawingPolygonArea) {
@@ -1511,7 +1814,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             .map((d) => d.id),
           ...utilities
             .filter((u) => {
-              if (!isLayerVisible(u.layerId, 'layer_util')) return false;
+              if (!showUtilities || !isLayerVisible(u.layerId, 'layer_util')) return false;
               const landingHit = u.x >= minX && u.x <= maxX && u.y >= minY && u.y <= maxY;
               const originHit =
                 Boolean(u.throwFrom) &&
@@ -1869,7 +2172,11 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   // Double click map to fit to screen size & reset font size to default
   const handleMapDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
-    if (target.closest('button') || target.closest('[data-no-map-click]')) {
+    if (
+      target.closest('button') ||
+      target.closest('[data-no-map-click]') ||
+      target.closest('[data-utility-handle]')
+    ) {
       return;
     }
     setZoom(calculateFitZoom());
@@ -2018,6 +2325,126 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         isDe
           ? 'Verschiebemodus aktiv — Callout ziehen (Enter = Fertig)'
           : 'Move mode active — drag callout (Enter = Done)'
+      );
+    }
+  };
+
+  useEffect(() => {
+    if (movingUtilityId && !utilities.some((u) => u.id === movingUtilityId)) {
+      setMovingUtilityId(null);
+    }
+  }, [movingUtilityId, utilities]);
+
+  const handleUpdateUtilityById = (utilId: string, patch: SelectedElementsPatch) => {
+    const target = utilities.find((u) => u.id === utilId);
+    if (!target || target.locked || isLayerLocked(target.layerId || 'layer_util')) return;
+    if (!patch.skipHistory) {
+      pushHistorySnapshot();
+    }
+    setUtilities((prev) =>
+      prev.map((u) => {
+        if (u.id !== utilId) return u;
+        let nextThrowFrom = u.throwFrom;
+        let nextCurveBend = patch.curveBend !== undefined ? patch.curveBend : u.curveBend;
+        if (patch.removeThrowFrom) {
+          nextThrowFrom = undefined;
+          nextCurveBend = undefined;
+        } else if (patch.addDefaultThrowFrom && !u.throwFrom) {
+          nextThrowFrom = {
+            x: Math.max(-75, Math.min(75, u.x - 10)),
+            y: Math.max(-75, Math.min(75, u.y + 10)),
+          };
+        } else if (patch.resetCurve && nextThrowFrom) {
+          nextCurveBend = undefined;
+        }
+        const copy: UtilityMarker = {
+          ...u,
+          ...(patch.type !== undefined ? { type: patch.type } : {}),
+          ...(patch.color !== undefined ? { color: patch.color } : {}),
+          ...(patch.opacity !== undefined ? { opacity: patch.opacity } : {}),
+          ...(patch.locked !== undefined ? { locked: patch.locked } : {}),
+          ...(patch.throwType !== undefined ? { throwType: patch.throwType } : {}),
+          ...(patch.label !== undefined ? { label: patch.label || undefined } : {}),
+          ...(patch.notes !== undefined ? { notes: patch.notes } : {}),
+          ...(patch.lineScale !== undefined ? { lineScale: patch.lineScale } : {}),
+          ...(patch.spotScale !== undefined ? { spotScale: patch.spotScale } : {}),
+          ...(patch.aimSpots !== undefined ? { aimSpots: patch.aimSpots } : {}),
+          ...(patch.activeAimSpot !== undefined ? { activeAimSpot: patch.activeAimSpot } : {}),
+          ...(patch.fontSize !== undefined ? { fontSize: patch.fontSize } : {}),
+          throwFrom: nextThrowFrom,
+          curveBend: nextCurveBend,
+        };
+        if (patch.resetColor) delete copy.color;
+        if (patch.resetLineScale) delete copy.lineScale;
+        if (patch.resetSpotScale) delete copy.spotScale;
+        return copy;
+      })
+    );
+    setHasChangesInSession(true);
+  };
+
+  const handleRequestMoveUtility = (util: UtilityMarker) => {
+    const isLockedEl = Boolean(util.locked || isLayerLocked(util.layerId || 'layer_util'));
+    if (isLockedEl) {
+      showActionToast(
+        isDe
+          ? 'Utility ist gesperrt (Schloss aufheben zum Verschieben)'
+          : 'Utility is locked (unlock to move)'
+      );
+      return;
+    }
+    if (movingUtilityId === util.id) {
+      setMovingUtilityId(null);
+      return;
+    }
+    setMovingAreaCalloutId(null);
+    setShowUtilities(true);
+    if (!selectedElementIds.includes(util.id)) {
+      handleSelectElement(util.id, false);
+    }
+    if (util.throwFrom) {
+      setMoveTargetPromptUtility(util);
+    } else {
+      setActiveTool('select');
+      setMovingUtilityTarget('landing');
+      setMovingUtilityId(util.id);
+      showActionToast(
+        isDe
+          ? 'Verschiebemodus aktiv — Spot ziehen (Enter = Fertig)'
+          : 'Move mode active — drag spot (Enter = Done)'
+      );
+    }
+  };
+
+  const handleConfirmMoveUtilityTarget = (
+    util: UtilityMarker,
+    target: 'origin' | 'landing' | 'both'
+  ) => {
+    setMoveTargetPromptUtility(null);
+    setActiveTool('select');
+    setShowUtilities(true);
+    if (!selectedElementIds.includes(util.id)) {
+      handleSelectElement(util.id, false);
+    }
+    setMovingUtilityTarget(target);
+    setMovingUtilityId(util.id);
+    if (target === 'origin') {
+      showActionToast(
+        isDe
+          ? 'Verschiebemodus aktiv — Startpunkt (Abwurf) ziehen (Enter = Fertig)'
+          : 'Move mode active — drag origin point (Enter = Done)'
+      );
+    } else if (target === 'both') {
+      showActionToast(
+        isDe
+          ? 'Verschiebemodus aktiv — Start- & Endpunkt zusammen ziehen (Enter = Fertig)'
+          : 'Move mode active — drag origin & landing together (Enter = Done)'
+      );
+    } else {
+      showActionToast(
+        isDe
+          ? 'Verschiebemodus aktiv — Endpunkt (Spot) ziehen (Enter = Fertig)'
+          : 'Move mode active — drag landing spot (Enter = Done)'
       );
     }
   };
@@ -2438,6 +2865,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   };
 
   const handleDiscardAndExit = () => {
+    isDiscardingRef.current = true;
     onUpdateMap(initialMapDataRef.current, true);
     setHasChangesInSession(false);
     setShowSyncPrompt(false);
@@ -2449,7 +2877,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     const userToUse = targetUser || currentUser;
     if (!doSync || !userToUse) {
       // Save locally only & capture map version snapshot
-      const updated = { ...mapData, updatedAt: Date.now() };
+      const updated = buildUpdatedMapWithTactics();
       handleSaveSnapshot(isDe ? 'Lokal gespeichert' : 'Saved locally', updated.callouts);
       onUpdateMap(updated, true);
       setHasChangesInSession(false);
@@ -2485,18 +2913,17 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       }
 
       // No conflict -> normal upload & capture map snapshot
-      const updated = { ...mapData, updatedAt: Date.now() };
+      const updated = buildUpdatedMapWithTactics();
       handleSaveSnapshot(isDe ? 'Gespeichert (Cloud)' : 'Saved (Cloud)', updated.callouts);
       onUpdateMap(updated, false);
+      await syncUserMap(userToUse.uid, updated);
       setHasChangesInSession(false);
       setShowSyncPrompt(false);
       if (onGoHome) onGoHome();
       else onBack();
-
-      await syncUserMap(userToUse.uid, updated);
     } catch (err) {
       console.warn('Conflict check or cloud sync failed, saving locally:', err);
-      const updated = { ...mapData, updatedAt: Date.now() };
+      const updated = buildUpdatedMapWithTactics();
       handleSaveSnapshot(isDe ? 'Lokal gespeichert' : 'Saved locally', updated.callouts);
       onUpdateMap(updated, true);
       setHasChangesInSession(false);
@@ -2515,7 +2942,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
     try {
       // 1. App lädt die neuere Karte herunter (conflictCloudMap)
       // 2. Wendet soeben lokal vorgenommene Änderungen auf diesen Cloud-Stand an
-      const merged = smartMergeMap(mapData, conflictCloudMap);
+      const merged = smartMergeMap(buildUpdatedMapWithTactics(), conflictCloudMap);
       merged.updatedAt = Date.now();
 
       // 3. Das kombinierte Ergebnis erhält einen neuen Zeitstempel (updatedAt = jetzt) und wird sofort hochgeladen
@@ -2537,6 +2964,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   // 2. Discard & load cloud version
   const handleDiscardAndLoadCloud = () => {
     if (!conflictCloudMap) return;
+    isDiscardingRef.current = true;
     onUpdateMap(conflictCloudMap, true);
     setShowConflictModal(false);
     setHasChangesInSession(false);
@@ -2546,7 +2974,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
   // 3. Save locally only on this device
   const handleSaveLocallyOnly = () => {
-    const updated = { ...mapData, updatedAt: Date.now() };
+    const updated = buildUpdatedMapWithTactics();
     handleSaveSnapshot(isDe ? 'Lokal gespeichert' : 'Saved locally', updated.callouts);
     onUpdateMap(updated, true);
     setShowConflictModal(false);
@@ -2841,6 +3269,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
       return isCalloutForLevel(c, tileLevel, Boolean(mapData.lowerImage));
     });
     const isBothMode = currentLevel === 'both';
+    const ignoreCalloutsForTool = shouldIgnoreCalloutInteractions(activeTool);
 
     return (
       <div
@@ -2965,16 +3394,17 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                   transform: `rotate(${callout.rotation || 0}deg)`,
                   transformOrigin: 'center center',
                 }}
-                onMouseEnter={() => !isEditMode && setHoveredCallout(callout)}
-                onMouseLeave={() => !isEditMode && setHoveredCallout(null)}
+                onMouseEnter={() => !ignoreCalloutsForTool && !isEditMode && setHoveredCallout(callout)}
+                onMouseLeave={() => !ignoreCalloutsForTool && !isEditMode && setHoveredCallout(null)}
                 onClick={(e) => {
+                  if (ignoreCalloutsForTool) return;
                   if (!hasMovedDistance) {
                     e.stopPropagation();
                     handleSelectCalloutMulti(callout, e.ctrlKey || e.metaKey || e.shiftKey || isMultiSelectMode);
                   }
                 }}
                 onContextMenu={(e) => {
-                  if (isDrawingPolygonArea) return;
+                  if (ignoreCalloutsForTool || isDrawingPolygonArea) return;
                   e.preventDefault();
                   e.stopPropagation();
                   if (!selectedCalloutIds.includes(callout.id)) {
@@ -2986,11 +3416,14 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                   setContextMenu({ x: e.clientX, y: e.clientY });
                 }}
                 onDoubleClick={(e) => {
+                  if (ignoreCalloutsForTool) return;
                   e.stopPropagation();
                   handleOpenCalloutEditor(callout, e);
                 }}
                 className={`absolute rounded-sm transition-all ${
-                  movingAreaCalloutId === callout.id
+                  ignoreCalloutsForTool
+                    ? 'pointer-events-none border-1 border-opacity-70 z-10'
+                    : movingAreaCalloutId === callout.id
                     ? movingModeTarget === 'area' || movingModeTarget === 'both'
                       ? 'border border-dashed ring-1 ring-amber-400/50 cursor-move z-40'
                       : 'border opacity-60 cursor-move z-20'
@@ -3163,31 +3596,36 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                           : undefined
                       }
                       className={`transition-all ${
-                        movingAreaCalloutId === callout.id
+                        ignoreCalloutsForTool
+                          ? 'pointer-events-none'
+                          : movingAreaCalloutId === callout.id
                           ? 'cursor-move pointer-events-auto'
                           : isEditMode
                           ? 'pointer-events-auto'
                           : 'pointer-events-auto cursor-pointer'
                       }`}
                       onMouseDown={(e) => {
+                        if (ignoreCalloutsForTool) return;
                         if (movingAreaCalloutId === callout.id) {
                           handleMoveModeDragStart(callout, e);
                         }
                       }}
                       onTouchStart={(e) => {
+                        if (ignoreCalloutsForTool) return;
                         longPressTargetCandidateRef.current = { callout };
                         if (movingAreaCalloutId === callout.id) {
                           handleMoveModeDragStart(callout, e);
                         }
                       }}
                       onClick={(e) => {
+                        if (ignoreCalloutsForTool) return;
                         if (!hasMovedDistance) {
                           e.stopPropagation();
                           handleSelectCalloutMulti(callout, e.ctrlKey || e.metaKey || e.shiftKey || isMultiSelectMode);
                         }
                       }}
                       onContextMenu={(e) => {
-                        if (isDrawingPolygonArea) return;
+                        if (ignoreCalloutsForTool || isDrawingPolygonArea) return;
                         e.preventDefault();
                         e.stopPropagation();
                         if (!selectedCalloutIds.includes(callout.id)) {
@@ -3198,9 +3636,10 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                         setShowContextColorSubmenu(false);
                         setContextMenu({ x: e.clientX, y: e.clientY });
                       }}
-                      onMouseEnter={() => !isEditMode && setHoveredCallout(callout)}
-                      onMouseLeave={() => !isEditMode && setHoveredCallout(null)}
+                      onMouseEnter={() => !ignoreCalloutsForTool && !isEditMode && setHoveredCallout(callout)}
+                      onMouseLeave={() => !ignoreCalloutsForTool && !isEditMode && setHoveredCallout(null)}
                       onDoubleClick={(e) => {
+                        if (ignoreCalloutsForTool) return;
                         e.stopPropagation();
                         handleOpenCalloutEditor(callout, e as unknown as React.MouseEvent);
                       }}
@@ -3358,67 +3797,52 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
           {/* SAVED UTILITY THROW TRAJECTORIES (CURVED BEZIER ARCS + ORIGIN BULLSEYES) */}
           {!isDrawingPolygonArea &&
+            showUtilities &&
             utilities
-              .filter((util) => util.throwFrom && isLayerVisible(util.layerId, 'layer_util'))
+              .filter(
+                (util) =>
+                  util.throwFrom &&
+                  (!singleEditUtilityId || util.id === singleEditUtilityId) &&
+                  isLayerVisible(util.layerId, 'layer_util')
+              )
               .map((util) => {
                 const geom = getThrowGeometry(util.throwFrom!, util, util.curveBend);
                 const meta = UTILITY_META[util.type] || UTILITY_META.smoke;
-                const utilColor = meta.colorHex || '#38bdf8';
+                const utilColor = getUtilityColor(util, meta.colorHex || '#38bdf8');
                 const isSelectedEl = selectedElementIds.includes(util.id);
+                const isMovingThisUtil = movingUtilityId === util.id;
                 const isLockedEl = Boolean(util.locked || isLayerLocked(util.layerId || 'layer_util'));
                 const isEraserHovered = hoveredUtilityId === util.id && activeTool === 'eraser';
                 const elOpacity = (util.opacity ?? 1) * getLayerOpacity(util.layerId, 'layer_util');
                 const pathD = `M ${geom.from.x} ${geom.from.y} Q ${geom.cp.x} ${geom.cp.y} ${util.x} ${util.y}`;
+                const effLineScale = getEffectiveUtilityLineScale(util, utilityLineScale);
+                const svgMetrics = getUtilityThrowSvgMetrics(effLineScale, isSelectedEl || isMovingThisUtil);
 
                 // Chevron slightly before landing spot oriented cleanly along arrival tangent
                 const tip =
                   geom.dist > 5
                     ? evaluateQuadraticBezier(geom.from, geom.cp, util, 0.85)
                     : null;
-                const chevLen = 1.6;
+                const chevLen = svgMetrics.chevronLength;
                 const chevAngle = geom.arrivalAngleRad;
                 const chevronPoints = tip
-                  ? `${tip.x + Math.cos(chevAngle) * 0.8},${tip.y + Math.sin(chevAngle) * 0.8} ` +
+                  ? `${tip.x + Math.cos(chevAngle) * (chevLen * 0.5)},${tip.y + Math.sin(chevAngle) * (chevLen * 0.5)} ` +
                     `${tip.x - chevLen * Math.cos(chevAngle - Math.PI / 5)},${tip.y - chevLen * Math.sin(chevAngle - Math.PI / 5)} ` +
                     `${tip.x - chevLen * Math.cos(chevAngle + Math.PI / 5)},${tip.y - chevLen * Math.sin(chevAngle + Math.PI / 5)}`
                   : null;
 
                 return (
                   <g key={`throw_svg_${util.id}`} opacity={elOpacity}>
-                    {isSelectedEl && (
-                      <>
-                        <line
-                          x1={geom.from.x}
-                          y1={geom.from.y}
-                          x2={geom.cp.x}
-                          y2={geom.cp.y}
-                          stroke="#38bdf8"
-                          strokeWidth={0.28}
-                          strokeDasharray="0.8,0.8"
-                          strokeOpacity={0.55}
-                          className="pointer-events-none"
-                        />
-                        <line
-                          x1={geom.cp.x}
-                          y1={geom.cp.y}
-                          x2={util.x}
-                          y2={util.y}
-                          stroke="#38bdf8"
-                          strokeWidth={0.28}
-                          strokeDasharray="0.8,0.8"
-                          strokeOpacity={0.55}
-                          className="pointer-events-none"
-                        />
-                        <path
-                          d={pathD}
-                          fill="none"
-                          stroke="#38bdf8"
-                          strokeWidth={1.9}
-                          strokeOpacity={0.5}
-                          strokeLinecap="round"
-                          className="pointer-events-none"
-                        />
-                      </>
+                    {(isSelectedEl || isMovingThisUtil) && (
+                      <path
+                        d={pathD}
+                        fill="none"
+                        stroke={isMovingThisUtil ? '#f59e0b' : '#38bdf8'}
+                        strokeWidth={svgMetrics.haloWidth}
+                        strokeOpacity={isMovingThisUtil ? 0.58 : 0.5}
+                        strokeLinecap="round"
+                        className="pointer-events-none"
+                      />
                     )}
 
                     {/* Outer dark casing for high contrast */}
@@ -3426,7 +3850,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       d={pathD}
                       fill="none"
                       stroke="rgba(9,9,11,0.82)"
-                      strokeWidth={isSelectedEl ? 1.35 : 1.05}
+                      strokeWidth={svgMetrics.casingWidth}
                       strokeLinecap="round"
                       className="pointer-events-none"
                     />
@@ -3436,8 +3860,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       d={pathD}
                       fill="none"
                       stroke={isEraserHovered ? '#ef4444' : utilColor}
-                      strokeWidth={isSelectedEl ? 0.8 : 0.6}
-                      strokeDasharray={isEraserHovered ? '1.2,1.2' : '1.7,1.1'}
+                      strokeWidth={svgMetrics.strokeWidth}
+                      strokeDasharray={isEraserHovered ? '1.2,1.2' : svgMetrics.dashArray}
                       strokeLinecap="round"
                       className="pointer-events-none"
                     />
@@ -3448,7 +3872,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                         points={chevronPoints}
                         fill={isEraserHovered ? '#ef4444' : utilColor}
                         stroke="rgba(9,9,11,0.9)"
-                        strokeWidth={0.25}
+                        strokeWidth={Math.max(0.12, svgMetrics.strokeWidth * 0.35)}
                         className="pointer-events-none"
                       />
                     )}
@@ -3457,16 +3881,16 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                     <circle
                       cx={geom.from.x}
                       cy={geom.from.y}
-                      r={isSelectedEl ? 1.35 : 1.05}
+                      r={svgMetrics.originOuterRadius}
                       fill="#09090b"
                       stroke={isEraserHovered ? '#ef4444' : utilColor}
-                      strokeWidth={0.45}
+                      strokeWidth={svgMetrics.originStrokeWidth}
                       className="pointer-events-none"
                     />
                     <circle
                       cx={geom.from.x}
                       cy={geom.from.y}
-                      r={0.45}
+                      r={svgMetrics.originInnerRadius}
                       fill="#ffffff"
                       className="pointer-events-none"
                     />
@@ -3485,6 +3909,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                         }
                       }}
                       onClick={(e) => {
+                        if (hasMovedDistance) return;
                         if (activeTool === 'eraser') {
                           e.stopPropagation();
                           if (isLockedEl) return;
@@ -3494,10 +3919,16 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                           setHasChangesInSession(true);
                         } else if (activeTool === 'select' || activeTool === 'marquee') {
                           e.stopPropagation();
-                          handleSelectElement(
-                            util.id,
-                            e.ctrlKey || e.metaKey || e.shiftKey || isMultiSelectMode
-                          );
+                          const isMulti =
+                            e.ctrlKey || e.metaKey || e.shiftKey || isMultiSelectMode;
+                          handleSelectElement(util.id, isMulti);
+                        }
+                      }}
+                      onDoubleClick={(e) => {
+                        if (activeTool === 'select' || activeTool === 'marquee') {
+                          e.stopPropagation();
+                          handleSelectElement(util.id, false);
+                          setInfoUtilityId(util.id);
                         }
                       }}
                       onContextMenu={(e) => {
@@ -3520,6 +3951,26 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                 );
               })}
 
+          {/* ORIGIN SNAP INDICATOR WHEN HOVERING EXISTING THROW SPOT */}
+          {!isDrawingPolygonArea &&
+            showUtilities &&
+            activeTool === 'utility' &&
+            utilityPlacementMode === 'throw' &&
+            !pendingUtilityThrowOrigin &&
+            hoveredSnapOrigin && (
+              <g className="pointer-events-none">
+                <circle
+                  cx={hoveredSnapOrigin.x}
+                  cy={hoveredSnapOrigin.y}
+                  r={2.4}
+                  fill="rgba(16, 185, 129, 0.2)"
+                  stroke="#10b981"
+                  strokeWidth={0.48}
+                  strokeDasharray="0.9,0.6"
+                />
+              </g>
+            )}
+
           {/* LIVE PENDING 2-POINT UTILITY THROW PREVIEW */}
           {!isDrawingPolygonArea &&
             activeTool === 'utility' &&
@@ -3528,6 +3979,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
               const previewColor = UTILITY_META[selectedUtility]?.colorHex || '#0ea5e9';
               const hoverTarget = utilityHoverCoord || pendingUtilityThrowOrigin;
               const previewGeom = getThrowGeometry(pendingUtilityThrowOrigin, hoverTarget);
+              const previewMetrics = getUtilityThrowSvgMetrics(utilityLineScale, false);
               const showArc =
                 Math.hypot(
                   hoverTarget.x - pendingUtilityThrowOrigin.x,
@@ -3541,15 +3993,15 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                         d={`M ${pendingUtilityThrowOrigin.x} ${pendingUtilityThrowOrigin.y} Q ${previewGeom.cp.x} ${previewGeom.cp.y} ${hoverTarget.x} ${hoverTarget.y}`}
                         fill="none"
                         stroke="rgba(9,9,11,0.75)"
-                        strokeWidth={1.2}
+                        strokeWidth={previewMetrics.casingWidth}
                         strokeLinecap="round"
                       />
                       <path
                         d={`M ${pendingUtilityThrowOrigin.x} ${pendingUtilityThrowOrigin.y} Q ${previewGeom.cp.x} ${previewGeom.cp.y} ${hoverTarget.x} ${hoverTarget.y}`}
                         fill="none"
                         stroke={previewColor}
-                        strokeWidth={0.7}
-                        strokeDasharray="1.6,1.1"
+                        strokeWidth={previewMetrics.strokeWidth}
+                        strokeDasharray={previewMetrics.dashArray}
                         strokeLinecap="round"
                       />
                       <circle
@@ -3566,19 +4018,24 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                   <circle
                     cx={pendingUtilityThrowOrigin.x}
                     cy={pendingUtilityThrowOrigin.y}
-                    r={2.1}
+                    r={Math.max(1.6, previewMetrics.originOuterRadius * 1.85)}
                     fill={previewColor}
                     fillOpacity={0.25}
                   />
                   <circle
                     cx={pendingUtilityThrowOrigin.x}
                     cy={pendingUtilityThrowOrigin.y}
-                    r={1.2}
+                    r={previewMetrics.originOuterRadius}
                     fill="#09090b"
                     stroke={previewColor}
-                    strokeWidth={0.55}
+                    strokeWidth={previewMetrics.originStrokeWidth}
                   />
-                  <circle cx={pendingUtilityThrowOrigin.x} cy={pendingUtilityThrowOrigin.y} r={0.45} fill="#ffffff" />
+                  <circle
+                    cx={pendingUtilityThrowOrigin.x}
+                    cy={pendingUtilityThrowOrigin.y}
+                    r={previewMetrics.originInnerRadius}
+                    fill="#ffffff"
+                  />
                 </g>
               );
             })()}
@@ -3603,18 +4060,42 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
 
         {/* INTERACTIVE THROW ORIGIN & CURVE BEND HANDLES (HTML overlay above SVG) */}
         {!isDrawingPolygonArea &&
-          utilities
-            .filter((util) => util.throwFrom && isLayerVisible(util.layerId, 'layer_util'))
-            .map((util) => {
+          showUtilities && (() => {
+            const visibleThrowUtils = utilities.filter(
+              (util) =>
+                util.throwFrom &&
+                (!singleEditUtilityId || util.id === singleEditUtilityId) &&
+                isLayerVisible(util.layerId, 'layer_util')
+            );
+            return visibleThrowUtils.map((util) => {
               const geom = getThrowGeometry(util.throwFrom!, util, util.curveBend);
               const isSelectedEl = selectedElementIds.includes(util.id);
               const isLockedEl = Boolean(util.locked || isLayerLocked(util.layerId || 'layer_util'));
               const elOpacity = (util.opacity ?? 1) * getLayerOpacity(util.layerId, 'layer_util');
               const meta = UTILITY_META[util.type] || UTILITY_META.smoke;
+              const utilColor = getUtilityColor(util, meta.colorHex);
+              const isMovingThisUtil = movingUtilityId === util.id;
+              const isMovingOrigin =
+                isMovingThisUtil &&
+                (movingUtilityTarget === 'origin' || movingUtilityTarget === 'both');
+              const canDragOrigin =
+                !isLockedEl &&
+                (isMovingOrigin || (activeTool === 'select' && !isMovingThisUtil));
+              const dragModeOrigin =
+                isMovingThisUtil && movingUtilityTarget === 'both' ? 'both' : 'origin';
               const throwBadge =
                 util.throwType && util.throwType !== 'left'
                   ? THROW_TYPE_META[util.throwType]?.short
                   : null;
+              const coLocatedIds = findCoLocatedOriginUtilityIds(visibleThrowUtils, util.throwFrom!);
+              const isPrimaryCoLocated = coLocatedIds[0] === util.id;
+              const coLocatedCount = coLocatedIds.length;
+              const canSnapFromOriginHandle =
+                activeTool === 'utility' &&
+                utilityPlacementMode === 'throw' &&
+                !pendingUtilityThrowOrigin;
+              const blockOriginHandlePointer =
+                activeTool === 'utility' && !canSnapFromOriginHandle;
 
               return (
                 <React.Fragment key={`throw_handles_${util.id}`}>
@@ -3627,23 +4108,29 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       opacity: elOpacity,
                     }}
                     onMouseDown={(e) => {
-                      if (activeTool === 'select' && !isLockedEl) {
+                      if (canDragOrigin) {
                         e.stopPropagation();
-                        startUtilityHandleDrag(util, 'origin', e);
+                        startUtilityHandleDrag(util, dragModeOrigin, e);
                       }
                     }}
                     onTouchStart={(e) => {
-                      if (activeTool === 'select' && !isLockedEl && isSelectedEl) {
+                      if (canDragOrigin && (isSelectedEl || isMovingOrigin)) {
                         e.stopPropagation();
                         cancelTouchLongPress();
-                        startUtilityHandleDrag(util, 'origin', e);
-                      } else if (activeTool !== 'eraser') {
+                        startUtilityHandleDrag(util, dragModeOrigin, e);
+                      } else if (activeTool !== 'eraser' && activeTool !== 'utility') {
                         longPressTargetCandidateRef.current = { elementId: util.id };
                       }
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
                       if (hasMovedDistance) return;
+                      if (canSnapFromOriginHandle) {
+                        setPendingUtilityThrowOrigin(util.throwFrom!);
+                        setUtilityHoverCoord(util.throwFrom!);
+                        setHoveredSnapOrigin(null);
+                        return;
+                      }
                       if (activeTool === 'eraser') {
                         if (isLockedEl) return;
                         pushHistorySnapshot();
@@ -3651,14 +4138,21 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                         setSelectedElementIds((prev) => prev.filter((id) => id !== util.id));
                         setHasChangesInSession(true);
                       } else {
-                        handleSelectElement(
-                          util.id,
-                          e.ctrlKey || e.metaKey || e.shiftKey || isMultiSelectMode
-                        );
+                        const isMulti =
+                          e.ctrlKey || e.metaKey || e.shiftKey || isMultiSelectMode;
+                        handleSelectElement(util.id, isMulti);
                       }
                     }}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      if (canSnapFromOriginHandle || activeTool === 'eraser' || activeTool === 'utility') {
+                        return;
+                      }
+                      handleSelectElement(util.id, false);
+                      setInfoUtilityId(util.id);
+                    }}
                     onContextMenu={(e) => {
-                      if (isEditMode || isDrawingPolygonArea) return;
+                      if (isEditMode || isDrawingPolygonArea || activeTool === 'utility') return;
                       e.preventDefault();
                       e.stopPropagation();
                       if (!selectedElementIds.includes(util.id)) {
@@ -3667,30 +4161,47 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       setShowContextColorSubmenu(false);
                       setContextMenu({ x: e.clientX, y: e.clientY });
                     }}
-                    className={`absolute -translate-x-1/2 -translate-y-1/2 z-26 flex items-center justify-center ${
-                      activeTool === 'select' && !isLockedEl
+                    className={`absolute -translate-x-1/2 -translate-y-1/2 z-[32] flex items-center justify-center ${
+                      blockOriginHandlePointer
+                        ? 'pointer-events-none'
+                        : canSnapFromOriginHandle
+                        ? 'cursor-crosshair'
+                        : canDragOrigin
                         ? 'cursor-grab active:cursor-grabbing'
                         : 'cursor-pointer'
-                    } ${isSelectedEl ? 'w-6 h-6' : 'w-4 h-4 hover:scale-125'} transition-transform`}
+                    } ${isSelectedEl || isMovingOrigin ? 'w-6 h-6' : 'w-4 h-4 hover:scale-125'} transition-transform`}
                     title={
-                      isDe
-                        ? `Abwurfpunkt (${meta.labelDe})${activeTool === 'select' && !isLockedEl ? ' · Ziehen zum Verschieben' : ''}`
+                      canSnapFromOriginHandle
+                        ? isDe
+                          ? 'Klicken: weiteres Lineup von diesem Startpunkt ziehen'
+                          : 'Click: add another lineup from this origin'
+                        : isDe
+                        ? `Abwurfpunkt (${meta.labelDe})${canDragOrigin ? ' · Ziehen zum Verschieben' : ''}`
                         : `Throw Origin (${meta.labelEn})`
                     }
                   >
-                    {isSelectedEl && (
+                    {(isSelectedEl || isMovingOrigin) && (
                       <span
-                        className="w-4 h-4 rounded-full border-2 border-sky-300 bg-zinc-950/90 shadow-lg flex items-center justify-center"
+                        className={`w-4 h-4 rounded-full border-2 bg-zinc-950/90 shadow-lg flex items-center justify-center ${
+                          isMovingOrigin
+                            ? 'border-amber-400 ring-2 ring-amber-400/60'
+                            : 'border-sky-300'
+                        }`}
                       >
                         <span
                           className="w-1.5 h-1.5 rounded-full"
-                          style={{ backgroundColor: meta.colorHex }}
+                          style={{ backgroundColor: utilColor }}
                         />
+                      </span>
+                    )}
+                    {coLocatedCount > 1 && isPrimaryCoLocated && !isSelectedEl && (
+                      <span className="absolute -bottom-3.5 left-1/2 -translate-x-1/2 px-1 rounded-full bg-zinc-950/90 border border-emerald-400/70 text-[8px] font-mono font-bold text-emerald-300 whitespace-nowrap shadow-md pointer-events-none">
+                        {coLocatedCount}×
                       </span>
                     )}
                     {throwBadge && (
                       <span
-                        style={{ borderColor: meta.colorHex }}
+                        style={{ borderColor: utilColor }}
                         className="absolute -top-4 left-1/2 -translate-x-1/2 px-1 py-0 rounded bg-zinc-950/95 border text-[8px] font-mono font-black text-white whitespace-nowrap shadow-md pointer-events-none"
                       >
                         {throwBadge}
@@ -3699,7 +4210,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                   </div>
 
                   {/* 2. Draggable Curve Bend Handle (when selected & unlocked) */}
-                  {isSelectedEl && activeTool === 'select' && !isLockedEl && (
+                  {isSelectedEl && activeTool === 'select' && !isLockedEl && !isMovingThisUtil && (
                     <div
                       data-utility-handle="curve"
                       style={{
@@ -3716,6 +4227,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                         startUtilityHandleDrag(util, 'curve', e);
                       }}
                       onClick={(e) => e.stopPropagation()}
+                      onDoubleClick={(e) => e.stopPropagation()}
                       className="absolute -translate-x-1/2 -translate-y-1/2 z-35 w-4 h-4 rounded-full bg-sky-400 border-2 border-zinc-950 shadow-[0_0_8px_rgba(56,189,248,0.85)] cursor-move hover:scale-125 transition-transform flex items-center justify-center"
                       title={
                         isDe
@@ -3728,17 +4240,39 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                   )}
                 </React.Fragment>
               );
-            })}
+            });
+          })()}
 
-        {/* UTILITY MARKERS (Granaten-Symbole ohne Kreis, in Kreisgröße w-6 h-6 mit Originalfarben) */}
+        {/* UTILITY MARKERS (Granaten-Symbole ohne Kreis, stufenlos skalierbar global + pro Utility) */}
         {!isDrawingPolygonArea &&
+          showUtilities &&
           utilities
-            .filter((util) => isLayerVisible(util.layerId, 'layer_util'))
+            .filter(
+              (util) =>
+                (!singleEditUtilityId || util.id === singleEditUtilityId) &&
+                isLayerVisible(util.layerId, 'layer_util')
+            )
             .map((util) => {
               const isSelectedEl = selectedElementIds.includes(util.id);
               const isLockedEl = Boolean(util.locked || isLayerLocked(util.layerId || 'layer_util'));
               const elOpacity = (util.opacity ?? 1) * getLayerOpacity(util.layerId, 'layer_util');
               const meta = UTILITY_META[util.type] || UTILITY_META.smoke;
+              const utilColor = getUtilityColor(util, meta.colorHex);
+              const effSpotScale = getEffectiveUtilitySpotScale(util, utilitySpotScale);
+              const spotPx = getUtilitySpotPixelSize(effSpotScale);
+              const wrapperPx = Math.max(18, spotPx);
+              const ignoreLandingForUtilityTool = activeTool === 'utility';
+              const isMovingThisUtil = movingUtilityId === util.id;
+              const isMovingLanding =
+                isMovingThisUtil &&
+                (movingUtilityTarget === 'landing' || movingUtilityTarget === 'both');
+              const canDragLanding =
+                !ignoreLandingForUtilityTool &&
+                !isLockedEl &&
+                (isMovingLanding || (activeTool === 'select' && !isMovingThisUtil));
+              const dragModeLanding =
+                isMovingThisUtil && movingUtilityTarget === 'both' ? 'both' : 'landing';
+
               return (
                 <div
                   key={util.id}
@@ -3747,22 +4281,28 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                     left: `calc(50% + ${util.x}%)`,
                     top: `calc(50% + ${util.y}%)`,
                     opacity: elOpacity,
+                    width: `${wrapperPx}px`,
+                    height: `${wrapperPx}px`,
+                    color: utilColor,
                   }}
                   onMouseDown={(e) => {
-                    if (activeTool === 'select' && !isLockedEl) {
+                    if (ignoreLandingForUtilityTool) return;
+                    if (canDragLanding) {
                       e.stopPropagation();
-                      startUtilityHandleDrag(util, 'landing', e);
+                      startUtilityHandleDrag(util, dragModeLanding, e);
                     }
                   }}
                   onTouchStart={(e) => {
-                    if (activeTool === 'select' && !isLockedEl && isSelectedEl) {
+                    if (ignoreLandingForUtilityTool) return;
+                    if (canDragLanding && (isSelectedEl || isMovingLanding)) {
                       cancelTouchLongPress();
-                      startUtilityHandleDrag(util, 'landing', e);
+                      startUtilityHandleDrag(util, dragModeLanding, e);
                     } else if (activeTool !== 'eraser') {
                       longPressTargetCandidateRef.current = { elementId: util.id };
                     }
                   }}
                   onClick={(e) => {
+                    if (ignoreLandingForUtilityTool) return;
                     e.stopPropagation();
                     if (hasMovedDistance) return;
                     if (activeTool === 'eraser') {
@@ -3772,11 +4312,19 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                       setSelectedElementIds((prev) => prev.filter((id) => id !== util.id));
                       setHasChangesInSession(true);
                     } else {
-                      handleSelectElement(util.id, e.ctrlKey || e.metaKey || e.shiftKey || isMultiSelectMode);
+                      const isMulti =
+                        e.ctrlKey || e.metaKey || e.shiftKey || isMultiSelectMode;
+                      handleSelectElement(util.id, isMulti);
                     }
                   }}
+                  onDoubleClick={(e) => {
+                    if (ignoreLandingForUtilityTool || activeTool === 'eraser') return;
+                    e.stopPropagation();
+                    handleSelectElement(util.id, false);
+                    setInfoUtilityId(util.id);
+                  }}
                   onContextMenu={(e) => {
-                    if (isEditMode || isDrawingPolygonArea) return;
+                    if (ignoreLandingForUtilityTool || isEditMode || isDrawingPolygonArea) return;
                     e.preventDefault();
                     e.stopPropagation();
                     if (!selectedElementIds.includes(util.id)) {
@@ -3785,12 +4333,16 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                     setShowContextColorSubmenu(false);
                     setContextMenu({ x: e.clientX, y: e.clientY });
                   }}
-                  className={`absolute -translate-x-1/2 -translate-y-1/2 z-25 w-6 h-6 flex items-center justify-center ${
-                    activeTool === 'select' && !isLockedEl ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
-                  } hover:scale-115 transition-all ${
-                    meta.textClass
-                  } drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)] ${
-                    isSelectedEl
+                  className={`absolute -translate-x-1/2 -translate-y-1/2 z-[31] flex items-center justify-center ${
+                    ignoreLandingForUtilityTool
+                      ? 'pointer-events-none'
+                      : canDragLanding
+                      ? 'cursor-grab active:cursor-grabbing hover:scale-115'
+                      : 'cursor-pointer hover:scale-115'
+                  } transition-all drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)] ${
+                    isMovingLanding
+                      ? 'ring-2 ring-amber-400 ring-offset-2 ring-offset-zinc-950 rounded-md scale-115 bg-amber-950/40'
+                      : isSelectedEl
                       ? 'ring-2 ring-sky-400 ring-offset-2 ring-offset-zinc-950 rounded-md scale-115 bg-zinc-950/60'
                       : ''
                   }`}
@@ -3800,13 +4352,23 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                         ? 'Klicken zum Entfernen'
                         : 'Click to remove'
                       : `${isDe ? meta.labelDe : meta.labelEn}${util.label ? ` · ${util.label}` : ''} — ${
-                          isDe ? 'Klicken zum Auswählen · Ziehen zum Verschieben' : 'Click to select · Drag to move'
+                          isDe
+                            ? 'Klicken zum Auswählen · Doppelklick für Utility-Info · Ziehen zum Verschieben'
+                            : 'Click to select · Double-click for Utility Info · Drag to move'
                         }`
                   }
                 >
-                  <UtilitySymbol type={util.type} size="md" />
+                  <UtilitySymbol type={util.type} sizePx={spotPx} />
                   {util.label && (
-                    <span className="absolute top-6 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded bg-zinc-950/90 border border-zinc-700/80 text-[9px] font-semibold text-zinc-100 whitespace-nowrap shadow-md pointer-events-none">
+                    <span
+                      style={{
+                        top: 'calc(100% + 2px)',
+                        fontSize: util.fontSize ? `${util.fontSize}px` : undefined,
+                      }}
+                      className={`absolute left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded bg-zinc-950/90 border border-zinc-700/80 font-semibold text-zinc-100 whitespace-nowrap shadow-md pointer-events-none ${
+                        util.fontSize ? '' : 'text-[9px]'
+                      }`}
+                    >
                       {util.label}
                     </span>
                   )}
@@ -3940,19 +4502,20 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
               <div
                 key={`callout_${tileLevel}_${callout.id}`}
                 style={{ left: `calc(50% + ${pinX}%)`, top: `calc(50% + ${pinY}%)` }}
-                className={`absolute w-0 h-0 flex items-center justify-center pointer-events-auto group ${
-                  isBeingDragged ? 'z-50' : 'z-25'
-                }`}
-                onMouseEnter={() => !draggingCalloutId && setHoveredCallout(callout)}
-                onMouseLeave={() => setHoveredCallout(null)}
+                className={`absolute w-0 h-0 flex items-center justify-center group ${
+                  ignoreCalloutsForTool ? 'pointer-events-none' : 'pointer-events-auto'
+                } ${isBeingDragged ? 'z-50' : 'z-25'}`}
+                onMouseEnter={() => !ignoreCalloutsForTool && !draggingCalloutId && setHoveredCallout(callout)}
+                onMouseLeave={() => !ignoreCalloutsForTool && setHoveredCallout(null)}
                 onClick={(e) => {
+                  if (ignoreCalloutsForTool) return;
                   e.stopPropagation();
                   if (!hasMovedDistance) {
                     handleSelectCalloutMulti(callout, e.ctrlKey || e.metaKey || e.shiftKey || isMultiSelectMode);
                   }
                 }}
                 onContextMenu={(e) => {
-                  if (isDrawingPolygonArea) return;
+                  if (ignoreCalloutsForTool || isDrawingPolygonArea) return;
                   e.preventDefault();
                   e.stopPropagation();
                   if (!selectedCalloutIds.includes(callout.id)) {
@@ -3964,13 +4527,16 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                   setContextMenu({ x: e.clientX, y: e.clientY });
                 }}
                 onDoubleClick={(e) => {
+                  if (ignoreCalloutsForTool) return;
                   e.stopPropagation();
                   handleOpenCalloutEditor(callout, e);
                 }}
               >
                 {!callout.hidePin && (
                   <div
-                    className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 flex items-center justify-center pointer-events-auto ${
+                    className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 flex items-center justify-center ${
+                      ignoreCalloutsForTool ? 'pointer-events-none' : 'pointer-events-auto'
+                    } ${
                       isMovingThisCalloutMarker
                         ? 'rounded-full p-1 border border-dashed border-amber-300'
                         : isMovingAreaOnlyForThis
@@ -4368,8 +4934,84 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         );
       })()}
 
+      {/* UTILITY MOVE MODE BANNER */}
+      {movingUtilityId && (() => {
+        const activeMovingUtility = utilities.find((u) => u.id === movingUtilityId);
+        if (!activeMovingUtility) return null;
+        const canSwitchUtilTarget = Boolean(activeMovingUtility.throwFrom);
+        return (
+          <div
+            data-no-map-click="true"
+            className="absolute top-26 md:top-16 left-1/2 -translate-x-1/2 z-[100] flex flex-wrap items-center justify-center gap-2 sm:gap-2.5 px-3 sm:px-4 py-2 bg-amber-500 text-zinc-950 font-bold rounded-xl shadow-2xl max-w-[94vw] text-xs sm:text-sm"
+          >
+            <Move className="w-4 h-4 shrink-0" />
+            <span className="truncate">
+              {movingUtilityTarget === 'origin'
+                ? isDe
+                  ? 'Utility verschieben: Startpunkt'
+                  : 'Move Utility: Origin'
+                : movingUtilityTarget === 'both'
+                ? isDe
+                  ? 'Utility verschieben: Beides zusammen'
+                  : 'Move Utility: Both together'
+                : isDe
+                ? 'Utility verschieben: Endpunkt'
+                : 'Move Utility: Landing'}
+            </span>
+            {canSwitchUtilTarget && (
+              <div className="flex items-center gap-1 bg-zinc-950/15 rounded-lg p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setMovingUtilityTarget('origin')}
+                  className={`px-2 py-0.5 rounded-md text-[11px] font-bold cursor-pointer transition-colors ${
+                    movingUtilityTarget === 'origin'
+                      ? 'bg-zinc-950 text-amber-300'
+                      : 'text-zinc-950 hover:bg-zinc-950/15'
+                  }`}
+                >
+                  {isDe ? 'Startpunkt' : 'Origin'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMovingUtilityTarget('landing')}
+                  className={`px-2 py-0.5 rounded-md text-[11px] font-bold cursor-pointer transition-colors ${
+                    movingUtilityTarget === 'landing'
+                      ? 'bg-zinc-950 text-amber-300'
+                      : 'text-zinc-950 hover:bg-zinc-950/15'
+                  }`}
+                >
+                  {isDe ? 'Endpunkt' : 'Landing'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMovingUtilityTarget('both')}
+                  className={`px-2 py-0.5 rounded-md text-[11px] font-bold cursor-pointer transition-colors ${
+                    movingUtilityTarget === 'both'
+                      ? 'bg-zinc-950 text-amber-300'
+                      : 'text-zinc-950 hover:bg-zinc-950/15'
+                  }`}
+                >
+                  {isDe ? 'Beides' : 'Both'}
+                </button>
+              </div>
+            )}
+            <span className="hidden md:inline text-[10px] font-mono text-zinc-900/75">
+              Enter / Esc
+            </span>
+            <button
+              type="button"
+              onClick={() => setMovingUtilityId(null)}
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 bg-zinc-950 text-white rounded-lg text-xs hover:bg-zinc-900 transition-colors cursor-pointer shrink-0"
+            >
+              <Check className="w-3.5 h-3.5 text-amber-400" />
+              <span>{isDe ? 'Fertig' : 'Done'}</span>
+            </button>
+          </div>
+        );
+      })()}
+
       {/* CUSTOM SELECTION ACTIVE BANNER */}
-      {isCustomSelectionActive && !movingAreaCalloutId && (
+      {isCustomSelectionActive && !movingAreaCalloutId && !movingUtilityId && (
         <div className="absolute top-26 md:top-16 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-3 py-1.5 bg-indigo-950/90 border border-indigo-500/40 text-indigo-200 text-xs font-semibold rounded-full shadow-xl backdrop-blur-md animate-in fade-in duration-200 max-w-[92vw]">
           <ListFilter className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
           <span>{isDe ? `Meine Auswahl: ${visibleCallouts.length} Callouts` : `My Selection: ${visibleCallouts.length} Callouts`}</span>
@@ -4408,9 +5050,12 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         presetCount={tacticPresets.length}
         onOpenPresets={() => setIsPresetsModalOpen(true)}
         onShare={handleShareTactics}
-        isEditActive={Boolean(isEditMode || singleEditCalloutId)}
+        isEditActive={Boolean(isEditMode || singleEditCalloutId || singleEditUtilityId)}
         onEditAction={() => {
-          if (isEditMode || singleEditCalloutId) {
+          if (activeTool === 'utility') {
+            switchUtilityToolToSelect();
+          }
+          if (isEditMode || singleEditCalloutId || singleEditUtilityId) {
             if (hasChangesInSession) {
               handleSaveSnapshot(
                 isDe
@@ -4420,6 +5065,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             }
             setIsEditMode(false);
             setSingleEditCalloutId(null);
+            setSingleEditUtilityId(null);
             setSelectedCallout(null);
             setSelectedCalloutIds([]);
             setHighlightedCalloutId(undefined);
@@ -4461,7 +5107,16 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           selectedUtility={selectedUtility}
           utilityPlacementMode={utilityPlacementMode}
           selectedThrowType={selectedThrowType}
+          keepUtilityOrigin={keepUtilityOrigin}
+          utilityLineScale={utilityLineScale}
+          utilitySpotScale={utilitySpotScale}
           selectedPlayerSide={selectedPlayerSide}
+          onCreateNewCallout={() => {
+            if (activeTool === 'utility') {
+              switchUtilityToolToSelect();
+            }
+            handleOpenAddNewCalloutModal();
+          }}
           onHideToolbar={() => setIsToolbarVisible(false)}
           onSelectTool={setActiveTool}
           onToggleMultiSelect={() => {
@@ -4482,6 +5137,9 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           onSelectUtility={setSelectedUtility}
           onSelectUtilityPlacementMode={setUtilityPlacementMode}
           onSelectThrowType={setSelectedThrowType}
+          onToggleKeepUtilityOrigin={() => setKeepUtilityOrigin((p) => !p)}
+          onChangeUtilityLineScale={(scale) => setUtilityLineScale(clampUtilityLineScale(scale))}
+          onChangeUtilitySpotScale={(scale) => setUtilitySpotScale(clampUtilitySpotScale(scale))}
           onSelectPlayerSide={setSelectedPlayerSide}
         />
       )}
@@ -4499,16 +5157,63 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             selectedUtility={selectedUtility}
             utilityPlacementMode={utilityPlacementMode}
             selectedThrowType={selectedThrowType}
+            keepUtilityOrigin={keepUtilityOrigin}
+            utilityLineScale={utilityLineScale}
+            utilitySpotScale={utilitySpotScale}
             selectedPlayerSide={selectedPlayerSide}
             canUndo={canUndo}
             canRedo={canRedo}
             hasBoardElements={drawings.length > 0 || utilities.length > 0 || players.length > 0}
+            selectedSingleUtility={selectedSingleUtility}
+            utilityDraft={utilityDraft}
+            utilityFocusTrigger={utilityEditTrigger}
+            onChangeUtilityDraft={(patch) =>
+              setUtilityDraft((prev) => ({ ...prev, ...patch }))
+            }
+            onUpdateSelectedElementsProps={handleUpdateSelectedElementsProps}
+            onOpenUtilityInfo={(u) => setInfoUtilityId(u.id)}
+            onOpenUtilityCustomColor={(target) => {
+              setCustomColorTarget(target);
+              setIsCustomColorModalOpen(true);
+            }}
+            onMoveUtility={handleRequestMoveUtility}
+            onBranchFromUtilityOrigin={(origin, utilType) => {
+              setActiveTool('utility');
+              setUtilityPlacementMode('throw');
+              setSelectedUtility(utilType);
+              setPendingUtilityThrowOrigin(origin);
+              setUtilityHoverCoord(origin);
+              setHoveredSnapOrigin(null);
+              setSelectedElementIds([]);
+              setSelectedCalloutIds([]);
+              setSelectedCallout(null);
+              setInfoUtilityId(null);
+              setShowUtilities(true);
+              setUtilityEditTrigger((prev) => prev + 1);
+            }}
+            onDuplicateSelected={handleDuplicateSelected}
+            onDeleteElement={handleDeleteSingleElement}
+            onFinishUtilityEdit={() => {
+              setSelectedElementIds([]);
+              setMovingUtilityId(null);
+              setSingleEditUtilityId(null);
+              switchUtilityToolToSelect();
+            }}
+            onCreateNewCallout={() => {
+              if (activeTool === 'utility') {
+                switchUtilityToolToSelect();
+              }
+              handleOpenAddNewCalloutModal();
+            }}
             onHideToolbar={() => setIsToolbarVisible(false)}
-            onSelectTool={setActiveTool}
+            onSelectTool={handleSelectTool}
             onToolPress={handleToolPress}
             onSelectUtility={setSelectedUtility}
             onSelectUtilityPlacementMode={setUtilityPlacementMode}
             onSelectThrowType={setSelectedThrowType}
+            onToggleKeepUtilityOrigin={() => setKeepUtilityOrigin((p) => !p)}
+            onChangeUtilityLineScale={(scale) => setUtilityLineScale(clampUtilityLineScale(scale))}
+            onChangeUtilitySpotScale={(scale) => setUtilitySpotScale(clampUtilitySpotScale(scale))}
             onSelectPlayerSide={setSelectedPlayerSide}
             onSelectColor={setPenColor}
             onOpenCustomColor={() => {
@@ -4669,13 +5374,12 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             </div>
           )}
 
-          {/* 2-POINT UTILITY THROW STEP GUIDANCE PILL */}
+          {/* UTILITY PLACEMENT GUIDANCE PILL (THROW & SPOT MODES) */}
           {!isDrawingPolygonArea &&
             !isEditMode &&
             selectedElementIds.length === 0 &&
             selectedCalloutIds.length === 0 &&
-            activeTool === 'utility' &&
-            utilityPlacementMode === 'throw' && (
+            activeTool === 'utility' && (
               <div
                 data-no-map-click="true"
                 onMouseDown={(e) => e.stopPropagation()}
@@ -4684,47 +5388,97 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                   !isToolbarVisible && !isFullscreen ? 'top-12 md:top-3' : 'top-3'
                 } left-1/2 -translate-x-1/2 z-40 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 px-3 py-1.5 rounded-xl bg-zinc-950/95 border border-emerald-500/60 text-xs text-zinc-100 shadow-2xl backdrop-blur-md w-max max-w-[94vw] print:hidden`}
               >
-                <Spline className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                {pendingUtilityThrowOrigin ? (
+                {utilityPlacementMode === 'throw' ? (
                   <>
-                    <span className="font-semibold text-emerald-200">
-                      {isDe
-                        ? '1. Abwurf gesetzt → 2. Landeplatz wählen'
-                        : '1. Origin set → 2. Tap landing spot'}
-                    </span>
-                    <span className="px-1.5 py-0.5 rounded bg-sky-500/15 border border-sky-400/40 text-[10px] font-semibold text-sky-300 whitespace-nowrap">
-                      {formatThrowTypeFull(selectedThrowType, lang)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPendingUtilityThrowOrigin(null);
-                        setUtilityHoverCoord(null);
-                      }}
-                      className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-[11px] font-bold text-zinc-300 hover:text-white cursor-pointer"
-                    >
-                      {isDe ? 'Abbrechen' : 'Cancel'}
-                    </button>
+                    <Spline className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    {pendingUtilityThrowOrigin ? (
+                      <>
+                        <span className="font-semibold text-emerald-200">
+                          {isDe
+                            ? keepUtilityOrigin
+                              ? 'Start fixiert → Weitere Würfe setzen'
+                              : '1. Abwurf gesetzt → 2. Landeplatz wählen'
+                            : keepUtilityOrigin
+                            ? 'Origin pinned → Place multiple throws'
+                            : '1. Origin set → 2. Tap landing spot'}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded bg-sky-500/15 border border-sky-400/40 text-[10px] font-semibold text-sky-300 whitespace-nowrap">
+                          {formatThrowTypeFull(selectedThrowType, lang)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setKeepUtilityOrigin((p) => !p)}
+                          aria-pressed={keepUtilityOrigin}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
+                            keepUtilityOrigin
+                              ? 'bg-emerald-500 text-zinc-950 border-emerald-400'
+                              : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border-zinc-700'
+                          }`}
+                          title={
+                            isDe
+                              ? 'Startpunkt für mehrere Lineups beibehalten'
+                              : 'Keep starting position for multiple lineups'
+                          }
+                        >
+                          {isDe ? 'Start fixieren' : 'Keep origin'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPendingUtilityThrowOrigin(null);
+                            setUtilityHoverCoord(null);
+                          }}
+                          className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-[11px] font-bold text-zinc-300 hover:text-white border border-zinc-700 cursor-pointer"
+                        >
+                          {isDe ? 'Abbrechen' : 'Cancel'}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-medium text-zinc-200">
+                          {isDe
+                            ? '1. Punkt tippen: Abwurfort wählen'
+                            : 'Step 1: Tap throw origin'}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded bg-sky-500/15 border border-sky-400/40 text-[10px] font-semibold text-sky-300 whitespace-nowrap">
+                          {formatThrowTypeFull(selectedThrowType, lang)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setUtilityPlacementMode('point')}
+                          className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-[10px] font-bold text-zinc-300 hover:text-white border border-zinc-700 cursor-pointer"
+                        >
+                          {isDe ? 'Nur Spot' : 'Spot'}
+                        </button>
+                      </>
+                    )}
                   </>
                 ) : (
                   <>
+                    <Crosshair className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                     <span className="font-medium text-zinc-200">
                       {isDe
-                        ? '1. Punkt tippen: Abwurfort wählen'
-                        : 'Step 1: Tap throw origin'}
-                    </span>
-                    <span className="px-1.5 py-0.5 rounded bg-sky-500/15 border border-sky-400/40 text-[10px] font-semibold text-sky-300 whitespace-nowrap">
-                      {formatThrowTypeFull(selectedThrowType, lang)}
+                        ? 'Spot-Modus: Landeplatz wählen'
+                        : 'Spot mode: Tap landing spot'}
                     </span>
                     <button
                       type="button"
-                      onClick={() => setUtilityPlacementMode('point')}
+                      onClick={() => setUtilityPlacementMode('throw')}
                       className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-[10px] font-bold text-zinc-300 hover:text-white border border-zinc-700 cursor-pointer"
                     >
-                      {isDe ? 'Nur Spot' : 'Spot'}
+                      {isDe ? 'Wurflinie' : 'Throw line'}
                     </button>
                   </>
                 )}
+                <button
+                  type="button"
+                  onClick={switchUtilityToolToSelect}
+                  className="flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-[11px] font-bold text-zinc-950 transition-colors cursor-pointer shadow-sm"
+                  title={isDe ? 'Fertig & zum Auswählen-Werkzeug wechseln' : 'Done & switch to Select tool'}
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{isDe ? 'Fertig' : 'Done'}</span>
+                </button>
               </div>
             )}
 
@@ -4781,6 +5535,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
               players={players}
               colors={colors}
               movingAreaCalloutId={movingAreaCalloutId}
+              movingUtilityId={movingUtilityId}
               showContextColorPicker={showContextColorPicker}
               onToggleContextColorPicker={() => setShowContextColorPicker((p) => !p)}
               onShowCalloutInfo={(c) => {
@@ -4792,6 +5547,9 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
               onEditCallout={handleOpenCalloutEditor}
               onToggleMoveArea={handleRequestMoveCalloutOrArea}
               onCreateArea={handleRequestCreateArea}
+              onShowUtilityInfo={(u) => setInfoUtilityId(u.id)}
+              onEditUtility={(u) => openUtilityEditorInLeftPanel(u)}
+              onMoveUtility={handleRequestMoveUtility}
               onGroupSelected={handleGroupSelected}
               onDuplicateSelected={handleDuplicateSelected}
               onToggleLockSelected={handleToggleLockSelected}
@@ -4800,6 +5558,19 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                 setShowContextColorPicker(false);
               }}
               onUpdateSelectedElementsProps={handleUpdateSelectedElementsProps}
+              onBranchFromUtilityOrigin={(origin, utilType) => {
+                setActiveTool('utility');
+                setUtilityPlacementMode('throw');
+                setSelectedUtility(utilType);
+                setPendingUtilityThrowOrigin(origin);
+                setUtilityHoverCoord(origin);
+                setHoveredSnapOrigin(null);
+                setSelectedElementIds([]);
+                setSelectedCalloutIds([]);
+                setSelectedCallout(null);
+                setInfoUtilityId(null);
+                setShowUtilities(true);
+              }}
               onOpenCustomColor={() => {
                 setCustomColorTarget('selection');
                 setIsCustomColorModalOpen(true);
@@ -4811,6 +5582,15 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                 setSelectedCalloutIds([]);
                 setSelectedCallout(null);
                 setShowContextColorPicker(false);
+              }}
+              onFinish={() => {
+                setMovingUtilityId(null);
+                setSingleEditUtilityId(null);
+                setSelectedElementIds([]);
+                setSelectedCalloutIds([]);
+                setSelectedCallout(null);
+                setShowContextColorPicker(false);
+                switchUtilityToolToSelect();
               }}
             />
           )}
@@ -4828,6 +5608,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
               players={players}
               colors={colors}
               movingAreaCalloutId={movingAreaCalloutId}
+              movingUtilityId={movingUtilityId}
               showColorSubmenu={showContextColorSubmenu}
               onToggleColorSubmenu={() => setShowContextColorSubmenu((p) => !p)}
               onShowCalloutInfo={(c) => {
@@ -4851,6 +5632,9 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
               onToggleMoveArea={handleRequestMoveCalloutOrArea}
               onCreateArea={handleRequestCreateArea}
               onRemoveArea={(c) => handleRemoveCalloutAreaOnly(c.id)}
+              onShowUtilityInfo={(u) => setInfoUtilityId(u.id)}
+              onEditUtility={(u) => openUtilityEditorInLeftPanel(u)}
+              onMoveUtility={handleRequestMoveUtility}
               onGroupSelected={handleGroupSelected}
               onDuplicateSelected={handleDuplicateSelected}
               onToggleLockSelected={handleToggleLockSelected}
@@ -5008,7 +5792,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
               pan={pan}
               onSetPan={setPan}
               drawings={drawings}
-              utilities={utilities}
+              utilities={showUtilities ? utilities : []}
               players={players}
               isLayerVisible={isLayerVisible}
             />
@@ -5032,6 +5816,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             onToggleAreas={() => setShowAreas((a) => !a)}
             showGrid={showGrid}
             onToggleGrid={() => setShowGrid((g) => !g)}
+            showUtilities={showUtilities}
+            onToggleUtilities={() => setShowUtilities((u) => !u)}
             showCalloutLabels={showCalloutLabels}
             onToggleLabels={() => setShowCalloutLabels((p) => !p)}
             calloutScale={calloutScale}
@@ -5133,6 +5919,30 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
               setSelectedElementIds((prev) => prev.filter((sid) => sid !== id));
               setHasChangesInSession(true);
             }}
+            globalUtilityLineScale={utilityLineScale}
+            globalUtilitySpotScale={utilitySpotScale}
+            colors={colors}
+            utilityEditTrigger={utilityEditTrigger}
+            onOpenUtilityInfo={(u) => setInfoUtilityId(u.id)}
+            onOpenCustomColor={(u) => {
+              setCustomColorTarget({ utilityId: u.id });
+              setIsCustomColorModalOpen(true);
+            }}
+            onMoveUtility={handleRequestMoveUtility}
+            onBranchFromUtilityOrigin={(origin, utilType) => {
+              setActiveTool('utility');
+              setUtilityPlacementMode('throw');
+              setSelectedUtility(utilType);
+              setPendingUtilityThrowOrigin(origin);
+              setUtilityHoverCoord(origin);
+              setHoveredSnapOrigin(null);
+              setSelectedElementIds([]);
+              setSelectedCalloutIds([]);
+              setSelectedCallout(null);
+              setInfoUtilityId(null);
+              setShowUtilities(true);
+            }}
+            onDuplicateSelected={handleDuplicateSelected}
             showAreas={showAreas}
             onToggleShowAreas={() => setShowAreas((p) => !p)}
             showCalloutLabels={showCalloutLabels}
@@ -5251,6 +6061,30 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                   setSelectedElementIds((prev) => prev.filter((sid) => sid !== id));
                   setHasChangesInSession(true);
                 }}
+                globalUtilityLineScale={utilityLineScale}
+                globalUtilitySpotScale={utilitySpotScale}
+                colors={colors}
+                utilityEditTrigger={utilityEditTrigger}
+                onOpenUtilityInfo={(u) => setInfoUtilityId(u.id)}
+                onOpenCustomColor={(u) => {
+                  setCustomColorTarget({ utilityId: u.id });
+                  setIsCustomColorModalOpen(true);
+                }}
+                onMoveUtility={handleRequestMoveUtility}
+                onBranchFromUtilityOrigin={(origin, utilType) => {
+                  setActiveTool('utility');
+                  setUtilityPlacementMode('throw');
+                  setSelectedUtility(utilType);
+                  setPendingUtilityThrowOrigin(origin);
+                  setUtilityHoverCoord(origin);
+                  setHoveredSnapOrigin(null);
+                  setSelectedElementIds([]);
+                  setSelectedCalloutIds([]);
+                  setSelectedCallout(null);
+                  setInfoUtilityId(null);
+                  setShowUtilities(true);
+                }}
+                onDuplicateSelected={handleDuplicateSelected}
                 showAreas={showAreas}
                 onToggleShowAreas={() => setShowAreas((p) => !p)}
                 showCalloutLabels={showCalloutLabels}
@@ -5278,6 +6112,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           onToggleAreas={() => setShowAreas((a) => !a)}
           showGrid={showGrid}
           onToggleGrid={() => setShowGrid((g) => !g)}
+          showUtilities={showUtilities}
+          onToggleUtilities={() => setShowUtilities((u) => !u)}
           showCalloutLabels={showCalloutLabels}
           onToggleLabels={() => setShowCalloutLabels((p) => !p)}
           calloutScale={calloutScale}
@@ -5416,6 +6252,41 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           );
           setSelectedElementIds((prev) => prev.filter((sid) => sid !== id));
           setHasChangesInSession(true);
+        }}
+        globalUtilityLineScale={utilityLineScale}
+        globalUtilitySpotScale={utilitySpotScale}
+        colors={colors}
+        utilityEditTrigger={utilityEditTrigger}
+        onOpenUtilityInfo={(u) => {
+          setIsMobileSheetOpen(false);
+          setInfoUtilityId(u.id);
+        }}
+        onOpenCustomColor={(u) => {
+          setIsMobileSheetOpen(false);
+          setCustomColorTarget({ utilityId: u.id });
+          setIsCustomColorModalOpen(true);
+        }}
+        onMoveUtility={(u) => {
+          setIsMobileSheetOpen(false);
+          handleRequestMoveUtility(u);
+        }}
+        onBranchFromUtilityOrigin={(origin, utilType) => {
+          setIsMobileSheetOpen(false);
+          setActiveTool('utility');
+          setUtilityPlacementMode('throw');
+          setSelectedUtility(utilType);
+          setPendingUtilityThrowOrigin(origin);
+          setUtilityHoverCoord(origin);
+          setHoveredSnapOrigin(null);
+          setSelectedElementIds([]);
+          setSelectedCalloutIds([]);
+          setSelectedCallout(null);
+          setInfoUtilityId(null);
+          setShowUtilities(true);
+        }}
+        onDuplicateSelected={() => {
+          setIsMobileSheetOpen(false);
+          handleDuplicateSelected();
         }}
         showAreas={showAreas}
         onToggleShowAreas={() => setShowAreas((p) => !p)}
@@ -5611,6 +6482,117 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
               <button
                 type="button"
                 onClick={() => setMoveTargetPromptCallout(null)}
+                className="px-3.5 py-1.5 text-xs font-medium rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 cursor-pointer"
+              >
+                {isDe ? 'Abbrechen' : 'Cancel'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MOVE TARGET CHOICE MODAL (when Utility has both Start & Landing) */}
+      {moveTargetPromptUtility && (
+        <div
+          data-no-map-click="true"
+          onClick={() => setMoveTargetPromptUtility(null)}
+          className="fixed inset-0 z-[125] flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 animate-backdrop-soft print:hidden"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-label={isDe ? 'Utility verschieben' : 'Move Utility'}
+            className="w-full max-w-sm rounded-2xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl text-zinc-100 space-y-4 animate-dialog-soft"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Move className="w-4 h-4 text-amber-400" />
+                  <span>{isDe ? 'Was möchtest du verschieben?' : 'What do you want to move?'}</span>
+                </h3>
+                <p className="text-xs text-zinc-400">
+                  {moveTargetPromptUtility.label?.trim() ||
+                    (isDe
+                      ? (UTILITY_META[moveTargetPromptUtility.type] || UTILITY_META.smoke).labelDe
+                      : (UTILITY_META[moveTargetPromptUtility.type] || UTILITY_META.smoke).labelEn)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMoveTargetPromptUtility(null)}
+                aria-label={isDe ? 'Schließen' : 'Close'}
+                className="p-1 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2.5">
+              <button
+                type="button"
+                onClick={() => handleConfirmMoveUtilityTarget(moveTargetPromptUtility, 'origin')}
+                className="flex items-center gap-3 p-3 rounded-xl border border-zinc-700 bg-zinc-950 hover:bg-zinc-800 hover:border-sky-400 text-left transition-all cursor-pointer group"
+              >
+                <div className="p-2 rounded-lg bg-sky-500/15 border border-sky-500/30 text-sky-400">
+                  <Crosshair className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white group-hover:text-sky-300">
+                    {isDe ? 'Startpunkt' : 'Origin point'}
+                  </div>
+                  <div className="text-[11px] text-zinc-400">
+                    {isDe
+                      ? 'Nur den Abwurfpunkt verschieben, Endpunkt bleibt fest'
+                      : 'Move only the throw origin, keeping landing spot fixed'}
+                  </div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleConfirmMoveUtilityTarget(moveTargetPromptUtility, 'landing')}
+                className="flex items-center gap-3 p-3 rounded-xl border border-zinc-700 bg-zinc-950 hover:bg-zinc-800 hover:border-amber-400 text-left transition-all cursor-pointer group"
+              >
+                <div className="p-2 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400">
+                  <UtilitySymbol type={moveTargetPromptUtility.type} size="sm" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white group-hover:text-amber-300">
+                    {isDe ? 'Endpunkt' : 'Landing spot'}
+                  </div>
+                  <div className="text-[11px] text-zinc-400">
+                    {isDe
+                      ? 'Nur den Landepunkt verschieben, Startpunkt bleibt fest'
+                      : 'Move only the landing spot, keeping origin fixed'}
+                  </div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleConfirmMoveUtilityTarget(moveTargetPromptUtility, 'both')}
+                className="flex items-center gap-3 p-3 rounded-xl border border-zinc-700 bg-zinc-950 hover:bg-zinc-800 hover:border-emerald-400 text-left transition-all cursor-pointer group"
+              >
+                <div className="p-2 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+                  <Move className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white group-hover:text-emerald-300">
+                    {isDe ? 'Beides zusammen' : 'Both together'}
+                  </div>
+                  <div className="text-[11px] text-zinc-400">
+                    {isDe
+                      ? 'Startpunkt und Endpunkt gemeinsam verschieben'
+                      : 'Move origin and landing spot together'}
+                  </div>
+                </div>
+              </button>
+            </div>
+
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => setMoveTargetPromptUtility(null)}
                 className="px-3.5 py-1.5 text-xs font-medium rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 cursor-pointer"
               >
                 {isDe ? 'Abbrechen' : 'Cancel'}
@@ -5850,13 +6832,20 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         defaultTitle={`${mapData.name} - Taktik`}
         tacticState={{
           drawings: drawings.filter((d) => isLayerVisible(d.layerId, 'layer_t')),
-          utilities: utilities.filter((u) => isLayerVisible(u.layerId, 'layer_util')),
+          utilities: utilities.filter((u) => showUtilities && isLayerVisible(u.layerId, 'layer_util')),
           players: players.filter((p) =>
             isLayerVisible(p.layerId, p.side === 'ct' ? 'layer_ct' : 'layer_t')
           ),
         }}
-        onSaveAsMyTactic={(title) => {
+        utilityLineScale={utilityLineScale}
+        utilitySpotScale={utilitySpotScale}
+        onSaveAsMyTactic={(title, filteredState) => {
           if (onSaveAsMyTactic) {
+            const stateToSave = filteredState || {
+              drawings,
+              utilities,
+              players,
+            };
             (onSaveAsMyTactic as (
               baseMap: MapData,
               tacticTitle: string,
@@ -5867,9 +6856,7 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
                 layers?: TacticLayer[];
               }
             ) => void)(mapData, title, {
-              drawings,
-              utilities,
-              players,
+              ...stateToSave,
               layers,
             });
           }
@@ -5879,12 +6866,33 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           setDrawings(loadedState.drawings || []);
           setUtilities(loadedState.utilities || []);
           setPlayers(loadedState.players || []);
+          if (loadedState.showAreas !== undefined) {
+            setShowAreas(loadedState.showAreas);
+          }
+          if (loadedState.showCallouts !== undefined) {
+            setShowCalloutLabels(loadedState.showCallouts);
+          }
           const stateWithLayers = loadedState as { layers?: TacticLayer[] };
           if (stateWithLayers.layers && stateWithLayers.layers.length > 0) {
             setLayers(stateWithLayers.layers);
           }
           setSelectedElementIds([]);
           setSelectedCalloutIds([]);
+          setHasChangesInSession(true);
+        }}
+        onLoadSingleUtility={(incomingUtil) => {
+          pushHistorySnapshot();
+          const newUtil: UtilityMarker = {
+            ...incomingUtil,
+            id: `util_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            layerId: activeLayerId || 'layer_util',
+          };
+          setUtilities((prev) => [...prev, newUtil]);
+          setShowUtilities(true);
+          setSelectedElementIds([newUtil.id]);
+          setSelectedCalloutIds([]);
+          setSelectedCallout(null);
+          setInfoUtilityId(newUtil.id);
           setHasChangesInSession(true);
         }}
         lang={lang}
@@ -5932,13 +6940,16 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         onClose={() => setIsEditOptionsModalOpen(false)}
         lang={lang}
         callouts={mapData.callouts}
+        utilities={utilities}
         singleEditCalloutId={singleEditCalloutId}
+        singleEditUtilityId={singleEditUtilityId}
         singleEditSearchQuery={singleEditSearchQuery}
         onChangeSearchQuery={setSingleEditSearchQuery}
         customSelectedCount={customSelectedCalloutIds.length}
         getZoneBadgeColor={getZoneBadgeColor}
         onEnableGlobalEdit={() => {
           setSingleEditCalloutId(null);
+          setSingleEditUtilityId(null);
           setSelectedCallout(null);
           setSelectedCalloutIds([]);
           setHighlightedCalloutId(undefined);
@@ -5947,9 +6958,21 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           setIsEditOptionsModalOpen(false);
         }}
         onEnableSingleEdit={(calloutId) => {
+          setSingleEditUtilityId(null);
           setSingleEditCalloutId(calloutId);
           setIsEditMode(true);
           setIsEditOptionsModalOpen(false);
+        }}
+        onEnableSingleUtilityEdit={(utilityId) => {
+          const targetUtil = utilities.find((u) => u.id === utilityId);
+          setSingleEditCalloutId(null);
+          setSingleEditUtilityId(utilityId);
+          setIsEditMode(false);
+          setShowUtilities(true);
+          setIsEditOptionsModalOpen(false);
+          if (targetUtil) {
+            openUtilityEditorInLeftPanel(targetUtil);
+          }
         }}
         onOpenNewCallout={() => {
           setIsEditOptionsModalOpen(false);
@@ -5993,13 +7016,60 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
         lang={lang}
       />
 
+      {/* Extra Floating Utility-Info Window (Screenshots, 1-4 Aim Selector & Throw Guide) */}
+      <UtilityInfoModal
+        util={infoUtilityId ? utilities.find((u) => u.id === infoUtilityId) || null : null}
+        allUtilities={utilities}
+        mapData={mapData}
+        lang={lang}
+        isMovingThis={Boolean(infoUtilityId && movingUtilityId === infoUtilityId)}
+        onUpdate={handleUpdateUtilityById}
+        onEdit={(u) => {
+          setInfoUtilityId(null);
+          openUtilityEditorInLeftPanel(u);
+        }}
+        onMove={handleRequestMoveUtility}
+        onAddLine={(u) => {
+          handleUpdateUtilityById(u.id, { addDefaultThrowFrom: true });
+        }}
+        onSelectUtility={(u) => {
+          setInfoUtilityId(u.id);
+          handleSelectElement(u.id, false);
+        }}
+        onClose={() => setInfoUtilityId(null)}
+      />
+
       {/* Custom Color Selection Modal */}
       <CustomColorModal
         isOpen={isCustomColorModalOpen}
         onClose={() => setIsCustomColorModalOpen(false)}
-        currentColor={penColor}
+        currentColor={
+          customColorTarget === 'utilityDraft'
+            ? utilityDraft.color || (UTILITY_META[selectedUtility] || UTILITY_META.smoke).colorHex
+            : typeof customColorTarget === 'object' && customColorTarget?.utilityId
+            ? (() => {
+                const u = utilities.find((item) => item.id === customColorTarget.utilityId);
+                return u
+                  ? getUtilityColor(u, (UTILITY_META[u.type] || UTILITY_META.smoke).colorHex)
+                  : penColor;
+              })()
+            : customColorTarget === 'selection' && selectedElementIds.length === 1
+            ? (() => {
+                const u = utilities.find((item) => item.id === selectedElementIds[0]);
+                if (u) {
+                  return getUtilityColor(u, (UTILITY_META[u.type] || UTILITY_META.smoke).colorHex);
+                }
+                const d = drawings.find((item) => item.id === selectedElementIds[0]);
+                return d?.color || penColor;
+              })()
+            : penColor
+        }
         onSelectColor={(c) => {
-          if (customColorTarget === 'selection') {
+          if (customColorTarget === 'utilityDraft') {
+            setUtilityDraft((prev) => ({ ...prev, color: c }));
+          } else if (typeof customColorTarget === 'object' && customColorTarget?.utilityId) {
+            handleUpdateUtilityById(customColorTarget.utilityId, { color: c });
+          } else if (customColorTarget === 'selection') {
             handleUpdateSelectedElementsProps({ color: c });
           } else {
             setPenColor(c);
@@ -6030,6 +7100,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
             ? `${mapData.name} — ${previewSnapshot.label}`
             : `${mapData.name} — ${isDe ? 'Aktuelle Taktik' : 'Current Tactic'}`
         }
+        utilityLineScale={utilityLineScale}
+        utilitySpotScale={utilitySpotScale}
         lang={lang}
       />
 

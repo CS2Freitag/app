@@ -414,6 +414,12 @@ export function resetToDefaults(): MapData[] {
       localStorage.removeItem(STORAGE_KEYS.MAPS);
       localStorage.removeItem(STORAGE_KEYS.DELETED_MAPS);
       localStorage.removeItem(STORAGE_KEYS.FAVORITES);
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('cs2_map_history_')) {
+          localStorage.removeItem(key);
+        }
+      }
     } catch (e) {
       //
     }

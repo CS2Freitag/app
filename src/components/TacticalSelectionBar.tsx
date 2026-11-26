@@ -10,8 +10,10 @@ import {
   Palette,
   RotateCcw,
   Spline,
+  GitBranch,
   Trash2,
   X,
+  Check,
   SquarePlus,
 } from 'lucide-react';
 import {
@@ -21,6 +23,7 @@ import {
   TacticalDrawingLine,
   UtilityMarker,
   UtilityThrowType,
+  UtilityType,
 } from '../types';
 import { THROW_TYPE_META, UTILITY_THROW_TYPES, formatThrowTypeFull, getThrowTypeLabel } from '../utils/utilityThrowGeometry';
 import { SelectedElementsPatch } from './TacticalLayersPanel';
@@ -35,20 +38,26 @@ interface TacticalSelectionBarProps {
   players: PlayerToken[];
   colors: string[];
   movingAreaCalloutId: string | null;
+  movingUtilityId?: string | null;
   showContextColorPicker: boolean;
   onToggleContextColorPicker: () => void;
   onShowCalloutInfo: (callout: Callout) => void;
   onEditCallout: (callout: Callout, e: React.MouseEvent) => void;
   onToggleMoveArea: (callout: Callout) => void;
   onCreateArea: (callout: Callout) => void;
+  onShowUtilityInfo?: (util: UtilityMarker) => void;
+  onEditUtility?: (util: UtilityMarker) => void;
+  onMoveUtility?: (util: UtilityMarker) => void;
   onGroupSelected: () => void;
   onDuplicateSelected: () => void;
   onToggleLockSelected: () => void;
   onUpdateColor: (color: string) => void;
   onUpdateSelectedElementsProps?: (patch: SelectedElementsPatch) => void;
+  onBranchFromUtilityOrigin?: (origin: { x: number; y: number }, utilType: UtilityType) => void;
   onOpenCustomColor: () => void;
   onDeleteSelected: () => void;
   onClearSelection: () => void;
+  onFinish?: () => void;
 }
 
 export const TacticalSelectionBar: React.FC<TacticalSelectionBarProps> = ({
@@ -61,20 +70,26 @@ export const TacticalSelectionBar: React.FC<TacticalSelectionBarProps> = ({
   players,
   colors,
   movingAreaCalloutId,
+  movingUtilityId,
   showContextColorPicker,
   onToggleContextColorPicker,
   onShowCalloutInfo,
   onEditCallout,
   onToggleMoveArea,
   onCreateArea,
+  onShowUtilityInfo,
+  onEditUtility,
+  onMoveUtility,
   onGroupSelected,
   onDuplicateSelected,
   onToggleLockSelected,
   onUpdateColor,
   onUpdateSelectedElementsProps,
+  onBranchFromUtilityOrigin,
   onOpenCustomColor,
   onDeleteSelected,
   onClearSelection,
+  onFinish,
 }) => {
   const isDe = lang === 'de';
   const totalCount = selectedElementIds.length + selectedCalloutIds.length;
@@ -89,6 +104,7 @@ export const TacticalSelectionBar: React.FC<TacticalSelectionBarProps> = ({
     selectedElementIds.length === 1 && selectedCalloutIds.length === 0
       ? utilities.find((u) => u.id === selectedElementIds[0]) || null
       : null;
+  const hasSelectedUtilities = utilities.some((u) => selectedElementIds.includes(u.id));
 
   const selectedGroupSet = new Set([
     ...drawings.filter((d) => selectedElementIds.includes(d.id) && d.groupId).map((d) => d.groupId),
@@ -229,39 +245,87 @@ export const TacticalSelectionBar: React.FC<TacticalSelectionBarProps> = ({
 
       {singleSelectedUtil && onUpdateSelectedElementsProps && (
         <>
-          <button
-            type="button"
-            onClick={() =>
-              onUpdateSelectedElementsProps(
-                singleSelectedUtil.throwFrom ? { removeThrowFrom: true } : { addDefaultThrowFrom: true }
-              )
-            }
-            className={`flex items-center gap-1 px-2 py-1 rounded-lg border transition-colors shrink-0 cursor-pointer ${
-              singleSelectedUtil.throwFrom
-                ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-200 hover:bg-emerald-500/30'
-                : 'hover:bg-zinc-800 border-transparent text-zinc-200 hover:text-white'
-            }`}
-            title={
-              singleSelectedUtil.throwFrom
-                ? isDe
-                  ? 'Wurflinie entfernen'
-                  : 'Remove throw line'
-                : isDe
-                ? 'Wurflinie hinzufügen'
-                : 'Add throw line'
-            }
-          >
-            <Spline className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="hidden sm:inline">
-              {singleSelectedUtil.throwFrom
-                ? isDe
-                  ? 'Linie aus'
-                  : 'Spot'
-                : isDe
-                ? '+ Wurflinie'
-                : '+ Throw'}
-            </span>
-          </button>
+          {onShowUtilityInfo && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onShowUtilityInfo(singleSelectedUtil);
+              }}
+              className="flex items-center justify-center gap-1 min-w-[34px] min-h-[34px] sm:min-w-0 sm:min-h-0 px-2 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/50 text-sky-300 hover:text-white transition-colors shrink-0 cursor-pointer"
+              title={isDe ? 'Utility-Info öffnen' : 'Open Utility Info'}
+            >
+              <Info className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-sky-400" />
+              <span className="hidden sm:inline">Info</span>
+            </button>
+          )}
+
+          {onEditUtility && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEditUtility(singleSelectedUtil);
+              }}
+              className="flex items-center justify-center gap-1 min-w-[34px] min-h-[34px] sm:min-w-0 sm:min-h-0 px-2 py-1 rounded-lg hover:bg-zinc-800 text-zinc-200 hover:text-white transition-colors shrink-0 cursor-pointer"
+              title={isDe ? 'Utility bearbeiten' : 'Edit utility'}
+            >
+              <Edit3 className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">{isDe ? 'Bearbeiten' : 'Edit'}</span>
+            </button>
+          )}
+
+          {onMoveUtility && (() => {
+            const isMovingThisUtil = movingUtilityId === singleSelectedUtil.id;
+            return (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMoveUtility(singleSelectedUtil);
+                }}
+                className={`flex items-center justify-center gap-1 min-w-[34px] min-h-[34px] sm:min-w-0 sm:min-h-0 px-2 py-1 rounded-lg transition-colors shrink-0 cursor-pointer ${
+                  isMovingThisUtil
+                    ? 'bg-amber-500/25 text-amber-300 border border-amber-500/50'
+                    : 'hover:bg-zinc-800 text-zinc-200 hover:text-white'
+                }`}
+                title={
+                  isMovingThisUtil
+                    ? isDe
+                      ? 'Verschieben beenden'
+                      : 'Stop moving'
+                    : isDe
+                    ? 'Utility verschieben (Startpunkt, Endpunkt oder beides)'
+                    : 'Move utility (Origin, Landing, or both)'
+                }
+              >
+                <Move className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-amber-400" />
+                <span className="hidden sm:inline">
+                  {isMovingThisUtil
+                    ? isDe
+                      ? 'Fertig'
+                      : 'Done'
+                    : isDe
+                    ? 'Verschieben'
+                    : 'Move'}
+                </span>
+              </button>
+            );
+          })()}
+
+          {!singleSelectedUtil.throwFrom && (
+            <button
+              type="button"
+              onClick={() => onUpdateSelectedElementsProps({ addDefaultThrowFrom: true })}
+              className="flex items-center justify-center gap-1 min-w-[34px] min-h-[34px] sm:min-w-0 sm:min-h-0 px-2 py-1 rounded-lg border hover:bg-zinc-800 border-transparent text-zinc-200 hover:text-white transition-colors shrink-0 cursor-pointer"
+              title={isDe ? 'Wurflinie hinzufügen' : 'Add throw line'}
+            >
+              <Spline className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-emerald-400" />
+              <span className="hidden sm:inline">
+                {isDe ? '+ Wurflinie' : '+ Throw'}
+              </span>
+            </button>
+          )}
 
           {singleSelectedUtil.throwFrom && (
             <>
@@ -292,10 +356,30 @@ export const TacticalSelectionBar: React.FC<TacticalSelectionBarProps> = ({
                 <button
                   type="button"
                   onClick={() => onUpdateSelectedElementsProps({ resetCurve: true })}
-                  className="p-1 rounded-lg hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors shrink-0 cursor-pointer"
+                  className="flex items-center justify-center min-w-[34px] min-h-[34px] sm:min-w-0 sm:min-h-0 p-1 rounded-lg hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors shrink-0 cursor-pointer"
                   title={isDe ? 'Bogen zurücksetzen' : 'Reset curve'}
                 >
-                  <RotateCcw className="w-3.5 h-3.5" />
+                  <RotateCcw className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                </button>
+              )}
+
+              {onBranchFromUtilityOrigin && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onBranchFromUtilityOrigin(singleSelectedUtil.throwFrom!, singleSelectedUtil.type)
+                  }
+                  className="flex items-center justify-center gap-1 min-w-[34px] min-h-[34px] sm:min-w-0 sm:min-h-0 px-2 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-200 transition-colors shrink-0 cursor-pointer"
+                  title={
+                    isDe
+                      ? 'Weiteres Lineup von diesem Abwurfpunkt zeichnen'
+                      : 'Draw another lineup arrow from this throw origin'
+                  }
+                >
+                  <GitBranch className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-emerald-400" />
+                  <span className="hidden sm:inline">
+                    {isDe ? '+ Wurf von hier' : '+ Add lineup'}
+                  </span>
                 </button>
               )}
             </>
@@ -343,38 +427,19 @@ export const TacticalSelectionBar: React.FC<TacticalSelectionBarProps> = ({
         </span>
       </button>
 
-      <div className="relative">
-        <button
-          type="button"
-          onClick={onToggleContextColorPicker}
-          className="flex items-center justify-center gap-1 min-w-[34px] min-h-[34px] sm:min-w-0 sm:min-h-0 px-2 py-1 rounded-lg hover:bg-zinc-800 text-zinc-200 hover:text-white transition-colors shrink-0 cursor-pointer"
-          title={isDe ? 'Farbe ändern' : 'Change color'}
-        >
-          <Palette className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-purple-400" />
-          <span className="hidden sm:inline">{isDe ? 'Farbe' : 'Color'}</span>
-        </button>
-        {showContextColorPicker && (
-          <div className="absolute top-full mt-2 right-0 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 p-2 rounded-xl bg-zinc-900 border border-zinc-700 shadow-2xl flex items-center gap-1.5 z-50 w-max max-w-[85vw] overflow-x-auto no-scrollbar">
-            {colors.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => onUpdateColor(c)}
-                style={{ backgroundColor: c }}
-                className="w-6 h-6 rounded-full border border-zinc-600 hover:scale-115 transition-transform cursor-pointer shrink-0"
-              />
-            ))}
-            <button
-              type="button"
-              onClick={onOpenCustomColor}
-              className="px-2 h-6 rounded-full bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-zinc-600 text-[10px] font-bold cursor-pointer flex items-center gap-1 shrink-0"
-            >
-              <Palette className="w-3 h-3" />
-              <span>{isDe ? 'Eigene' : 'Custom'}</span>
-            </button>
-          </div>
-        )}
-      </div>
+      <button
+        type="button"
+        onClick={onToggleContextColorPicker}
+        className={`flex items-center justify-center gap-1 min-w-[34px] min-h-[34px] sm:min-w-0 sm:min-h-0 px-2 py-1 rounded-lg transition-colors shrink-0 cursor-pointer ${
+          showContextColorPicker
+            ? 'bg-purple-500/20 text-purple-200 border border-purple-500/50'
+            : 'hover:bg-zinc-800 text-zinc-200 hover:text-white'
+        }`}
+        title={isDe ? 'Farbe ändern' : 'Change color'}
+      >
+        <Palette className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-purple-400" />
+        <span className="hidden sm:inline">{isDe ? 'Farbe' : 'Color'}</span>
+      </button>
 
       <button
         type="button"
@@ -386,6 +451,21 @@ export const TacticalSelectionBar: React.FC<TacticalSelectionBarProps> = ({
         <span className="hidden sm:inline">{isDe ? 'Löschen' : 'Delete'}</span>
       </button>
 
+      {hasSelectedUtilities && onFinish && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onFinish();
+          }}
+          className="flex items-center justify-center gap-1 min-h-[34px] sm:min-h-0 px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold transition-colors shrink-0 cursor-pointer shadow-sm"
+          title={isDe ? 'Fertig & zum Auswählen-Werkzeug wechseln' : 'Done & switch to Select tool'}
+        >
+          <Check className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+          <span>{isDe ? 'Fertig' : 'Done'}</span>
+        </button>
+      )}
+
       <button
         type="button"
         onClick={onClearSelection}
@@ -394,6 +474,43 @@ export const TacticalSelectionBar: React.FC<TacticalSelectionBarProps> = ({
       >
         <X className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
       </button>
+
+      {showContextColorPicker && (
+        <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 p-2 rounded-xl bg-zinc-900/95 border border-zinc-700 shadow-2xl flex flex-wrap items-center justify-center gap-1.5 z-50 w-max max-w-[92vw]">
+          {colors.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => onUpdateColor(c)}
+              style={{ backgroundColor: c }}
+              className="w-6 h-6 rounded-full border border-zinc-600 hover:scale-115 transition-transform cursor-pointer shrink-0"
+              title={c}
+            />
+          ))}
+          {hasSelectedUtilities && onUpdateSelectedElementsProps && (
+            <button
+              type="button"
+              onClick={() => {
+                onUpdateSelectedElementsProps({ resetColor: true });
+                onToggleContextColorPicker();
+              }}
+              className="px-2 h-6 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-600 text-[10px] font-semibold cursor-pointer flex items-center gap-1 shrink-0"
+              title={isDe ? 'Standardfarbe wiederherstellen' : 'Reset to default color'}
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>{isDe ? 'Standard' : 'Default'}</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onOpenCustomColor}
+            className="px-2 h-6 rounded-full bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-zinc-600 text-[10px] font-bold cursor-pointer flex items-center gap-1 shrink-0"
+          >
+            <Palette className="w-3 h-3" />
+            <span>{isDe ? 'Eigene' : 'Custom'}</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 };

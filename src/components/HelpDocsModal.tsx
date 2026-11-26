@@ -117,6 +117,22 @@ export const HelpDocsModal: React.FC<HelpDocsModalProps> = ({
         : 'Install as app on Windows, Android or iOS with autosave',
       tag: isDe ? 'Bild 6: Installation' : 'Fig 6: PWA',
     },
+    {
+      src: resolveAssetPath('bild8.png'),
+      title: isDe ? 'Utility-Board & Eigenschaften' : 'Utility Board & Properties',
+      subtitle: isDe
+        ? 'Wurflinien, Name mit Schriftgröße, Spot-Größe, Linienstärke & Seitenpanel'
+        : 'Throw arcs, label & font size, spot scale, line thickness & side panel',
+      tag: isDe ? 'Bild 7: Utilitys' : 'Fig 7: Utilities',
+    },
+    {
+      src: resolveAssetPath('bild7.png'),
+      title: isDe ? 'Utility-Info & Lineup-Bilder' : 'Utility Info & Lineup Images',
+      subtitle: isDe
+        ? 'Doppelklick-Info mit Standpunkt, Zielpunkt (1–4), Ergebnis & Wurfanweisung'
+        : 'Double-click info modal with stand, aim (1–4), result & throw instructions',
+      tag: isDe ? 'Bild 8: Utility-Info' : 'Fig 8: Lineup Info',
+    },
   ];
 
   return (
@@ -175,14 +191,14 @@ export const HelpDocsModal: React.FC<HelpDocsModalProps> = ({
                   : 'CS2Freitag Tactical Map is your interactive Counter-Strike 2 tactics board and callout guide. Learn map callouts with descriptions & voice playback, practice in the interactive quiz, draw strategies with paths, arrows, utilities and player tokens, organize layers, and share via high-res PNG or link.'}
               </p>
 
-              {/* Bild-Galerie: 6 detaillierte Screenshots der App */}
+              {/* Bild-Galerie: 8 detaillierte Screenshots der App */}
               <div className="pt-1 space-y-2">
                 <div className="flex items-center justify-between text-[11px] font-bold text-zinc-300">
                   <span>{isDe ? 'Bilder der App (Antippen zum Vergrößern):' : 'App Screenshots (Tap to enlarge):'}</span>
-                  <span className="text-amber-400 font-mono text-[10px]">6 Screenshots</span>
+                  <span className="text-amber-400 font-mono text-[10px]">8 Screenshots</span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   {galleryImages.map((img, idx) => (
                     <div
                       key={idx}
@@ -367,29 +383,100 @@ export const HelpDocsModal: React.FC<HelpDocsModalProps> = ({
               </div>
             </div>
 
-            {/* 7. Utilitys & 2-Punkt-Wurflinien (L, R, L+R, JT, R+JT) */}
+            {/* 7. Utilitys, Wurflinien, Utility-Info & Wurfarten */}
             <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-emerald-500/30 space-y-3">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-2 font-bold text-emerald-400 text-sm">
                   <Spline className="w-4 h-4 shrink-0" />
-                  <span>{isDe ? '7. Utilitys, 2-Punkt-Wurflinien & Wurfarten' : '7. Utilities, 2-Point Throw Arcs & Throw Types'}</span>
+                  <span>
+                    {isDe
+                      ? '7. Utilitys, Wurflinien, Utility-Info & Wurfarten'
+                      : '7. Utilities, Throw Arcs, Utility Info & Throw Types'}
+                  </span>
                 </div>
                 <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 font-mono text-[10px] font-bold">
                   Smoke · Flash · Molo · HE · Decoy
                 </span>
               </div>
 
-              <div className="space-y-1.5 text-zinc-300 leading-relaxed">
-                <p>
-                  {isDe
-                    ? 'Unter „Utility“ kannst du zwischen „Nur Spot“ (1 Klick: nur Landeplatz markieren) und „2-Punkt Wurf“ / „Wurflinie“ (1. Tipp/Klick = Abwurf-Position, 2. Tipp/Klick = Landeplatz mit gebogener Flugkurve & Richtungspfeil) wählen.'
-                    : 'Under "Utility" choose between "Spot Only" (1 click for landing location) and "2-Point Throw Arc" (1st click = throw origin, 2nd click = landing spot with curved trajectory & directional arrow).'}
-                </p>
-                <p className="text-zinc-400 text-[11px]">
-                  {isDe
-                    ? 'Tipp zum Anpassen: Wähle eine gesetzte Utility mit „Auswahl“ an. Danach kannst du den Abwurfpunkt, den blauen Kurvenbogen-Griff (z. B. für Bandenwürfe/Bounces) und den Landeplatz einzeln verschieben sowie eine Lineup-Notiz hinterlegen.'
-                    : 'Editing tip: Select a placed utility to drag its throw origin, the blue curve-bend handle (for bank/bounce throws), or the landing icon individually, and add a custom lineup note.'}
-                </p>
+              <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-3 items-start">
+                <div className="space-y-2 text-zinc-300 leading-relaxed">
+                  <p>
+                    <strong className="text-emerald-300">
+                      {isDe ? 'Platzieren & Standardgrößen:' : 'Placing & Defaults:'}
+                    </strong>{' '}
+                    {isDe
+                      ? 'Wähle unter „Utility“ zwischen „Nur Spot“ (1 Klick: nur Landeplatz markieren) und „2-Punkt Wurf“ / „Wurflinie“ (1. Klick = Abwurf-Position, 2. Klick = Landeplatz mit gebogener Flugkurve & Pfeil). Standardmäßig liegt die Linienstärke bei 50 % und die Spot-Größe bei 100 %. Mit „Startpunkt fixieren“ oder „+ Wurf von hier“ setzt du mehrere Würfe vom selben Standpunkt.'
+                      : 'Under "Utility", choose between "Spot Only" (1 click for landing spot) and "2-Point Throw Arc" (1st click = throw origin, 2nd click = landing spot with curved trajectory & arrow). Default line width is 50% and spot size is 100%. Use "Lock origin" or "+ Throw from here" to draw multiple throws from one position.'}
+                  </p>
+                  <p>
+                    <strong className="text-sky-300">
+                      {isDe ? 'Auswählen, Bearbeiten & Verschieben:' : 'Select, Edit & Move:'}
+                    </strong>{' '}
+                    {isDe
+                      ? 'Ein einfacher Linksklick wählt das Utility direkt aus und öffnet rechts das Eigenschaften-Panel (Typ, Name, Schriftgröße 10–28 px, Farbe, Spot-Größe, Linienstärke, Kurvenbogen, Wurfart & Notiz). Abwurfpunkt, blauer Kurven-Griff und Ziel-Icon lassen sich direkt ziehen; im „Verschieben“-Modus wählst du zwischen Startpunkt, Endpunkt oder Beides zusammen. Rechtsklick (bzw. Long-Press) öffnet ein am oberen Balken frei verschiebbares Kontextmenü (Utility-Info, Bearbeiten, Verschieben, Schließen-X).'
+                      : 'A single left click selects the utility and opens the right-hand properties panel (type, name, font size 10–28 px, color, spot size, line thickness, curve arc, throw type & note). Drag the throw origin, blue curve handle, or target icon directly, or use "Move" mode to shift Start, End, or Both together. Right-click (or long-press) opens a draggable context menu.'}
+                  </p>
+                  <p>
+                    <strong className="text-amber-300">
+                      {isDe ? 'Utility-Info Fenster (Doppelklick):' : 'Utility Info Window (Double-Click):'}
+                    </strong>{' '}
+                    {isDe
+                      ? 'Ein Doppelklick auf Start- oder Endpunkt (oder ein Klick auf „Info“) öffnet das frei verschiebbare Utility-Info-Fenster. Dort lädst du bis zu 3 Lineup-Screenshots hoch (WebP, JPG, PNG mit automatischer Skalierung & Zoom): 1. Standpunkt, 2. Zielpunkt (mit Zielauswahl 1–4) und 3. Ergebnis – Zielpunkt und Ergebnis gehören dabei pro Nummer (1–4) fest zusammen. Außerdem kannst du oben bei Mehrfach-Würfen zwischen den Linien wechseln, Name & Schriftgröße (10–28 px) festlegen sowie über „Wurf anpassen“ Wurfart, Wurflinie und Notiz direkt ändern.'
+                      : 'Double-clicking the origin or target (or clicking "Info") opens the draggable Utility Info window. Upload up to 3 lineup screenshots (WebP, JPG, PNG with auto-resize & zoom): 1. Stand, 2. Aim (slots 1–4), and 3. Result — Aim and Result stay paired per slot (1–4). You can also switch between multiple throws from the same origin, edit label & font size (10–28 px), and adjust throw type, line, and instructions via "Adjust throw".'}
+                  </p>
+                </div>
+
+                {/* Zwei klickbare Vorschaubilder direkt im Utility-Bereich */}
+                <div className="flex flex-row lg:flex-col gap-2.5 shrink-0">
+                  <div
+                    onClick={() =>
+                      setEnlargedImage({
+                        src: resolveAssetPath('bild8.png'),
+                        title: isDe ? 'Utility-Board & Eigenschaften' : 'Utility Board & Properties',
+                        subtitle: isDe
+                          ? 'Wurflinie auf der Karte mit Aktionsleiste & rechtem Eigenschaften-Panel'
+                          : 'Throw arc on the map with action bar & right-side properties panel',
+                      })
+                    }
+                    className="w-40 sm:w-44 h-24 rounded-lg overflow-hidden border border-zinc-700 bg-zinc-900 cursor-pointer group relative shadow-md"
+                  >
+                    <img
+                      src={resolveAssetPath('bild8.png')}
+                      alt={isDe ? 'Utility-Board und Seitenleiste' : 'Utility board and side panel'}
+                      className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform"
+                    />
+                    <div className="absolute inset-0 bg-black/40 group-hover:bg-transparent transition-colors flex items-center justify-center">
+                      <span className="px-2 py-0.5 rounded bg-zinc-950/90 text-emerald-300 text-[10px] font-bold border border-zinc-700">
+                        {isDe ? 'Eigenschaften' : 'Properties'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div
+                    onClick={() =>
+                      setEnlargedImage({
+                        src: resolveAssetPath('bild7.png'),
+                        title: isDe ? 'Utility-Info & Lineup-Screenshots' : 'Utility Info & Lineup Screenshots',
+                        subtitle: isDe
+                          ? 'Doppelklick-Fenster mit Standpunkt, Zielpunkt 1–4 & Ergebnis'
+                          : 'Double-click window with stand, aim 1–4 & result',
+                      })
+                    }
+                    className="w-40 sm:w-44 h-24 rounded-lg overflow-hidden border border-zinc-700 bg-zinc-900 cursor-pointer group relative shadow-md"
+                  >
+                    <img
+                      src={resolveAssetPath('bild7.png')}
+                      alt={isDe ? 'Utility-Info mit Lineup-Bildern' : 'Utility info with lineup images'}
+                      className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform"
+                    />
+                    <div className="absolute inset-0 bg-black/40 group-hover:bg-transparent transition-colors flex items-center justify-center">
+                      <span className="px-2 py-0.5 rounded bg-zinc-950/90 text-amber-300 text-[10px] font-bold border border-zinc-700">
+                        {isDe ? 'Utility-Info' : 'Utility Info'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-1.5 pt-1">

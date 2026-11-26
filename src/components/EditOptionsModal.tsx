@@ -1,19 +1,23 @@
 import React from 'react';
 import { Move, X, Crosshair, Plus, ListFilter } from 'lucide-react';
-import { Callout, Language, ZoneType } from '../types';
+import { Callout, Language, UtilityMarker, ZoneType } from '../types';
+import { UtilitySymbol, UTILITY_META } from './UtilitySymbol';
 
 interface EditOptionsModalProps {
   isOpen: boolean;
   onClose: () => void;
   lang: Language;
   callouts: Callout[];
+  utilities: UtilityMarker[];
   singleEditCalloutId: string | null;
+  singleEditUtilityId: string | null;
   singleEditSearchQuery: string;
   onChangeSearchQuery: (q: string) => void;
   customSelectedCount: number;
   getZoneBadgeColor: (zone: ZoneType) => string;
   onEnableGlobalEdit: () => void;
   onEnableSingleEdit: (calloutId: string) => void;
+  onEnableSingleUtilityEdit: (utilityId: string) => void;
   onOpenNewCallout: () => void;
   onOpenCustomSelection: () => void;
 }
@@ -23,13 +27,16 @@ export const EditOptionsModal: React.FC<EditOptionsModalProps> = ({
   onClose,
   lang,
   callouts,
+  utilities,
   singleEditCalloutId,
+  singleEditUtilityId,
   singleEditSearchQuery,
   onChangeSearchQuery,
   customSelectedCount,
   getZoneBadgeColor,
   onEnableGlobalEdit,
   onEnableSingleEdit,
+  onEnableSingleUtilityEdit,
   onOpenNewCallout,
   onOpenCustomSelection,
 }) => {
@@ -44,6 +51,20 @@ export const EditOptionsModal: React.FC<EditOptionsModalProps> = ({
       trimmedName.toLowerCase().includes(normalizedQuery) ||
       c.zone.toLowerCase().includes(normalizedQuery) ||
       (!trimmedName && fallbackLabel.includes(normalizedQuery))
+    );
+  });
+
+  const filteredUtilities = utilities.filter((u) => {
+    const meta = UTILITY_META[u.type] || UTILITY_META.smoke;
+    const displayName = (u.label || '').trim() || (isDe ? meta.labelDe : meta.labelEn);
+    if (!normalizedQuery) return true;
+    return (
+      displayName.toLowerCase().includes(normalizedQuery) ||
+      u.type.toLowerCase().includes(normalizedQuery) ||
+      meta.labelDe.toLowerCase().includes(normalizedQuery) ||
+      meta.labelEn.toLowerCase().includes(normalizedQuery) ||
+      (u.notes || '').toLowerCase().includes(normalizedQuery) ||
+      'utility'.includes(normalizedQuery)
     );
   });
 
@@ -115,12 +136,12 @@ export const EditOptionsModal: React.FC<EditOptionsModalProps> = ({
               </div>
               <div className="flex-1">
                 <span className="font-extrabold text-sm text-white block mb-0.5">
-                  {isDe ? '2. Einzel-Bearbeitung (Fokussiert)' : '2. Single Callout Edit'}
+                  {isDe ? '2. Einzel-Bearbeitung (Fokussiert)' : '2. Single Item Edit (Focused)'}
                 </span>
                 <p className="text-xs text-zinc-400 leading-relaxed">
                   {isDe
-                    ? 'Wähle ein Callout aus. Alle anderen werden ausgeblendet.'
-                    : 'Select a callout. All others will be hidden.'}
+                    ? 'Wähle ein Callout oder eine Utility aus. Alle anderen werden ausgeblendet.'
+                    : 'Select a callout or utility. All others will be hidden.'}
                 </p>
               </div>
             </div>
@@ -131,13 +152,13 @@ export const EditOptionsModal: React.FC<EditOptionsModalProps> = ({
                   type="text"
                   value={singleEditSearchQuery}
                   onChange={(e) => onChangeSearchQuery(e.target.value)}
-                  placeholder={isDe ? 'Callout suchen...' : 'Search callout...'}
+                  placeholder={isDe ? 'Callout oder Utility suchen...' : 'Search callout or utility...'}
                   className="w-full bg-zinc-900 border border-zinc-700/80 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-sky-400"
                 />
                 <Crosshair className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-2.5" />
               </div>
 
-              <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+              <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
                 {filteredCallouts.map((c) => (
                   <button
                     key={c.id}
@@ -170,9 +191,39 @@ export const EditOptionsModal: React.FC<EditOptionsModalProps> = ({
                     </span>
                   </button>
                 ))}
-                {filteredCallouts.length === 0 && (
+
+                {filteredUtilities.map((u) => {
+                  const meta = UTILITY_META[u.type] || UTILITY_META.smoke;
+                  const title = (u.label || '').trim() || (isDe ? meta.labelDe : meta.labelEn);
+                  const typeLabel = u.type === 'molotov' ? 'MOLO' : u.type.toUpperCase();
+                  return (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => onEnableSingleUtilityEdit(u.id)}
+                      className={`w-full flex items-center justify-between p-2 rounded-lg text-left transition-all text-xs cursor-pointer ${
+                        singleEditUtilityId === u.id
+                          ? 'bg-amber-500/20 border border-amber-400 text-amber-300'
+                          : 'bg-zinc-900/90 hover:bg-zinc-800 text-amber-300 border border-zinc-800 hover:border-amber-500/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 truncate min-w-0">
+                        <UtilitySymbol type={u.type} size="xs" />
+                        <span className="font-bold text-amber-300 truncate">{title}</span>
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase bg-amber-500/15 text-orange-300 border-amber-500/40 shrink-0">
+                          {typeLabel}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-orange-400 font-semibold shrink-0 ml-2">
+                        {isDe ? 'Bearbeiten →' : 'Edit →'}
+                      </span>
+                    </button>
+                  );
+                })}
+
+                {filteredCallouts.length === 0 && filteredUtilities.length === 0 && (
                   <div className="p-3 text-center text-xs text-zinc-500">
-                    {isDe ? 'Kein Callout gefunden.' : 'No callout found.'}
+                    {isDe ? 'Kein Callout oder Utility gefunden.' : 'No callout or utility found.'}
                   </div>
                 )}
               </div>

@@ -102,18 +102,15 @@ export function useTacticHistory({
             .filter((s) => s && Array.isArray(s.callouts))
             .map((s) => ({
               ...s,
-              drawings:
-                Array.isArray(s.drawings) && s.drawings.length > 0
-                  ? s.drawings
-                  : mapData.tacticData?.drawings || [],
-              utilities:
-                Array.isArray(s.utilities) && s.utilities.length > 0
-                  ? s.utilities
-                  : mapData.tacticData?.utilities || [],
-              players:
-                Array.isArray(s.players) && s.players.length > 0
-                  ? s.players
-                  : mapData.tacticData?.players || [],
+              drawings: Array.isArray(s.drawings)
+                ? s.drawings
+                : mapData.tacticData?.drawings || [],
+              utilities: Array.isArray(s.utilities)
+                ? s.utilities
+                : mapData.tacticData?.utilities || [],
+              players: Array.isArray(s.players)
+                ? s.players
+                : mapData.tacticData?.players || [],
             }))
             .slice(0, 5);
           if (valid.length > 0) return valid;

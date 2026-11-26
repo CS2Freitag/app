@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { X, Palette } from 'lucide-react';
 import { Language } from '../types';
 
@@ -26,14 +26,22 @@ export const CustomColorModal: React.FC<CustomColorModalProps> = ({
   onSelectColor,
   lang,
 }) => {
+  const [customHex, setCustomHex] = useState(currentColor || '#ffffff');
+
+  useEffect(() => {
+    if (isOpen && currentColor) {
+      setCustomHex(currentColor);
+    }
+  }, [isOpen, currentColor]);
+
   if (!isOpen) return null;
   const isDe = lang === 'de';
-  const [customHex, setCustomHex] = useState(currentColor || '#ffffff');
 
   return (
     <div
+      data-no-map-click="true"
       onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 print:hidden animate-in fade-in"
+      className="fixed inset-0 z-[140] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 print:hidden animate-in fade-in"
     >
       <div
         onClick={(e) => e.stopPropagation()}

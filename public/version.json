@@ -1,15 +1,138 @@
 {
-  "version": "3.135",
+  "version": "3.147",
   "major": 3,
-  "patch": 135,
-  "releaseDate": "2026-11-21",
-  "title": "Update v3.135: Korrigierte Anubis-Standardkarte (T-Spawn-Position)",
-  "description": "Übernimmt die korrigierte Anubis-Version (inklusive richtiger T-Spawn-Position) in die Standardkarten und aktualisiert bestehende Stände automatisch.",
+  "patch": 147,
+  "releaseDate": "2026-11-26",
+  "title": "Update v3.147: „Neuer Callout“-Werkzeug & Utility-Einzel-Bearbeitung",
+  "description": "Ergänzt im Werkzeuge-Bereich einen direkten „Neuer Callout“-Button zwischen „Bereich“ und „Linie“ und macht Utilitys im Bearbeitungs-Modus unter „2. Einzel-Bearbeitung (Fokussiert)“ in gelb/oranger Schrift auswählbar.",
   "changes": [
-    "Anubis in den Standardkarten auf die korrigierte Version aktualisiert (T Spawn wieder exakt platziert)",
-    "Automatischer Abgleich aktualisiert ältere Anubis-Stände (auch bei Cloud-/Autosave-Sync), ohne persönliche Taktik-Presets zu verlieren"
+    "Neuer Button „Neuer Callout“ im Werkzeuge-Bereich direkt unter „Bereich“ und über „Linie“ zum unmittelbaren Erstellen eines neuen Callouts",
+    "Unter Bearbeitungs-Modus „2. Einzel-Bearbeitung (Fokussiert)“ sind nun auch alle Utilitys durchsuch- und auswählbar (mit passender gelb/oranger Schrift zur klaren Unterscheidung von Callouts)"
   ],
   "history": [
+    {
+      "version": "3.147",
+      "releaseDate": "2026-11-26",
+      "title": "„Neuer Callout“-Werkzeug & Utility-Einzel-Bearbeitung",
+      "changes": [
+        "Neuer Button „Neuer Callout“ im Werkzeuge-Bereich direkt unter „Bereich“ und über „Linie“ zum unmittelbaren Erstellen eines neuen Callouts",
+        "Unter Bearbeitungs-Modus „2. Einzel-Bearbeitung (Fokussiert)“ sind nun auch alle Utilitys durchsuch- und auswählbar (mit passender gelb/oranger Schrift zur klaren Unterscheidung von Callouts)"
+      ]
+    },
+    {
+      "version": "3.146",
+      "releaseDate": "2026-11-26",
+      "title": "Utility-Editor links mit Größenanpassung & Direkt teilen im Export",
+      "changes": [
+        "Utility-Bearbeitung von der rechten Seite entfernt und direkt in die linke Werkzeugleiste integriert (inkl. Name, Schriftgröße, Notiz, Farbe, Deckkraft, Spot-Größe, Linienstärke & Wurfanpassung)",
+        "Linke Werkzeugleiste ist jetzt etwas breiter und lässt sich auf PC & Tablet am rechten Rand stufenlos per gedrückter Maustaste/Touch vergrößern oder verkleinern (bis zur Breite der rechten Leiste)",
+        "Beim Klick auf „Utility“ scrollt die Werkzeugleiste automatisch so weit nach unten, dass „Utility“ direkt oben unter „Werkzeuge“ steht; zudem steht „Direkt teilen“ jetzt auch unter „Teilen & Exportieren“ zur Verfügung"
+      ]
+    },
+    {
+      "version": "3.145",
+      "releaseDate": "2026-11-26",
+      "title": "Utility-Info Teilen (alle 3 Bilder) & Teilen-Filter mit Live-Vorschau",
+      "changes": [
+        "Neuer „Teilen“-Button in der Utility-Info exportiert oder teilt das komplette Utility inklusive aller 3 Bilder, individuellem Namen, Farben, Schriftgröße, Wurf-Anweisung und Notizen (PNG-Lineup-Karte, JSON-Paket, Komplett-Code & QR-Link)",
+        "Im Teilen- & Export-Menü stehen nun 4 Schnell-Auswahlen („Alles“, „Nur Callouts“, „Bereiche & Callouts“, „Nur Utilitys“) sowie einzelne Ein-/Ausblende-Schalter für Bereiche, Callouts, Utilitys, Pfeile & Linien und Spieler zur Verfügung",
+        "Sobald im Teilen-Menü Elemente ausgeblendet werden, erscheint direkt unter dem QR-Code eine Live-Vorschau des tatsächlich geteilten bzw. exportierten Kartenstands"
+      ]
+    },
+    {
+      "version": "3.144",
+      "releaseDate": "2026-11-26",
+      "title": "„Fertig“-Button in Utility-Bearbeitungsleisten & automatischer Werkzeugwechsel",
+      "changes": [
+        "Beide schwebenden Utility-Leisten (Abwurf-/Spot-Platzierung sowie Utility-Auswahlleiste) enthalten jetzt einen grünen „Fertig“-Knopf",
+        "Ein Klick auf „Fertig“ beendet die Utility-Bearbeitung und schaltet das aktive Werkzeug automatisch auf „Auswählen“ um",
+        "Wird bei aktivem Utility-Werkzeug auf „Bearbeiten“ gedrückt (oben oder in der Utility-Leiste), wechselt das Werkzeug ebenfalls automatisch auf „Auswählen“"
+      ]
+    },
+    {
+      "version": "3.143",
+      "releaseDate": "2026-11-26",
+      "title": "Dauerhaftes Speichern gelöschter Utilitys lokal & im Cloud-Sync",
+      "changes": [
+        "Änderungen und Löschungen an Utilitys, Zeichnungen, Spielern und Ebenen werden nun sofort mit dem aktiven Kartenstand und lokalem Speicher synchronisiert",
+        "Beim Speichern über den Zurück-Dialog sowie beim Google Cloud-Sync wird stets der aktuelle bereinigte Taktikstand (inkl. gelöschter Utilitys) hochgeladen",
+        "Verlaufs-Schnappschüsse stellen bei absichtlich geleerten Utilitys keine alten Utilitys mehr aus dem Vorzustand her; „Auf Standardkarten zurücksetzen“ leert zudem alte Verlaufs-Einträge"
+      ]
+    },
+    {
+      "version": "3.142",
+      "releaseDate": "2026-11-26",
+      "title": "Fehlerbehebung PNG-Vorschau & aktualisierte Utility-Hilfe",
+      "changes": [
+        "Internen React-Fehler beim Öffnen der Taktik-PNG-Vorschau im Verlauf behoben",
+        "Hilfe-Bereich „7. Utilitys, Wurflinien, Utility-Info & Wurfarten“ um Seitenpanel, Verschiebemodus, Doppelklick-Utility-Info, Zielauswahl 1–4, Schriftgröße (10–28 px) und „Wurf anpassen“ erweitert",
+        "Zwei neue Beispiel-Screenshots (Utility-Board & Utility-Info) in der Hilfe-Galerie und im Utility-Abschnitt eingebunden"
+      ]
+    },
+    {
+      "version": "3.141",
+      "releaseDate": "2026-11-25",
+      "title": "Utility-Info Zielauswahl-Ergebnis, Name & Schriftgröße, Wurf anpassen & Mehrfach-Abwurfpunkt",
+      "changes": [
+        "Zielpunkt (Mitte) und Ergebnis (rechts) gehören nun fest zusammen: bei Umschalten auf Zielauswahl 2–4 bleibt das Ergebnisbild für diesen Zielpunkt unabhängig",
+        "Utility-Name / Beschriftung sowie Schriftgröße (10px, 12px, 14px, 16px, 18px, 22px, 28px) direkt in der Utility-Info und Seitenleiste anpassbar",
+        "Neuer Button „Wurf anpassen“ in der Utility-Info zur direkten Auswahl der Wurfart (L, R, L+R, JT, R+JT), Wurflinie und Wurfanweisungen",
+        "Bei Auswahl eines Abwurfpunkts mit mehreren Wurflinien kann in der Utility-Info direkt zwischen den verschiedenen Lineups gewählt werden"
+      ]
+    },
+    {
+      "version": "3.140",
+      "releaseDate": "2026-11-25",
+      "title": "Utility-Bearbeitung direkt in der rechten Seitenleiste & Z-Index-Optimierung",
+      "changes": [
+        "Ausgewählte Utilitys öffnen nun automatisch den Utility-Bereich in der rechten Seitenleiste (bzw. im mobilen Drawer) zur direkten Bearbeitung aller Eigenschaften",
+        "Separate Modal-Ansicht für Utility-Bearbeitung durch direkte Seitenleisten-Integration ersetzt",
+        "Utility-Start- und Endpunkte im Z-Index oberhalb von Callout-Beschriftungen platziert, sodass Utilitys in dichten Callout-Bereichen fehlerfrei auswählbar und verschiebbar sind"
+      ]
+    },
+    {
+      "version": "3.139",
+      "releaseDate": "2026-11-25",
+      "title": "Utility-Auswahl per Linksklick & Utility-Info per Doppelklick",
+      "changes": [
+        "Utility-Info öffnet sich nun per Doppelklick (auf Startpunkt, Wurflinie oder Zielpunkt) statt bei einfachem Linksklick",
+        "Ein einfacher Linksklick wählt das Utility direkt aus, um es unmittelbar zu greifen und zu verschieben",
+        "Verbesserte Fehleranzeige beim Google-Login im Synchronisationsfenster"
+      ]
+    },
+    {
+      "version": "3.138",
+      "releaseDate": "2026-11-25",
+      "title": "Utility-Info Screenshots (1–4), Direkte Seitenleiste & Kontextmenü-Feinschliff",
+      "changes": [
+        "Standardgröße für Utility-Linienstärke auf 50 % und Spot-Größe auf 100 % gesetzt",
+        "Rechtsklick-Menü öffnet automatisch vollständig links, rechts, über oder unter dem Zielpunkt im sichtbaren Bereich; separates „Linie Anpassen“-Menü entfernt",
+        "Ausgewählte Utilitys direkt in der rechten Seitenleiste bearbeitbar; „Bearbeiten“-Fenster auf PC & Tablet frei verschiebbar mit klar sichtbarem Hintergrund",
+        "Utility-Info erweitert um Screenshot-Uploads (WebP, JPG, PNG mit automatischer Größenanpassung) für 1. Standpunkt, 2. Zielpunkt (mit Zielauswahl 1–4) und 3. Ergebnis inkl. Vergrößerungsansicht"
+      ]
+    },
+    {
+      "version": "3.137",
+      "releaseDate": "2026-11-25",
+      "title": "Utility-Info Fenster, Bearbeiten, Verschieben & Linie Anpassen",
+      "changes": [
+        "„Linie Anpassen“ ersetzt „Linie aus“ mit Bogen-, Wurftyp-, Strichstärke- und Lösch-Dialog; Utility-Farben lassen sich nun direkt per Farbauswahl ändern",
+        "Neues frei verschiebbares Extra-Fenster „Utility-Info“ bei einfachem Linksklick auf Startpunkt, Flugbahn oder Spot sowie im Rechtsklick-Menü",
+        "Utility „Bearbeiten“ erlaubt individuelles Anpassen von Typ, Name, Notiz, Farbe, eigener Spot-Größe und eigener Strichstärke",
+        "Neuer Utility-Verschieben-Modus („Startpunkt“, „Endpunkt“ oder „Beides zusammen“), gestrichelte Kurvenhilfslinien entfernt, Rechtsklick-Menü verschiebbar + mit X + bildschirmbegrenzt und Mobile-Leisten sauber umgebrochen"
+      ]
+    },
+    {
+      "version": "3.136",
+      "releaseDate": "2026-11-24",
+      "title": "Utility-Lineups: Schieberegler, Mehrfach-Würfe & Anzeigen-Schalter",
+      "changes": [
+        "Getrennte stufenlose Schieberegler im Utility-Werkzeug für Linienstärke (20–200 %) und Spot-Größe (50–500 %), auch beim PNG-Export berücksichtigt",
+        "Callout-Bereiche, Pins und Beschriftungen werden im Utility-Werkzeug bei Klicks ignoriert – Lineups lassen sich direkt überall auf der Karte setzen",
+        "Neuer „Utilitys“-Schalter in der unteren Leiste (neben Bereiche und Raster) zum Ein- und Ausblenden aller Utility-Lineups",
+        "Mehrere Lineup-Pfeile von einem Startpunkt aus zeichnen: automatisches Einrasten an bestehenden Abwurfpunkten, „Startpunkt fixieren“-Modus und „+ Wurf von hier“ bei Auswahl"
+      ]
+    },
     {
       "version": "3.135",
       "releaseDate": "2026-11-21",

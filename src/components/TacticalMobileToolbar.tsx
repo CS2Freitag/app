@@ -8,6 +8,7 @@ import {
   Palette,
   PanelLeftClose,
   Pencil,
+  Plus,
   Spline,
   Users,
 } from 'lucide-react';
@@ -27,7 +28,11 @@ interface TacticalMobileToolbarProps {
   selectedUtility: UtilityType;
   utilityPlacementMode: UtilityPlacementMode;
   selectedThrowType: UtilityThrowType;
+  keepUtilityOrigin: boolean;
+  utilityLineScale: number;
+  utilitySpotScale: number;
   selectedPlayerSide: 'ct' | 't';
+  onCreateNewCallout?: () => void;
   onHideToolbar: () => void;
   onSelectTool: (tool: TacticalTool) => void;
   onToggleMultiSelect: () => void;
@@ -38,6 +43,9 @@ interface TacticalMobileToolbarProps {
   onSelectUtility: (u: UtilityType) => void;
   onSelectUtilityPlacementMode: (mode: UtilityPlacementMode) => void;
   onSelectThrowType: (t: UtilityThrowType) => void;
+  onToggleKeepUtilityOrigin: () => void;
+  onChangeUtilityLineScale: (scale: number) => void;
+  onChangeUtilitySpotScale: (scale: number) => void;
   onSelectPlayerSide: (s: 'ct' | 't') => void;
 }
 
@@ -52,7 +60,11 @@ export const TacticalMobileToolbar: React.FC<TacticalMobileToolbarProps> = ({
   selectedUtility,
   utilityPlacementMode,
   selectedThrowType,
+  keepUtilityOrigin,
+  utilityLineScale,
+  utilitySpotScale,
   selectedPlayerSide,
+  onCreateNewCallout,
   onHideToolbar,
   onSelectTool,
   onToggleMultiSelect,
@@ -63,6 +75,9 @@ export const TacticalMobileToolbar: React.FC<TacticalMobileToolbarProps> = ({
   onSelectUtility,
   onSelectUtilityPlacementMode,
   onSelectThrowType,
+  onToggleKeepUtilityOrigin,
+  onChangeUtilityLineScale,
+  onChangeUtilitySpotScale,
   onSelectPlayerSide,
 }) => {
   const isDe = lang === 'de';
@@ -119,6 +134,18 @@ export const TacticalMobileToolbar: React.FC<TacticalMobileToolbarProps> = ({
           <ListChecks className="w-3.5 h-3.5" />
           <span>{isDe ? 'Mehrfach' : 'Multi'}</span>
         </button>
+
+        {onCreateNewCallout && (
+          <button
+            type="button"
+            onClick={onCreateNewCallout}
+            className="flex items-center gap-1 px-2 min-h-[34px] rounded-lg text-[11px] font-semibold shrink-0 cursor-pointer transition-colors bg-zinc-950/60 text-zinc-200 border border-zinc-800 hover:bg-emerald-500/15 hover:border-emerald-500/50"
+            title={isDe ? 'Neuer Callout' : 'New Callout'}
+          >
+            <Plus className="w-3.5 h-3.5 text-emerald-400" />
+            <span>{isDe ? 'Neuer Callout' : 'New Callout'}</span>
+          </button>
+        )}
 
         <button
           onClick={() => onToolPress('pen', false)}
@@ -219,7 +246,7 @@ export const TacticalMobileToolbar: React.FC<TacticalMobileToolbarProps> = ({
 
       {activeTool === 'utility' && (
         <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+          <div className="flex flex-wrap items-center gap-1">
             {(['smoke', 'flash', 'molotov', 'he', 'decoy'] as UtilityType[]).map((u) => {
               const meta = UTILITY_META[u];
               return (
@@ -238,7 +265,7 @@ export const TacticalMobileToolbar: React.FC<TacticalMobileToolbarProps> = ({
               );
             })}
           </div>
-          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+          <div className="flex flex-wrap items-center gap-1">
             <button
               type="button"
               onClick={() => onSelectUtilityPlacementMode('point')}
@@ -285,8 +312,62 @@ export const TacticalMobileToolbar: React.FC<TacticalMobileToolbarProps> = ({
                 <span className="px-2 py-0.5 rounded-md bg-sky-500/10 border border-sky-500/30 text-[10px] font-semibold text-sky-300 shrink-0 whitespace-nowrap">
                   → {getThrowTypeLabel(selectedThrowType, lang)}
                 </span>
+                <button
+                  type="button"
+                  aria-pressed={keepUtilityOrigin}
+                  onClick={onToggleKeepUtilityOrigin}
+                  className={`px-2 py-0.5 rounded-md text-[10px] font-bold shrink-0 cursor-pointer border whitespace-nowrap ${
+                    keepUtilityOrigin
+                      ? 'bg-emerald-500/25 text-emerald-200 border-emerald-400/70'
+                      : 'bg-zinc-950 text-zinc-300 border-zinc-800'
+                  }`}
+                >
+                  {isDe ? 'Start fixieren' : 'Keep origin'}
+                </button>
               </>
             )}
+          </div>
+          <div className="flex items-center gap-2 pt-0.5">
+            <label className="flex-1 flex items-center gap-1.5 text-[10px] text-zinc-300 min-w-0">
+              <span className="shrink-0 font-semibold">{isDe ? 'Linie' : 'Line'}</span>
+              <input
+                type="range"
+                min={20}
+                max={200}
+                step={1}
+                aria-label={isDe ? 'Utility Linienstärke Mobil' : 'Utility line thickness mobile'}
+                value={Math.round(utilityLineScale * 100)}
+                onChange={(e) => onChangeUtilityLineScale(Number(e.target.value) / 100)}
+                onInput={(e) =>
+                  onChangeUtilityLineScale(Number((e.target as HTMLInputElement).value) / 100)
+                }
+                style={{ touchAction: 'pan-x' }}
+                className="flex-1 min-w-0 accent-sky-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
+              />
+              <span className="font-mono text-[9px] text-sky-300 w-8 text-right shrink-0">
+                {Math.round(utilityLineScale * 100)}%
+              </span>
+            </label>
+            <label className="flex-1 flex items-center gap-1.5 text-[10px] text-zinc-300 min-w-0">
+              <span className="shrink-0 font-semibold">Spot</span>
+              <input
+                type="range"
+                min={50}
+                max={500}
+                step={1}
+                aria-label={isDe ? 'Utility Spot-Größe Mobil' : 'Utility spot size mobile'}
+                value={Math.round(utilitySpotScale * 100)}
+                onChange={(e) => onChangeUtilitySpotScale(Number(e.target.value) / 100)}
+                onInput={(e) =>
+                  onChangeUtilitySpotScale(Number((e.target as HTMLInputElement).value) / 100)
+                }
+                style={{ touchAction: 'pan-x' }}
+                className="flex-1 min-w-0 accent-emerald-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
+              />
+              <span className="font-mono text-[9px] text-emerald-300 w-8 text-right shrink-0">
+                {Math.round(utilitySpotScale * 100)}%
+              </span>
+            </label>
           </div>
         </div>
       )}

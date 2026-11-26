@@ -10,6 +10,7 @@ import {
   TacticSnapshot,
   TacticalDrawingLine,
   UtilityMarker,
+  UtilityType,
   ZoneType,
 } from '../types';
 import { TacticalLayersPanel, SelectedElementsPatch } from './TacticalLayersPanel';
@@ -39,6 +40,15 @@ interface TacticalMobileSheetProps {
   onSelectElements: (ids: string[]) => void;
   onUpdateSelectedElementsProps: (patch: SelectedElementsPatch) => void;
   onDeleteElement: (id: string) => void;
+  globalUtilityLineScale?: number;
+  globalUtilitySpotScale?: number;
+  colors?: string[];
+  utilityEditTrigger?: number;
+  onOpenUtilityInfo?: (util: UtilityMarker) => void;
+  onOpenCustomColor?: (util: UtilityMarker) => void;
+  onMoveUtility?: (util: UtilityMarker) => void;
+  onBranchFromUtilityOrigin?: (origin: { x: number; y: number }, utilType: UtilityType) => void;
+  onDuplicateSelected?: () => void;
 
   showAreas: boolean;
   onToggleShowAreas: () => void;
@@ -81,6 +91,15 @@ export const TacticalMobileSheet: React.FC<TacticalMobileSheetProps> = ({
   onSelectElements,
   onUpdateSelectedElementsProps,
   onDeleteElement,
+  globalUtilityLineScale,
+  globalUtilitySpotScale,
+  colors,
+  utilityEditTrigger,
+  onOpenUtilityInfo,
+  onOpenCustomColor,
+  onMoveUtility,
+  onBranchFromUtilityOrigin,
+  onDuplicateSelected,
   showAreas,
   onToggleShowAreas,
   showCalloutLabels,
@@ -173,6 +192,15 @@ export const TacticalMobileSheet: React.FC<TacticalMobileSheetProps> = ({
               onSelectElements={onSelectElements}
               onUpdateSelectedElementsProps={onUpdateSelectedElementsProps}
               onDeleteElement={onDeleteElement}
+              globalUtilityLineScale={globalUtilityLineScale}
+              globalUtilitySpotScale={globalUtilitySpotScale}
+              colors={colors}
+              utilityEditTrigger={utilityEditTrigger}
+              onOpenUtilityInfo={onOpenUtilityInfo}
+              onOpenCustomColor={onOpenCustomColor}
+              onMoveUtility={onMoveUtility}
+              onBranchFromUtilityOrigin={onBranchFromUtilityOrigin}
+              onDuplicateSelected={onDuplicateSelected}
               showAreas={showAreas}
               onToggleShowAreas={onToggleShowAreas}
               showCalloutLabels={showCalloutLabels}
@@ -182,6 +210,7 @@ export const TacticalMobileSheet: React.FC<TacticalMobileSheetProps> = ({
               colorMode={colorMode}
               getZoneBadgeColor={getZoneBadgeColor}
               getDangerBadge={getDangerBadge}
+              allowUtilityTab={true}
             />
           ) : (
             <TacticalHistoryPanel

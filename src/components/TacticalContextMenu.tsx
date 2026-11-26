@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   Edit3,
   RotateCw,
@@ -15,6 +15,8 @@ import {
   SquarePlus,
   SquareMinus,
   Info,
+  GripHorizontal,
+  X,
 } from 'lucide-react';
 import {
   Callout,
@@ -25,6 +27,11 @@ import {
   UtilityThrowType,
 } from '../types';
 import { THROW_TYPE_META, UTILITY_THROW_TYPES, formatThrowTypeFull } from '../utils/utilityThrowGeometry';
+import {
+  clampMenuPosition,
+  computeSmartContextMenuPosition,
+  getUtilityColor,
+} from '../utils/utilityDisplay';
 import { UTILITY_META } from './UtilitySymbol';
 import { SelectedElementsPatch } from './TacticalLayersPanel';
 
@@ -39,6 +46,7 @@ interface TacticalContextMenuProps {
   players: PlayerToken[];
   colors: string[];
   movingAreaCalloutId: string | null;
+  movingUtilityId?: string | null;
   showColorSubmenu: boolean;
   onToggleColorSubmenu: () => void;
   onShowCalloutInfo: (callout: Callout) => void;
@@ -47,6 +55,9 @@ interface TacticalContextMenuProps {
   onToggleMoveArea: (callout: Callout) => void;
   onCreateArea: (callout: Callout) => void;
   onRemoveArea: (callout: Callout) => void;
+  onShowUtilityInfo?: (util: UtilityMarker) => void;
+  onEditUtility?: (util: UtilityMarker) => void;
+  onMoveUtility?: (util: UtilityMarker) => void;
   onGroupSelected: () => void;
   onDuplicateSelected: () => void;
   onToggleLockSelected: () => void;
@@ -83,6 +94,7 @@ export const TacticalContextMenu: React.FC<TacticalContextMenuProps> = ({
   players,
   colors,
   movingAreaCalloutId,
+  movingUtilityId,
   showColorSubmenu,
   onToggleColorSubmenu,
   onShowCalloutInfo,
@@ -91,6 +103,9 @@ export const TacticalContextMenu: React.FC<TacticalContextMenuProps> = ({
   onToggleMoveArea,
   onCreateArea,
   onRemoveArea,
+  onShowUtilityInfo,
+  onEditUtility,
+  onMoveUtility,
   onGroupSelected,
   onDuplicateSelected,
   onToggleLockSelected,
@@ -100,6 +115,26 @@ export const TacticalContextMenu: React.FC<TacticalContextMenuProps> = ({
   onClose,
 }) => {
   const isDe = lang === 'de';
+  const menuRef = useRef<HTMLDivElement>(null);
+  const hasUserDraggedRef = useRef(false);
+  const safeInsets = { top: 60, right: 12, bottom: 72, left: 12 };
+  const [menuPos, setMenuPos] = useState<{ x: number; y: number }>(() =>
+    typeof window !== 'undefined'
+      ? computeSmartContextMenuPosition(
+          position,
+          { width: 256, height: 340 },
+          { width: window.innerWidth, height: window.innerHeight },
+          safeInsets
+        )
+      : position
+  );
+  const dragStateRef = useRef<{
+    startX: number;
+    startY: number;
+    initLeft: number;
+    initTop: number;
+  } | null>(null);
+
   const totalCount = selectedElementIds.length + selectedCalloutIds.length;
   const singleCtxCallout =
     selectedCalloutIds.length === 1 && selectedElementIds.length === 0
@@ -109,6 +144,115 @@ export const TacticalContextMenu: React.FC<TacticalContextMenuProps> = ({
     selectedElementIds.length === 1 && selectedCalloutIds.length === 0
       ? utilities.find((u) => u.id === selectedElementIds[0]) || null
       : null;
+  const hasSelectedUtilities = utilities.some((u) => selectedElementIds.includes(u.id));
+
+  // Sync position when opened at a new right-click coordinate
+  useEffect(() => {
+    hasUserDraggedRef.current = false;
+    if (typeof window === 'undefined') {
+      setMenuPos(position);
+      return;
+    }
+    setMenuPos(
+      computeSmartContextMenuPosition(
+        position,
+        { width: 256, height: 340 },
+        { width: window.innerWidth, height: window.innerHeight },
+        safeInsets
+      )
+    );
+  }, [position.x, position.y]);
+
+  // Place completely beside clicked point & inside safe viewport whenever size/content changes
+  useLayoutEffect(() => {
+    if (!menuRef.current || typeof window === 'undefined') return;
+    const rect = menuRef.current.getBoundingClientRect();
+    const size = { width: rect.width || 256, height: rect.height || 320 };
+    const viewport = { width: window.innerWidth, height: window.innerHeight };
+    const target = hasUserDraggedRef.current
+      ? clampMenuPosition(menuPos, size, viewport, 12)
+      : computeSmartContextMenuPosition(position, size, viewport, safeInsets);
+    if (Math.abs(target.x - menuPos.x) > 1 || Math.abs(target.y - menuPos.y) > 1) {
+      setMenuPos(target);
+    }
+  }, [
+    position.x,
+    position.y,
+    menuPos.x,
+    menuPos.y,
+    showColorSubmenu,
+    singleCtxUtil?.id,
+    singleCtxUtil?.throwFrom,
+    singleCtxCallout?.id,
+    totalCount,
+  ]);
+
+  // Global drag listeners for moving context menu via header hold (PC & Tablet only)
+  useEffect(() => {
+    const handleMove = (clientX: number, clientY: number) => {
+      if (!dragStateRef.current || !menuRef.current || typeof window === 'undefined') return;
+      const rect = menuRef.current.getBoundingClientRect();
+      const dx = clientX - dragStateRef.current.startX;
+      const dy = clientY - dragStateRef.current.startY;
+      hasUserDraggedRef.current = true;
+      setMenuPos(
+        clampMenuPosition(
+          {
+            x: dragStateRef.current.initLeft + dx,
+            y: dragStateRef.current.initTop + dy,
+          },
+          { width: rect.width || 256, height: rect.height || 320 },
+          { width: window.innerWidth, height: window.innerHeight },
+          12
+        )
+      );
+    };
+
+    const handleResize = () => {
+      if (!menuRef.current || typeof window === 'undefined') return;
+      const rect = menuRef.current.getBoundingClientRect();
+      setMenuPos((prev) =>
+        clampMenuPosition(
+          prev,
+          { width: rect.width || 256, height: rect.height || 320 },
+          { width: window.innerWidth, height: window.innerHeight },
+          12
+        )
+      );
+    };
+
+    const onMouseMove = (e: MouseEvent) => handleMove(e.clientX, e.clientY);
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches[0]) handleMove(e.touches[0].clientX, e.touches[0].clientY);
+    };
+    const onEnd = () => {
+      dragStateRef.current = null;
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    window.addEventListener('mouseup', onEnd);
+    window.addEventListener('touchend', onEnd);
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('mouseup', onEnd);
+      window.removeEventListener('touchend', onEnd);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  const startHeaderDrag = (clientX: number, clientY: number) => {
+    if (!menuRef.current || typeof window === 'undefined' || window.innerWidth < 768) return;
+    const rect = menuRef.current.getBoundingClientRect();
+    dragStateRef.current = {
+      startX: clientX,
+      startY: clientY,
+      initLeft: rect.left,
+      initTop: rect.top,
+    };
+  };
 
   const selectedGroupSet = new Set([
     ...drawings.filter((d) => selectedElementIds.includes(d.id) && d.groupId).map((d) => d.groupId),
@@ -126,28 +270,29 @@ export const TacticalContextMenu: React.FC<TacticalContextMenuProps> = ({
     callouts.filter((c) => selectedCalloutIds.includes(c.id)).every((c) => c.locked);
 
   const firstSelectedDrawing = drawings.find((d) => selectedElementIds.includes(d.id));
+  const firstSelectedUtility = utilities.find((u) => selectedElementIds.includes(u.id));
   const firstSelectedPlayer = players.find((p) => selectedElementIds.includes(p.id));
   const firstSelectedCallout = callouts.find((c) => selectedCalloutIds.includes(c.id));
 
   const currentPreviewColor: string | null = singleCtxCallout
     ? singleCtxCallout.area?.customColor || getZoneDefaultColorHex(singleCtxCallout.zone)
     : singleCtxUtil
-    ? UTILITY_META[singleCtxUtil.type]?.colorHex || '#38bdf8'
+    ? getUtilityColor(singleCtxUtil, UTILITY_META[singleCtxUtil.type]?.colorHex || '#38bdf8')
+    : firstSelectedUtility
+    ? getUtilityColor(
+        firstSelectedUtility,
+        UTILITY_META[firstSelectedUtility.type]?.colorHex || '#38bdf8'
+      )
     : firstSelectedDrawing?.color ||
       (firstSelectedPlayer ? (firstSelectedPlayer.side === 'ct' ? '#3b82f6' : '#f59e0b') : null) ||
       (firstSelectedCallout
         ? firstSelectedCallout.area?.customColor || getZoneDefaultColorHex(firstSelectedCallout.zone)
         : null);
 
-  const menuLeft =
-    typeof window !== 'undefined' ? Math.min(position.x, window.innerWidth - 260) : position.x;
-  const menuTop =
-    typeof window !== 'undefined'
-      ? Math.min(position.y, window.innerHeight - (singleCtxCallout ? 500 : 300))
-      : position.y;
-
   return (
     <div
+      ref={menuRef}
+      role="menu"
       data-no-map-click="true"
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
@@ -155,31 +300,68 @@ export const TacticalContextMenu: React.FC<TacticalContextMenuProps> = ({
         e.preventDefault();
         e.stopPropagation();
       }}
-      style={{ left: `${Math.max(12, menuLeft)}px`, top: `${Math.max(12, menuTop)}px` }}
-      className="fixed z-[110] w-60 max-h-[calc(100dvh-24px)] overflow-y-auto rounded-xl bg-zinc-900/95 border border-zinc-700/90 shadow-2xl backdrop-blur-md text-xs text-zinc-100 animate-menu-soft print:hidden"
+      style={{ left: `${Math.max(12, menuPos.x)}px`, top: `${Math.max(12, menuPos.y)}px` }}
+      className="fixed z-[110] w-64 max-h-[calc(100dvh-24px)] overflow-y-auto rounded-xl bg-zinc-900/95 border border-zinc-700/90 shadow-2xl backdrop-blur-md text-xs text-zinc-100 animate-menu-soft print:hidden"
     >
-      {/* Header */}
-      <div className="px-3.5 py-2.5 border-b border-zinc-800 flex items-center justify-between gap-2 bg-zinc-950/60 sticky top-0 z-10">
-        <span className="font-semibold text-zinc-100 truncate">
-          {singleCtxCallout
-            ? singleCtxCallout.name.trim()
-              ? singleCtxCallout.name.replace(/\n/g, ' ')
+      {/* Draggable Header with Top-Right Close Button */}
+      <div
+        onMouseDown={(e) => {
+          if (e.button !== 0) return;
+          e.stopPropagation();
+          startHeaderDrag(e.clientX, e.clientY);
+        }}
+        onTouchStart={(e) => {
+          if (e.touches[0]) {
+            e.stopPropagation();
+            startHeaderDrag(e.touches[0].clientX, e.touches[0].clientY);
+          }
+        }}
+        title={isDe ? 'Gedrückt halten zum Verschieben (PC & Tablet)' : 'Hold & drag to move (PC & Tablet)'}
+        className="px-3 py-2 border-b border-zinc-800 flex items-center justify-between gap-2 bg-zinc-950/85 sticky top-0 z-10 md:cursor-grab md:active:cursor-grabbing select-none"
+      >
+        <div className="flex items-center gap-1.5 min-w-0">
+          <GripHorizontal className="hidden md:block w-3.5 h-3.5 text-zinc-500 shrink-0" />
+          <span className="font-semibold text-zinc-100 truncate">
+            {singleCtxCallout
+              ? singleCtxCallout.name.trim()
+                ? singleCtxCallout.name.replace(/\n/g, ' ')
+                : isDe
+                ? 'Unbenannte Zone'
+                : 'Unnamed Zone'
+              : singleCtxUtil
+              ? singleCtxUtil.label?.trim() ||
+                (isDe
+                  ? UTILITY_META[singleCtxUtil.type]?.labelDe || 'Utility'
+                  : UTILITY_META[singleCtxUtil.type]?.labelEn || 'Utility')
+              : totalCount === 1
+              ? isDe
+                ? '1 Element ausgewählt'
+                : '1 element selected'
               : isDe
-              ? 'Unbenannte Zone'
-              : 'Unnamed Zone'
-            : totalCount === 1
-            ? isDe
-              ? '1 Element ausgewählt'
-              : '1 element selected'
-            : isDe
-            ? `${totalCount} Elemente ausgewählt`
-            : `${totalCount} elements selected`}
-        </span>
-        {isGrouped && (
-          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold border border-sky-400/70 bg-sky-500/20 text-sky-300 shrink-0">
-            {isDe ? 'Gruppe' : 'Group'}
+              ? `${totalCount} Elemente ausgewählt`
+              : `${totalCount} elements selected`}
           </span>
-        )}
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          {isGrouped && (
+            <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold border border-sky-400/70 bg-sky-500/20 text-sky-300 shrink-0">
+              {isDe ? 'Gruppe' : 'Group'}
+            </span>
+          )}
+          <button
+            type="button"
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+            aria-label={isDe ? 'Menü schließen' : 'Close menu'}
+            className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* Action Rows */}
@@ -330,29 +512,87 @@ export const TacticalContextMenu: React.FC<TacticalContextMenuProps> = ({
 
         {singleCtxUtil && onUpdateSelectedElementsProps && (
           <>
-            <button
-              type="button"
-              onClick={() => {
-                onUpdateSelectedElementsProps(
-                  singleCtxUtil.throwFrom ? { removeThrowFrom: true } : { addDefaultThrowFrom: true }
-                );
-                onClose();
-              }}
-              className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-zinc-800 text-zinc-100 transition-colors cursor-pointer"
-            >
-              <span className="flex items-center gap-2.5">
-                <Spline className="w-4 h-4 text-emerald-400" />
-                <span className="font-medium">
-                  {singleCtxUtil.throwFrom
-                    ? isDe
-                      ? 'Wurflinie entfernen'
-                      : 'Remove throw line'
-                    : isDe
-                    ? 'Wurflinie hinzufügen'
-                    : 'Add throw line'}
+            {onShowUtilityInfo && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onShowUtilityInfo(singleCtxUtil);
+                  onClose();
+                }}
+                className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-sky-500/15 text-sky-300 hover:text-white transition-colors cursor-pointer"
+                title={isDe ? 'Utility-Info Fenster öffnen' : 'Open Utility Info window'}
+              >
+                <span className="flex items-center gap-2.5">
+                  <Info className="w-4 h-4 text-sky-400" />
+                  <span className="font-medium">
+                    {isDe ? 'Utility-Info' : 'Utility Info'}
+                  </span>
                 </span>
-              </span>
-            </button>
+              </button>
+            )}
+
+            {onEditUtility && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEditUtility(singleCtxUtil);
+                  onClose();
+                }}
+                className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-zinc-800 text-zinc-100 transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2.5">
+                  <Edit3 className="w-4 h-4 text-amber-400" />
+                  <span className="font-medium">
+                    {isDe ? 'Bearbeiten' : 'Edit utility'}
+                  </span>
+                </span>
+              </button>
+            )}
+
+            {onMoveUtility && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMoveUtility(singleCtxUtil);
+                  onClose();
+                }}
+                className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-zinc-800 text-zinc-100 transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2.5">
+                  <Move className="w-4 h-4 text-amber-400" />
+                  <span className="font-medium">
+                    {movingUtilityId === singleCtxUtil.id
+                      ? isDe
+                        ? 'Verschieben beenden'
+                        : 'Stop moving'
+                      : isDe
+                      ? 'Verschieben'
+                      : 'Move'}
+                  </span>
+                </span>
+              </button>
+            )}
+
+            {!singleCtxUtil.throwFrom && (
+              <button
+                type="button"
+                onClick={() => {
+                  onUpdateSelectedElementsProps({ addDefaultThrowFrom: true });
+                  onClose();
+                }}
+                className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-zinc-800 text-zinc-100 transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2.5">
+                  <Spline className="w-4 h-4 text-emerald-400" />
+                  <span className="font-medium">
+                    {isDe ? 'Wurflinie hinzufügen' : 'Add throw line'}
+                  </span>
+                </span>
+              </button>
+            )}
 
             {singleCtxUtil.throwFrom && (
               <>
@@ -490,7 +730,7 @@ export const TacticalContextMenu: React.FC<TacticalContextMenuProps> = ({
             </span>
           </button>
           {showColorSubmenu && (
-            <div className="px-2.5 py-2 mt-0.5 rounded-lg bg-zinc-950/90 border border-zinc-800 flex items-center justify-between gap-1.5 animate-submenu-soft">
+            <div className="px-2.5 py-2 mt-0.5 rounded-lg bg-zinc-950/90 border border-zinc-800 flex flex-wrap items-center justify-between gap-1.5 animate-submenu-soft">
               {colors.map((c) => {
                 const isActiveColor =
                   currentPreviewColor?.toLowerCase() === c.toLowerCase();
@@ -509,6 +749,19 @@ export const TacticalContextMenu: React.FC<TacticalContextMenuProps> = ({
                   />
                 );
               })}
+              {hasSelectedUtilities && onUpdateSelectedElementsProps && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onUpdateSelectedElementsProps({ resetColor: true });
+                    onClose();
+                  }}
+                  className="px-1.5 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-[10px] font-semibold text-amber-300 cursor-pointer"
+                  title={isDe ? 'Standardfarbe wiederherstellen' : 'Reset to default color'}
+                >
+                  {isDe ? 'Standard' : 'Reset'}
+                </button>
+              )}
             </div>
           )}
         </div>

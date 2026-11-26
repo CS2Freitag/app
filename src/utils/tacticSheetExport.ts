@@ -1,6 +1,16 @@
-import { MapData, TacticalDrawingLine, UtilityMarker, PlayerToken, Callout } from '../types';
+import { Callout, MapData, TacticalDrawingLine, UtilityMarker, PlayerToken, Language, UtilityAimSlotId } from '../types';
 import { resolveAssetPath } from './assets';
-import { getThrowGeometry, THROW_TYPE_META } from './utilityThrowGeometry';
+import {
+  clampUtilityLineScale,
+  clampUtilitySpotScale,
+  DEFAULT_UTILITY_LINE_SCALE,
+  DEFAULT_UTILITY_SPOT_SCALE,
+  getEffectiveUtilityLineScale,
+  getEffectiveUtilitySpotScale,
+  getUtilityColor,
+} from './utilityDisplay';
+import { formatThrowTypeFull, getThrowGeometry, THROW_TYPE_META } from './utilityThrowGeometry';
+import { UTILITY_META } from '../components/UtilitySymbol';
 
 async function loadImage(src: string): Promise<HTMLImageElement | null> {
   if (!src) return null;
@@ -117,10 +127,24 @@ function drawDiagonalStripes(
 export async function generateTacticSheetPng(
   mapData: MapData,
   tacticState: { drawings: TacticalDrawingLine[]; utilities: UtilityMarker[]; players: PlayerToken[] },
-  tacticTitle: string
+  tacticTitle: string,
+  options?: {
+    utilityLineScale?: number;
+    utilitySpotScale?: number;
+    showAreas?: boolean;
+    showCallouts?: boolean;
+    size?: number;
+    includeHeader?: boolean;
+  }
 ): Promise<string> {
+  const utilityLineScale = clampUtilityLineScale(options?.utilityLineScale ?? DEFAULT_UTILITY_LINE_SCALE);
+  const utilitySpotScale = clampUtilitySpotScale(options?.utilitySpotScale ?? DEFAULT_UTILITY_SPOT_SCALE);
+  const showAreas = options?.showAreas !== false;
+  const showCallouts = options?.showCallouts !== false;
+  const includeHeader = options?.includeHeader !== false;
+  const size = options?.size && options.size >= 320 ? Math.round(options.size) : 1600;
+  const ratio = size / 1600;
   const canvas = document.createElement('canvas');
-  const size = 1600; // High-resolution 1600x1600 canvas
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext('2d');
@@ -143,6 +167,7 @@ export async function generateTacticSheetPng(
   // ==========================================
   // STEP 3: DRAW ALL CALLOUT AREAS (FIRST PASS - BEHIND LABELS AND LINES)
   // ==========================================
+  if (showAreas) {
   for (const c of callouts) {
     if (!c.area) continue;
     const style = getAreaRenderStyle(c);
@@ -226,6 +251,7 @@ export async function generateTacticSheetPng(
       ctx.restore();
     }
   }
+  }
 
   // ==========================================
   // STEP 4: DRAW TACTICAL DRAWING LINES & ARROWS
@@ -284,7 +310,7 @@ export async function generateTacticSheetPng(
     // Pass 5a: Throw trajectories underneath landing icons
     for (const u of tacticState.utilities) {
       if (!u.throwFrom) continue;
-      const color =
+      const defaultColor =
         u.type === 'flash'
           ? '#fcd34d'
           : u.type === 'molotov'
@@ -294,6 +320,8 @@ export async function generateTacticSheetPng(
           : u.type === 'decoy'
           ? '#9333ea'
           : '#0ea5e9';
+      const color = getUtilityColor(u, defaultColor);
+      const effLineScale = getEffectiveUtilityLineScale(u, utilityLineScale);
 
       const geom = getThrowGeometry(u.throwFrom, u, u.curveBend);
       const fx = ((geom.from.x + 50) / 100) * size;
@@ -306,35 +334,38 @@ export async function generateTacticSheetPng(
       ctx.save();
       ctx.lineCap = 'round';
 
+      const dashScale = 0.45 + 0.55 * effLineScale;
+      const originScale = Math.max(0.45, Math.min(1.5, 0.5 + 0.5 * effLineScale));
+
       // Dark outer casing for crisp legibility on bright maps
       ctx.beginPath();
       ctx.moveTo(fx, fy);
       ctx.quadraticCurveTo(cpx, cpy, ux, uy);
       ctx.strokeStyle = 'rgba(9,9,11,0.82)';
-      ctx.lineWidth = 13;
+      ctx.lineWidth = Math.max(2, 13 * effLineScale);
       ctx.stroke();
 
       // Colored dashed flight arc
       ctx.beginPath();
       ctx.moveTo(fx, fy);
       ctx.quadraticCurveTo(cpx, cpy, ux, uy);
-      ctx.setLineDash([16, 11]);
+      ctx.setLineDash([16 * dashScale, 11 * dashScale]);
       ctx.strokeStyle = color;
-      ctx.lineWidth = 7;
+      ctx.lineWidth = Math.max(1.2, 7 * effLineScale);
       ctx.stroke();
       ctx.setLineDash([]);
 
       // Origin anchor dot (1. Abwurfpunkt)
       ctx.beginPath();
-      ctx.arc(fx, fy, 15, 0, Math.PI * 2);
+      ctx.arc(fx, fy, 15 * originScale, 0, Math.PI * 2);
       ctx.fillStyle = '#09090b';
       ctx.fill();
-      ctx.lineWidth = 5;
+      ctx.lineWidth = 5 * originScale;
       ctx.strokeStyle = color;
       ctx.stroke();
 
       ctx.beginPath();
-      ctx.arc(fx, fy, 5.5, 0, Math.PI * 2);
+      ctx.arc(fx, fy, 5.5 * originScale, 0, Math.PI * 2);
       ctx.fillStyle = '#ffffff';
       ctx.fill();
 
@@ -364,14 +395,16 @@ export async function generateTacticSheetPng(
     for (const u of tacticState.utilities) {
       const ux = ((u.x + 50) / 100) * size;
       const uy = ((u.y + 50) / 100) * size;
-      const symbolSize = 54; // Clearly visible on high-res canvas
+      const effSpotScale = getEffectiveUtilitySpotScale(u, utilitySpotScale);
+      const symbolSize = 54 * effSpotScale; // Scaled cleanly (0.5x to 5.0x)
       const scale = symbolSize / 24;
 
-      let color = '#0ea5e9'; // smoke
-      if (u.type === 'flash') color = '#fcd34d';
-      if (u.type === 'molotov') color = '#f97316';
-      if (u.type === 'he') color = '#dc2626';
-      if (u.type === 'decoy') color = '#9333ea';
+      let defaultColor = '#0ea5e9'; // smoke
+      if (u.type === 'flash') defaultColor = '#fcd34d';
+      if (u.type === 'molotov') defaultColor = '#f97316';
+      if (u.type === 'he') defaultColor = '#dc2626';
+      if (u.type === 'decoy') defaultColor = '#9333ea';
+      const color = getUtilityColor(u, defaultColor);
 
       ctx.save();
       ctx.translate(ux - 12 * scale, uy - 12 * scale);
@@ -448,6 +481,39 @@ export async function generateTacticSheetPng(
         ctx.stroke(new Path2D('M4.8 4.8a10.2 10.2 0 0 0 0 14.4M19.2 4.8a10.2 10.2 0 0 1 0 14.4'));
       }
       ctx.restore();
+
+      // Utility custom label (if set)
+      if (u.label && u.label.trim()) {
+        ctx.save();
+        const labelPx = Math.max(12, Math.round((u.fontSize || 12) * (size / 760)));
+        ctx.font = `800 ${labelPx}px sans-serif`;
+        const text = u.label.trim();
+        const tw = ctx.measureText(text).width;
+        const padX = Math.round(9 * ratio);
+        const padY = Math.round(5 * ratio);
+        const bw = tw + padX * 2;
+        const bh = labelPx + padY * 2;
+        const bx = ux - bw / 2;
+        const by = uy + Math.max(22 * ratio, 14 * scale);
+
+        ctx.fillStyle = 'rgba(9, 9, 11, 0.9)';
+        ctx.strokeStyle = color;
+        ctx.lineWidth = Math.max(1.5, 2.2 * ratio);
+        ctx.beginPath();
+        if ('roundRect' in ctx && typeof (ctx as any).roundRect === 'function') {
+          (ctx as any).roundRect(bx, by, bw, bh, Math.max(4, 6 * ratio));
+        } else {
+          ctx.rect(bx, by, bw, bh);
+        }
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, ux, by + bh / 2);
+        ctx.restore();
+      }
     }
   }
 
@@ -491,129 +557,389 @@ export async function generateTacticSheetPng(
     }
   }
 
-  // Preload all callout custom images in parallel (only when image mode is enabled)
-  const calloutImgPromises = callouts.map((c) => {
-    const wantsImage = c.displayMode === 'image' || c.displayMode === 'both' || (!c.displayMode && Boolean(c.customImage));
-    if (!wantsImage) return Promise.resolve(null);
-    const imgSrc = c.customImage || '';
-    return imgSrc ? loadImage(imgSrc) : Promise.resolve(null);
-  });
-  const calloutImages = await Promise.all(calloutImgPromises);
+  // Preload all callout custom images in parallel (only when image mode is enabled and callouts are shown)
+  if (showCallouts) {
+    const calloutImgPromises = callouts.map((c) => {
+      const wantsImage = c.displayMode === 'image' || c.displayMode === 'both' || (!c.displayMode && Boolean(c.customImage));
+      if (!wantsImage) return Promise.resolve(null);
+      const imgSrc = c.customImage || '';
+      return imgSrc ? loadImage(imgSrc) : Promise.resolve(null);
+    });
+    const calloutImages = await Promise.all(calloutImgPromises);
 
-  // ==========================================
-  // STEP 7: DRAW CALLOUT PINS, EMBLEMS AND TEXT LABELS (ON TOP)
-  // ==========================================
-  for (let i = 0; i < callouts.length; i++) {
-    const c = callouts[i];
-    const calloutImg = calloutImages[i];
-    const cx = ((c.x + 50) / 100) * size;
-    const cy = ((c.y + 50) / 100) * size;
+    // ==========================================
+    // STEP 7: DRAW CALLOUT PINS, EMBLEMS AND TEXT LABELS (ON TOP)
+    // ==========================================
+    for (let i = 0; i < callouts.length; i++) {
+      const c = callouts[i];
+      const calloutImg = calloutImages[i];
+      const cx = ((c.x + 50) / 100) * size;
+      const cy = ((c.y + 50) / 100) * size;
 
-    const displayMode = c.displayMode || (calloutImg ? 'image' : 'text');
-    const nameLower = (c.name || '').toLowerCase();
-    const zoneLower = c.zone || '';
-    const isCT = zoneLower === 'ct_spawn' || nameLower.includes('ct spawn');
-    const isT = zoneLower === 't_spawn' || nameLower.includes('t spawn');
+      const displayMode = c.displayMode || (calloutImg ? 'image' : 'text');
+      const nameLower = (c.name || '').toLowerCase();
+      const zoneLower = c.zone || '';
+      const isCT = zoneLower === 'ct_spawn' || nameLower.includes('ct spawn');
+      const isT = zoneLower === 't_spawn' || nameLower.includes('t spawn');
 
-    // Draw Custom Image Emblem in a clean cropped circle if present & enabled
-    if ((displayMode === 'image' || displayMode === 'both') && calloutImg) {
-      ctx.save();
-      const imgRadius = Math.max(22, Math.round(((c.imageSize || 36) * (size / 800)) / 2));
+      // Draw Custom Image Emblem in a clean cropped circle if present & enabled
+      if ((displayMode === 'image' || displayMode === 'both') && calloutImg) {
+        ctx.save();
+        const imgRadius = Math.max(10, Math.round(((c.imageSize || 36) * (size / 800)) / 2));
 
-      // Dark background circle & colored border
-      ctx.beginPath();
-      ctx.arc(cx, cy, imgRadius, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(9, 9, 11, 0.95)';
-      ctx.fill();
+        // Dark background circle & colored border
+        ctx.beginPath();
+        ctx.arc(cx, cy, imgRadius, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(9, 9, 11, 0.95)';
+        ctx.fill();
 
-      ctx.strokeStyle = isCT ? '#38bdf8' : isT ? '#f59e0b' : '#52525b';
-      ctx.lineWidth = 3.5;
-      ctx.stroke();
+        ctx.strokeStyle = isCT ? '#38bdf8' : isT ? '#f59e0b' : '#52525b';
+        ctx.lineWidth = Math.max(1.5, 3.5 * ratio);
+        ctx.stroke();
 
-      // Clip image to circular area
-      ctx.clip();
-      ctx.drawImage(calloutImg, cx - imgRadius, cy - imgRadius, imgRadius * 2, imgRadius * 2);
-      ctx.restore();
-    }
-
-    // Draw Text Box if enabled or displayMode is text/both
-    if (displayMode === 'text' || displayMode === 'both' || !calloutImg) {
-      ctx.save();
-      const fontSize = Math.max(18, Math.round((c.fontSize || 16) * (size / 750)));
-      ctx.font = `900 ${fontSize}px sans-serif`;
-      const lines = (c.name || '').split(/\r?\n/).slice(0, 2);
-      const maxLineWidth = Math.max(...lines.map((line) => ctx.measureText(line).width), 0);
-      const lineHeight = Math.round(fontSize * 1.18);
-      const padX = 12;
-      const padY = 8;
-      const boxW = maxLineWidth + padX * 2;
-      const boxH = lines.length > 1 ? lineHeight * lines.length + padY * 2 : fontSize + padY * 2;
-
-      const offsetY = displayMode === 'both' && calloutImg ? (c.imageSize || 36) * (size / 800) * 0.6 : 0;
-      const rx = -boxW / 2;
-      const ry = -boxH / 2;
-      const textRot = c.textRotation || 0;
-
-      ctx.translate(cx, cy + offsetY);
-      if (textRot !== 0) {
-        ctx.rotate((textRot * Math.PI) / 180);
+        // Clip image to circular area
+        ctx.clip();
+        ctx.drawImage(calloutImg, cx - imgRadius, cy - imgRadius, imgRadius * 2, imgRadius * 2);
+        ctx.restore();
       }
 
-      ctx.fillStyle = 'rgba(9, 9, 11, 0.92)';
-      ctx.strokeStyle = '#3f3f46';
-      ctx.lineWidth = 2.5;
+      // Draw Text Box if enabled or displayMode is text/both
+      if (displayMode === 'text' || displayMode === 'both' || !calloutImg) {
+        ctx.save();
+        const fontSize = Math.max(10, Math.round((c.fontSize || 16) * (size / 750)));
+        ctx.font = `900 ${fontSize}px sans-serif`;
+        const lines = (c.name || '').split(/\r?\n/).slice(0, 2);
+        const maxLineWidth = Math.max(...lines.map((line) => ctx.measureText(line).width), 0);
+        const lineHeight = Math.round(fontSize * 1.18);
+        const padX = Math.max(5, Math.round(12 * ratio));
+        const padY = Math.max(3, Math.round(8 * ratio));
+        const boxW = maxLineWidth + padX * 2;
+        const boxH = lines.length > 1 ? lineHeight * lines.length + padY * 2 : fontSize + padY * 2;
 
-      ctx.beginPath();
-      if ('roundRect' in ctx && typeof (ctx as any).roundRect === 'function') {
-        (ctx as any).roundRect(rx, ry, boxW, boxH, 8);
-      } else {
-        ctx.rect(rx, ry, boxW, boxH);
-      }
-      ctx.fill();
-      ctx.stroke();
+        const offsetY = displayMode === 'both' && calloutImg ? (c.imageSize || 36) * (size / 800) * 0.6 : 0;
+        const rx = -boxW / 2;
+        const ry = -boxH / 2;
+        const textRot = c.textRotation || 0;
 
-      ctx.fillStyle = '#ffffff';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      if (lines.length > 1) {
-        const startY = -((lines.length - 1) * lineHeight) / 2;
-        lines.forEach((line, idx) => {
-          ctx.fillText(line, 0, startY + idx * lineHeight);
-        });
-      } else {
-        ctx.fillText(lines[0] || '', 0, 0);
+        ctx.translate(cx, cy + offsetY);
+        if (textRot !== 0) {
+          ctx.rotate((textRot * Math.PI) / 180);
+        }
+
+        ctx.fillStyle = 'rgba(9, 9, 11, 0.92)';
+        ctx.strokeStyle = '#3f3f46';
+        ctx.lineWidth = Math.max(1.2, 2.5 * ratio);
+
+        ctx.beginPath();
+        if ('roundRect' in ctx && typeof (ctx as any).roundRect === 'function') {
+          (ctx as any).roundRect(rx, ry, boxW, boxH, Math.max(3, Math.round(8 * ratio)));
+        } else {
+          ctx.rect(rx, ry, boxW, boxH);
+        }
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        if (lines.length > 1) {
+          const startY = -((lines.length - 1) * lineHeight) / 2;
+          lines.forEach((line, idx) => {
+            ctx.fillText(line, 0, startY + idx * lineHeight);
+          });
+        } else {
+          ctx.fillText(lines[0] || '', 0, 0);
+        }
+        ctx.restore();
       }
-      ctx.restore();
     }
   }
 
   // ==========================================
   // STEP 8: HEADER BRANDING OVERLAY BANNER
   // ==========================================
-  ctx.save();
-  ctx.fillStyle = 'rgba(9, 9, 11, 0.94)';
-  ctx.fillRect(0, 0, size, 96);
-  ctx.strokeStyle = 'rgba(251, 191, 36, 0.55)';
-  ctx.lineWidth = 3.5;
+  if (includeHeader) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(9, 9, 11, 0.94)';
+    ctx.fillRect(0, 0, size, Math.round(96 * ratio));
+    ctx.strokeStyle = 'rgba(251, 191, 36, 0.55)';
+    ctx.lineWidth = Math.max(1.5, 3.5 * ratio);
+    ctx.beginPath();
+    ctx.moveTo(0, Math.round(96 * ratio));
+    ctx.lineTo(size, Math.round(96 * ratio));
+    ctx.stroke();
+
+    ctx.font = `900 ${Math.round(30 * ratio)}px sans-serif`;
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillText('CS2FREITAG', Math.round(30 * ratio), Math.round(44 * ratio));
+
+    ctx.font = `bold ${Math.round(22 * ratio)}px sans-serif`;
+    ctx.fillStyle = '#ffffff';
+    const displayTitle = tacticTitle || `${mapData.name} Taktik Sheet`;
+    ctx.fillText(`${mapData.name} — ${displayTitle}`, Math.round(30 * ratio), Math.round(76 * ratio));
+
+    ctx.font = `bold ${Math.round(16 * ratio)}px monospace`;
+    ctx.fillStyle = '#38bdf8';
+    ctx.textAlign = 'right';
+    ctx.fillText('Tactical Sheet Export (PNG)', size - Math.round(30 * ratio), Math.round(56 * ratio));
+    ctx.restore();
+  }
+
+  return canvas.toDataURL('image/png');
+}
+
+/**
+ * Generates a high-res single-utility Lineup Card PNG containing all 3 images
+ * (Standpunkt, Zielpunkt, Ergebnis), custom name, color, throw instruction, notes & mini-radar.
+ */
+export async function generateUtilityLineupCardPng(
+  util: UtilityMarker,
+  mapData: MapData,
+  activeSlot: UtilityAimSlotId,
+  lang: Language
+): Promise<string> {
+  const isDe = lang === 'de';
+  const meta = UTILITY_META[util.type] || UTILITY_META.smoke;
+  const color = getUtilityColor(util, meta.colorHex);
+  const typeLabel = isDe ? meta.labelDe : meta.labelEn;
+  const slotData = util.aimSpots?.[activeSlot] || {};
+  const slot1 = util.aimSpots?.['1'] || {};
+
+  const standpunktSrc = slotData.standpunktImage || (activeSlot !== '1' ? slot1.standpunktImage : undefined);
+  const aimSrc = slotData.aimImage;
+  const resultSrc = slotData.resultImage;
+
+  const width = 1600;
+  const hasNotes = Boolean(util.notes && util.notes.trim());
+  const height = hasNotes ? 980 : 900;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas context not available');
+
+  // Background
+  ctx.fillStyle = '#09090b';
+  ctx.fillRect(0, 0, width, height);
+
+  // Header bar
+  ctx.fillStyle = '#111114';
+  ctx.fillRect(0, 0, width, 112);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 4;
   ctx.beginPath();
-  ctx.moveTo(0, 96);
-  ctx.lineTo(size, 96);
+  ctx.moveTo(0, 112);
+  ctx.lineTo(width, 112);
   ctx.stroke();
 
-  ctx.font = '900 30px sans-serif';
-  ctx.fillStyle = '#f59e0b';
-  ctx.fillText('CS2FREITAG', 30, 44);
+  // Accent color badge pill on left
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  if ('roundRect' in ctx && typeof (ctx as any).roundRect === 'function') {
+    (ctx as any).roundRect(36, 28, 16, 56, 8);
+  } else {
+    ctx.rect(36, 28, 16, 56);
+  }
+  ctx.fill();
 
-  ctx.font = 'bold 22px sans-serif';
+  const mainTitle = util.label?.trim()
+    ? util.label.trim()
+    : `${typeLabel}-${util.throwFrom ? 'Lineup' : 'Spot'}`;
+  ctx.font = '900 34px sans-serif';
   ctx.fillStyle = '#ffffff';
-  const displayTitle = tacticTitle || `${mapData.name} Taktik Sheet`;
-  ctx.fillText(`${mapData.name} — ${displayTitle}`, 30, 76);
+  ctx.fillText(mainTitle, 70, 56);
 
+  ctx.font = 'bold 20px sans-serif';
+  ctx.fillStyle = '#a1a1aa';
+  const throwInfo = util.throwFrom
+    ? formatThrowTypeFull(util.throwType || 'left', lang)
+    : isDe
+    ? 'Nur Spot (ohne Wurflinie)'
+    : 'Spot only';
+  ctx.fillText(
+    `${mapData.name} · ${typeLabel} · ${throwInfo} · ${isDe ? `Zielpunkt #${activeSlot}` : `Aim #${activeSlot}`}`,
+    70,
+    90
+  );
+
+  // Branding on right
+  ctx.textAlign = 'right';
+  ctx.font = '900 24px sans-serif';
+  ctx.fillStyle = '#f59e0b';
+  ctx.fillText('CS2FREITAG', width - 36, 52);
   ctx.font = 'bold 16px monospace';
   ctx.fillStyle = '#38bdf8';
-  ctx.textAlign = 'right';
-  ctx.fillText('Tactical Sheet Export (PNG)', size - 30, 56);
-  ctx.restore();
+  ctx.fillText(`${typeLabel.toUpperCase()} LINEUP`, width - 36, 82);
+  ctx.textAlign = 'left';
+
+  // Load 3 screenshot images + radar map preview in parallel
+  const [standpunktImg, aimImg, resultImg, radarDataUrl] = await Promise.all([
+    standpunktSrc ? loadImage(standpunktSrc) : Promise.resolve(null),
+    aimSrc ? loadImage(aimSrc) : Promise.resolve(null),
+    resultSrc ? loadImage(resultSrc) : Promise.resolve(null),
+    generateTacticSheetPng(
+      mapData,
+      { drawings: [], utilities: [util], players: [] },
+      mainTitle,
+      { showAreas: false, showCallouts: true, size: 420, includeHeader: false }
+    ).then((url) => loadImage(url)),
+  ]);
+
+  // 3 Screenshot cards across top/center row
+  const cardTop = 148;
+  const gap = 24;
+  const sidePad = 36;
+  const cardW = Math.floor((width - sidePad * 2 - gap * 2) / 3);
+  const cardH = Math.round(cardW * (10 / 16));
+
+  const cards = [
+    {
+      title: isDe ? '1. Standpunkt (Spot)' : '1. Standpoint (Spot)',
+      img: standpunktImg,
+    },
+    {
+      title: isDe ? `2. Zielpunkt #${activeSlot} (Aim)` : `2. Aim Point #${activeSlot}`,
+      img: aimImg,
+    },
+    {
+      title: isDe ? '3. Ergebnis (Spot)' : '3. Result (Spot)',
+      img: resultImg,
+    },
+  ];
+
+  cards.forEach((card, idx) => {
+    const cx = sidePad + idx * (cardW + gap);
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillStyle = '#e4e4e7';
+    ctx.fillText(card.title, cx, cardTop - 12);
+
+    ctx.fillStyle = '#18181b';
+    ctx.strokeStyle = '#3f3f46';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    if ('roundRect' in ctx && typeof (ctx as any).roundRect === 'function') {
+      (ctx as any).roundRect(cx, cardTop, cardW, cardH, 16);
+    } else {
+      ctx.rect(cx, cardTop, cardW, cardH);
+    }
+    ctx.fill();
+    ctx.stroke();
+
+    if (card.img) {
+      ctx.save();
+      ctx.beginPath();
+      if ('roundRect' in ctx && typeof (ctx as any).roundRect === 'function') {
+        (ctx as any).roundRect(cx + 1, cardTop + 1, cardW - 2, cardH - 2, 15);
+      } else {
+        ctx.rect(cx + 1, cardTop + 1, cardW - 2, cardH - 2);
+      }
+      ctx.clip();
+      const scale = Math.max(cardW / card.img.width, cardH / card.img.height);
+      const dw = card.img.width * scale;
+      const dh = card.img.height * scale;
+      ctx.drawImage(card.img, cx + (cardW - dw) / 2, cardTop + (cardH - dh) / 2, dw, dh);
+      ctx.restore();
+    } else {
+      ctx.font = '600 18px sans-serif';
+      ctx.fillStyle = '#71717a';
+      ctx.textAlign = 'center';
+      ctx.fillText(isDe ? 'Kein Bild hinterlegt' : 'No image uploaded', cx + cardW / 2, cardTop + cardH / 2);
+      ctx.textAlign = 'left';
+    }
+  });
+
+  // Bottom Row: Mini Radar Map + Info / Notes
+  const bottomTop = cardTop + cardH + 30;
+  const bottomH = height - bottomTop - 32;
+  const radarSize = Math.min(bottomH, 340);
+
+  if (radarDataUrl) {
+    ctx.save();
+    ctx.fillStyle = '#18181b';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    if ('roundRect' in ctx && typeof (ctx as any).roundRect === 'function') {
+      (ctx as any).roundRect(sidePad, bottomTop, radarSize, radarSize, 16);
+    } else {
+      ctx.rect(sidePad, bottomTop, radarSize, radarSize);
+    }
+    ctx.fill();
+    ctx.stroke();
+    ctx.clip();
+    ctx.drawImage(radarDataUrl, sidePad, bottomTop, radarSize, radarSize);
+    ctx.restore();
+  }
+
+  const infoX = sidePad + radarSize + 28;
+  const infoW = width - infoX - sidePad;
+  ctx.fillStyle = '#141418';
+  ctx.strokeStyle = '#27272a';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  if ('roundRect' in ctx && typeof (ctx as any).roundRect === 'function') {
+    (ctx as any).roundRect(infoX, bottomTop, infoW, radarSize, 16);
+  } else {
+    ctx.rect(infoX, bottomTop, infoW, radarSize);
+  }
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.font = 'bold 20px sans-serif';
+  ctx.fillStyle = color;
+  ctx.fillText(isDe ? 'Lineup-Details' : 'Lineup Details', infoX + 26, bottomTop + 40);
+
+  ctx.font = '600 20px sans-serif';
+  ctx.fillStyle = '#e4e4e7';
+  ctx.fillText(
+    `${isDe ? 'Wurf-Anweisung' : 'Throw instruction'}: ${throwInfo}`,
+    infoX + 26,
+    bottomTop + 80
+  );
+  ctx.fillStyle = '#a1a1aa';
+  ctx.fillText(
+    `${isDe ? 'Farbe' : 'Color'}: ${color.toUpperCase()}  ·  ${isDe ? 'Schriftgröße' : 'Font size'}: ${util.fontSize || 12}px`,
+    infoX + 26,
+    bottomTop + 114
+  );
+
+  if (hasNotes) {
+    ctx.font = 'bold 18px sans-serif';
+    ctx.fillStyle = '#38bdf8';
+    ctx.fillText(isDe ? 'Notizen / Ausrichtung:' : 'Notes / Aiming:', infoX + 26, bottomTop + 162);
+
+    ctx.font = '500 20px sans-serif';
+    ctx.fillStyle = '#f4f4f5';
+    const words = util.notes!.trim().split(/\s+/);
+    let line = '';
+    let ly = bottomTop + 196;
+    const maxW = infoW - 52;
+    for (const word of words) {
+      const test = line ? `${line} ${word}` : word;
+      if (ctx.measureText(test).width > maxW) {
+        ctx.fillText(line, infoX + 26, ly);
+        line = word;
+        ly += 28;
+        if (ly > bottomTop + radarSize - 24) break;
+      } else {
+        line = test;
+      }
+    }
+    if (line && ly <= bottomTop + radarSize - 16) {
+      ctx.fillText(line, infoX + 26, ly);
+    }
+  } else {
+    ctx.font = '500 18px sans-serif';
+    ctx.fillStyle = '#71717a';
+    ctx.fillText(
+      isDe
+        ? 'Importierbar über CS2Freitag → Teilen → Laden & Scannen'
+        : 'Importable via CS2Freitag → Share → Load & Scan',
+      infoX + 26,
+      bottomTop + 170
+    );
+  }
 
   return canvas.toDataURL('image/png');
 }

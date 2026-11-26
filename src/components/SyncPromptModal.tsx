@@ -25,8 +25,35 @@ export const SyncPromptModal: React.FC<SyncPromptModalProps> = ({
   onDiscardAndExit,
   onClose,
 }) => {
+  const [loginError, setLoginError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!isOpen) {
+      setLoginError(null);
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
   const isDe = lang === 'de';
+
+  const formatLoginError = (err: unknown): string => {
+    const code = (err as { code?: string })?.code || '';
+    if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+      return isDe ? 'Anmeldung abgebrochen.' : 'Sign-in cancelled.';
+    }
+    if (code === 'auth/popup-blocked') {
+      return isDe
+        ? 'Popup wurde vom Browser blockiert. Bitte Popups für diese Seite erlauben.'
+        : 'Popup was blocked by your browser. Please allow popups for this site.';
+    }
+    if (code === 'auth/unauthorized-domain') {
+      return isDe
+        ? 'Diese Domain ist aktuell nicht für Google-Anmeldung freigegeben.'
+        : 'This domain is not authorized for Google Sign-In.';
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    return isDe ? `Anmeldung fehlgeschlagen: ${message}` : `Sign-in failed: ${message}`;
+  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in-50 print:hidden">
@@ -51,6 +78,11 @@ export const SyncPromptModal: React.FC<SyncPromptModalProps> = ({
               ? 'Möchtest du diese Änderungen jetzt mit deinem Google-Konto synchronisieren (Cloud), damit sie auch auf anderen Geräten verfügbar sind, oder nur lokal auf diesem Gerät speichern?'
               : 'Would you like to sync these changes with your Google account (Cloud) now so they are available on other devices, or only save them locally on this device?'}
           </p>
+          {loginError && (
+            <div className="rounded-xl border border-red-500/40 bg-red-950/50 px-3 py-2 text-xs text-red-200">
+              {loginError}
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col gap-2">
@@ -66,6 +98,7 @@ export const SyncPromptModal: React.FC<SyncPromptModalProps> = ({
           ) : (
             <button
               onClick={async () => {
+                setLoginError(null);
                 onSetIsSyncing(true);
                 try {
                   const res = await loginWithGoogle();
@@ -74,6 +107,7 @@ export const SyncPromptModal: React.FC<SyncPromptModalProps> = ({
                   }
                 } catch (err) {
                   console.error('Login error:', err);
+                  setLoginError(formatLoginError(err));
                 } finally {
                   onSetIsSyncing(false);
                 }

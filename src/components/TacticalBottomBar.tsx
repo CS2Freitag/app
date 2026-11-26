@@ -9,6 +9,7 @@ import {
   History,
 } from 'lucide-react';
 import { Language } from '../types';
+import { UtilitySymbol } from './UtilitySymbol';
 
 interface TacticalBottomBarProps {
   lang: Language;
@@ -16,6 +17,8 @@ interface TacticalBottomBarProps {
   onToggleAreas: () => void;
   showGrid: boolean;
   onToggleGrid: () => void;
+  showUtilities: boolean;
+  onToggleUtilities: () => void;
   showCalloutLabels: boolean;
   onToggleLabels: () => void;
   calloutScale: number;
@@ -36,6 +39,8 @@ export const TacticalBottomBar: React.FC<TacticalBottomBarProps> = ({
   onToggleAreas,
   showGrid,
   onToggleGrid,
+  showUtilities,
+  onToggleUtilities,
   showCalloutLabels,
   onToggleLabels,
   calloutScale,
@@ -85,6 +90,22 @@ export const TacticalBottomBar: React.FC<TacticalBottomBarProps> = ({
         >
           <Grid3X3 className="w-3.5 h-3.5" />
           <span>{isDe ? 'Raster' : 'Grid'}</span>
+        </button>
+
+        <button
+          type="button"
+          data-testid="toggle-utilities-btn"
+          aria-pressed={showUtilities}
+          onClick={onToggleUtilities}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-semibold transition-colors cursor-pointer shrink-0 ${
+            showUtilities
+              ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-200'
+              : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
+          }`}
+          title={isDe ? 'Utility-Lineups & Spots ein-/ausblenden' : 'Toggle utilities'}
+        >
+          <UtilitySymbol type="smoke" size="xs" />
+          <span>{isDe ? 'Utilitys' : 'Utilities'}</span>
         </button>
 
         <div className="h-4 w-px bg-zinc-800 shrink-0" />

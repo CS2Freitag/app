@@ -446,7 +446,7 @@ export function useTacticSelectionActions({
   const handleUpdateSelectedElementsProps = useCallback(
     (patch: SelectedElementsPatch) => {
       if (selectedElementIds.length === 0 && selectedCalloutIds.length === 0) return;
-      if (patch.label === undefined) {
+      if (!patch.skipHistory && patch.label === undefined && patch.notes === undefined) {
         pushHistorySnapshot();
       }
 
@@ -468,12 +468,29 @@ export function useTacticSelectionActions({
             if (!selectedElementIds.includes(u.id)) return u;
             const next: UtilityMarker = {
               ...u,
+              ...(patch.type !== undefined ? { type: patch.type } : {}),
+              ...(patch.color !== undefined ? { color: patch.color } : {}),
               ...(patch.opacity !== undefined ? { opacity: patch.opacity } : {}),
               ...(patch.locked !== undefined ? { locked: patch.locked } : {}),
               ...(patch.throwType !== undefined ? { throwType: patch.throwType } : {}),
               ...(patch.label !== undefined ? { label: patch.label || undefined } : {}),
+              ...(patch.notes !== undefined ? { notes: patch.notes || undefined } : {}),
               ...(patch.curveBend !== undefined ? { curveBend: patch.curveBend } : {}),
+              ...(patch.lineScale !== undefined ? { lineScale: patch.lineScale } : {}),
+              ...(patch.spotScale !== undefined ? { spotScale: patch.spotScale } : {}),
+              ...(patch.aimSpots !== undefined ? { aimSpots: patch.aimSpots } : {}),
+              ...(patch.activeAimSpot !== undefined ? { activeAimSpot: patch.activeAimSpot } : {}),
+              ...(patch.fontSize !== undefined ? { fontSize: patch.fontSize } : {}),
             };
+            if (patch.resetColor) {
+              delete next.color;
+            }
+            if (patch.resetLineScale) {
+              delete next.lineScale;
+            }
+            if (patch.resetSpotScale) {
+              delete next.spotScale;
+            }
             if (patch.removeThrowFrom) {
               delete next.throwFrom;
               delete next.curveBend;

@@ -4,6 +4,7 @@ import { UtilityType } from '../types';
 interface UtilitySymbolProps {
   type: UtilityType;
   size?: 'xs' | 'sm' | 'md';
+  sizePx?: number;
   className?: string;
 }
 
@@ -63,14 +64,22 @@ export const UTILITY_META: Record<
 export const UtilitySymbol: React.FC<UtilitySymbolProps> = ({
   type,
   size = 'md',
+  sizePx,
   className = '',
 }) => {
-  const iconDim = size === 'xs' ? 'w-3 h-3' : size === 'sm' ? 'w-3.5 h-3.5' : 'w-6 h-6';
+  const iconDim = sizePx
+    ? ''
+    : size === 'xs'
+    ? 'w-3 h-3'
+    : size === 'sm'
+    ? 'w-3.5 h-3.5'
+    : 'w-6 h-6';
+  const dimStyle = sizePx ? { width: `${sizePx}px`, height: `${sizePx}px` } : undefined;
 
   switch (type) {
     case 'smoke':
       return (
-        <svg viewBox="0 0 24 24" fill="none" className={`${iconDim} ${className}`} aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" style={dimStyle} className={`${iconDim} ${className}`} aria-hidden="true">
           <path
             d="M7 16a4 4 0 0 1-.88-7.9A5 5 0 0 1 15.9 6a3.5 3.5 0 0 1 1.6 6.62A3 3 0 0 1 16 18H8a3 3 0 0 1-1-2z"
             fill="currentColor"
@@ -82,7 +91,7 @@ export const UtilitySymbol: React.FC<UtilitySymbolProps> = ({
       );
     case 'flash':
       return (
-        <svg viewBox="0 0 24 24" fill="none" className={`${iconDim} ${className}`} aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" style={dimStyle} className={`${iconDim} ${className}`} aria-hidden="true">
           <path
             d="M12 2l2.2 5.4L20 6l-3.4 4.8L22 13l-5.6 1.8L18 20l-5.2-3.2L10 22l-.8-5.8L4 17l3.2-4.6L2 10l5.6-1.6L6 3.2l4.8 3.2L12 2z"
             fill="currentColor"
@@ -92,7 +101,7 @@ export const UtilitySymbol: React.FC<UtilitySymbolProps> = ({
       );
     case 'molotov':
       return (
-        <svg viewBox="0 0 24 24" fill="none" className={`${iconDim} ${className}`} aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" style={dimStyle} className={`${iconDim} ${className}`} aria-hidden="true">
           <path
             d="M12.5 2.5c.8 2.2 3.5 3.7 3.5 7.1 0 1.4-.5 2.5-1.3 3.3 1.4-.4 2.5-1.6 2.8-3.1 1.6 1.4 2.5 3.5 2.5 5.6A7 7 0 0 1 5 15.4c0-3.2 2-5.7 4-7.4 0 1.3.5 2.3 1.3 2.8-.2-2.8.8-5.6 2.2-8.3z"
             fill="currentColor"
@@ -106,7 +115,7 @@ export const UtilitySymbol: React.FC<UtilitySymbolProps> = ({
       );
     case 'he':
       return (
-        <svg viewBox="0 0 24 24" fill="none" className={`${iconDim} ${className}`} aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" style={dimStyle} className={`${iconDim} ${className}`} aria-hidden="true">
           <rect x="9" y="3" width="6" height="3" rx="1" fill="currentColor" />
           <path d="M12 6v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           <circle cx="12" cy="14" r="6.5" fill="currentColor" />
@@ -120,7 +129,7 @@ export const UtilitySymbol: React.FC<UtilitySymbolProps> = ({
     case 'decoy':
     default:
       return (
-        <svg viewBox="0 0 24 24" fill="none" className={`${iconDim} ${className}`} aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" style={dimStyle} className={`${iconDim} ${className}`} aria-hidden="true">
           <circle cx="12" cy="12" r="2.6" fill="currentColor" />
           <path
             d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4"

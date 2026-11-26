@@ -196,6 +196,8 @@ export default function App() {
               drawings: decoded.drawings,
               utilities: decoded.utilities,
               players: decoded.players,
+              ...(decoded.showAreas !== undefined ? { showAreas: decoded.showAreas } : {}),
+              ...(decoded.showCallouts !== undefined ? { showCallouts: decoded.showCallouts } : {}),
             },
           };
 

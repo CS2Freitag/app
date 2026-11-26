@@ -90,6 +90,8 @@ export interface TacticalState {
   players: PlayerToken[];
   layers?: TacticLayer[];
   presets?: TacticPreset[];
+  showAreas?: boolean;
+  showCallouts?: boolean;
 }
 
 export interface MapData {
@@ -112,6 +114,13 @@ export interface MapData {
 export type UtilityType = 'smoke' | 'flash' | 'molotov' | 'he' | 'decoy';
 export type UtilityThrowType = 'left' | 'right' | 'both' | 'jump' | 'run_jump';
 export type UtilityPlacementMode = 'point' | 'throw';
+export type UtilityAimSlotId = '1' | '2' | '3' | '4';
+
+export interface UtilityAimSpotImages {
+  standpunktImage?: string;
+  aimImage?: string;
+  resultImage?: string;
+}
 
 export interface UtilityMarker {
   id: string;
@@ -122,10 +131,17 @@ export interface UtilityMarker {
   curveBend?: number;
   throwType?: UtilityThrowType;
   label?: string;
+  notes?: string;
+  color?: string;
+  lineScale?: number;
+  spotScale?: number;
+  aimSpots?: Partial<Record<UtilityAimSlotId, UtilityAimSpotImages>>;
+  activeAimSpot?: UtilityAimSlotId;
   layerId?: string;
   groupId?: string;
   locked?: boolean;
   opacity?: number;
+  fontSize?: number;
 }
 
 export interface PlayerToken {
