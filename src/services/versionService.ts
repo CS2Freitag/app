@@ -16,7 +16,7 @@ import {
   shouldDeleteCacheOnActivate,
 } from '../utils/updateLock';
 
-export const CURRENT_BUILD_VERSION = '3.147';
+export const CURRENT_BUILD_VERSION = '3.148';
 export const VERSION_STORAGE_KEY = 'cs2_installed_version';
 export const PREVIOUS_VERSION_STORAGE_KEY = 'cs2_previous_version';
 export const SIMULATED_VERSION_KEY = 'cs2_simulated_version';

@@ -1,22 +1,24 @@
 {
-  "version": "3.147",
+  "version": "3.148",
   "major": 3,
-  "patch": 147,
+  "patch": 148,
   "releaseDate": "2026-11-26",
-  "title": "Update v3.147: „Neuer Callout“-Werkzeug & Utility-Einzel-Bearbeitung",
-  "description": "Ergänzt im Werkzeuge-Bereich einen direkten „Neuer Callout“-Button zwischen „Bereich“ und „Linie“ und macht Utilitys im Bearbeitungs-Modus unter „2. Einzel-Bearbeitung (Fokussiert)“ in gelb/oranger Schrift auswählbar.",
+  "title": "Update v3.148: Intelligenter Backup-Assistent & Autosave-Schutz",
+  "description": "Fügt beim ersten Erstellen von Callouts, Bereichen oder Utilitys einen automatischen Sicherungs-Assistenten hinzu, falls weder lokales Datei-Autosave noch Cloud-Sync aktiv sind.",
   "changes": [
-    "Neuer Button „Neuer Callout“ im Werkzeuge-Bereich direkt unter „Bereich“ und über „Linie“ zum unmittelbaren Erstellen eines neuen Callouts",
-    "Unter Bearbeitungs-Modus „2. Einzel-Bearbeitung (Fokussiert)“ sind nun auch alle Utilitys durchsuch- und auswählbar (mit passender gelb/oranger Schrift zur klaren Unterscheidung von Callouts)"
+    "Intelligenter Backup-Assistent schützt vor Datenverlust: Warnt beim ersten Erstellen von Inhalten, wenn kein Autosave/Cloud-Sync aktiv ist",
+    "Auswahl zwischen lokaler Backup-Datei (Autosave) und Google Cloud-Sync mit direktem Einrichtungs-Modus",
+    "Einmalige Sicherheitswarnung beim Deaktivieren von Sicherungen in den Einstellungen"
   ],
   "history": [
     {
-      "version": "3.147",
+      "version": "3.148",
       "releaseDate": "2026-11-26",
-      "title": "„Neuer Callout“-Werkzeug & Utility-Einzel-Bearbeitung",
+      "title": "Intelligenter Backup-Assistent & Autosave-Schutz",
       "changes": [
-        "Neuer Button „Neuer Callout“ im Werkzeuge-Bereich direkt unter „Bereich“ und über „Linie“ zum unmittelbaren Erstellen eines neuen Callouts",
-        "Unter Bearbeitungs-Modus „2. Einzel-Bearbeitung (Fokussiert)“ sind nun auch alle Utilitys durchsuch- und auswählbar (mit passender gelb/oranger Schrift zur klaren Unterscheidung von Callouts)"
+        "Intelligenter Backup-Assistent schützt vor Datenverlust: Warnt beim ersten Erstellen von Inhalten, wenn kein Autosave/Cloud-Sync aktiv ist",
+        "Auswahl zwischen lokaler Backup-Datei (Autosave) und Google Cloud-Sync mit direktem Einrichtungs-Modus",
+        "Einmalige Sicherheitswarnung beim Deaktivieren von Sicherungen in den Einstellungen"
       ]
     },
     {
