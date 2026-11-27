@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  AlertTriangle,
   Check,
   Edit3,
   GripHorizontal,
@@ -47,6 +48,8 @@ interface UtilityInfoModalProps {
   onAddLine: (util: UtilityMarker) => void;
   onSelectUtility?: (util: UtilityMarker) => void;
   onClose: () => void;
+  isAutosaveActive?: boolean;
+  onOpenBackupSetup?: () => void;
 }
 
 const AIM_SLOTS: UtilityAimSlotId[] = ['1', '2', '3', '4'];
@@ -65,6 +68,8 @@ export const UtilityInfoModal: React.FC<UtilityInfoModalProps> = ({
   onAddLine,
   onSelectUtility,
   onClose,
+  isAutosaveActive = true,
+  onOpenBackupSetup,
 }) => {
   const isDe = lang === 'de';
   const [isShareOpen, setIsShareOpen] = useState(false);
@@ -765,18 +770,42 @@ export const UtilityInfoModal: React.FC<UtilityInfoModalProps> = ({
               </p>
             )}
           </div>
+        </div>
 
-          {/* Quick Actions Footer */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-zinc-800">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => onEdit(util)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-200 font-semibold text-[11px] cursor-pointer transition-colors"
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                <span>{isDe ? 'Bearbeiten' : 'Edit'}</span>
-              </button>
+        {/* Quick Actions Footer (pinned at bottom, never clipped) */}
+        <div className="px-4 py-3 border-t border-zinc-800 bg-zinc-950/80 shrink-0 space-y-2.5">
+            {!isAutosaveActive && (
+              <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-rose-950/40 border border-rose-500/30 text-rose-300 text-xs animate-in fade-in">
+                <div className="flex items-center gap-2 min-w-0">
+                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span className="truncate">
+                    {isDe
+                      ? 'Kein Autosave aktiv: Bilder & Änderungen werden nicht extern gesichert.'
+                      : 'Autosave disabled: Images & edits are not backed up externally.'}
+                  </span>
+                </div>
+                {onOpenBackupSetup && (
+                  <button
+                    type="button"
+                    onClick={onOpenBackupSetup}
+                    className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs whitespace-nowrap cursor-pointer transition-colors shrink-0 shadow-sm"
+                  >
+                    {isDe ? 'Aktivieren' : 'Enable'}
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => onEdit(util)}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-200 font-semibold text-[11px] cursor-pointer transition-colors"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>{isDe ? 'Bearbeiten' : 'Edit'}</span>
+                </button>
 
               <button
                 type="button"

@@ -112,6 +112,8 @@ interface MapEditorModalProps {
   onAddCustomGroup?: (groupName: string) => void;
   onDeleteCustomGroup?: (groupName: string) => void;
   lang: Language;
+  isAutosaveActive?: boolean;
+  onOpenBackupSetup?: () => void;
 }
 
 export const MapEditorModal: React.FC<MapEditorModalProps> = ({
@@ -124,6 +126,8 @@ export const MapEditorModal: React.FC<MapEditorModalProps> = ({
   onAddCustomGroup,
   onDeleteCustomGroup,
   lang,
+  isAutosaveActive = true,
+  onOpenBackupSetup,
 }) => {
   const isDe = lang === 'de';
 
@@ -825,7 +829,30 @@ export const MapEditorModal: React.FC<MapEditorModalProps> = ({
           </div>
 
           {/* Footer Actions (fixed at bottom of modal, never clipped) */}
-          <div className="px-5 sm:px-6 py-4 border-t border-zinc-800 bg-zinc-900 shrink-0 flex items-center justify-between gap-3">
+          <div className="px-5 sm:px-6 py-3.5 border-t border-zinc-800 bg-zinc-900 shrink-0 space-y-3">
+            {!isAutosaveActive && (
+              <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-rose-950/40 border border-rose-500/30 text-rose-300 text-xs animate-in fade-in">
+                <div className="flex items-center gap-2 min-w-0">
+                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span className="truncate">
+                    {isDe
+                      ? 'Kein Autosave aktiv: Neue Karten werden nicht automatisch extern gesichert.'
+                      : 'Autosave disabled: New maps are not backed up externally.'}
+                  </span>
+                </div>
+                {onOpenBackupSetup && (
+                  <button
+                    type="button"
+                    onClick={onOpenBackupSetup}
+                    className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs whitespace-nowrap cursor-pointer transition-colors shrink-0 shadow-sm"
+                  >
+                    {isDe ? 'Aktivieren' : 'Enable'}
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between gap-3">
             {mapToEdit && onDeleteMap ? (
               <button
                 type="button"
@@ -866,8 +893,9 @@ export const MapEditorModal: React.FC<MapEditorModalProps> = ({
               </button>
             </div>
           </div>
-        </form>
-      </div>
+        </div>
+      </form>
     </div>
+  </div>
   );
 };

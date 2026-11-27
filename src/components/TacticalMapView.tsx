@@ -146,6 +146,8 @@ interface TacticalMapViewProps {
   currentUser: User | null;
   lang: Language;
   initialHighlightedCalloutId?: string;
+  isAutosaveActive?: boolean;
+  onOpenBackupSetup?: () => void;
 }
 
 export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
@@ -158,6 +160,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
   currentUser,
   lang,
   initialHighlightedCalloutId,
+  isAutosaveActive = true,
+  onOpenBackupSetup,
 }) => {
   const isDe = lang === 'de';
 
@@ -7037,6 +7041,8 @@ export const TacticalMapView: React.FC<TacticalMapViewProps> = ({
           handleSelectElement(u.id, false);
         }}
         onClose={() => setInfoUtilityId(null)}
+        isAutosaveActive={isAutosaveActive}
+        onOpenBackupSetup={onOpenBackupSetup}
       />
 
       {/* Custom Color Selection Modal */}

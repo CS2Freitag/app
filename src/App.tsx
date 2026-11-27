@@ -25,6 +25,7 @@ import { OfflineIndicator } from './components/OfflineIndicator';
 import { SettingsModal } from './components/SettingsModal';
 import { CalloutQuizModal } from './components/CalloutQuizModal';
 import { HelpDocsModal } from './components/HelpDocsModal';
+import { BackupSetupModal } from './components/BackupSetupModal';
 import { MapImportConflictModal } from './components/MapImportConflictModal';
 import { ShareTacticModal } from './components/ShareTacticModal';
 import { ExternalLink, ArrowUp, Check, Save, Sparkles, Download } from 'lucide-react';
@@ -134,6 +135,12 @@ export default function App() {
   const [connectedFileName, setConnectedFileName] = useState<string>(() => loadAutosaveFilename());
   const [lastAutosaveTs, setLastAutosaveTs] = useState<number>(() => loadLastAutosaveTimestamp());
   const [isAutosaving, setIsAutosaving] = useState<boolean>(false);
+  const [isBackupSetupOpen, setIsBackupSetupOpen] = useState<boolean>(false);
+
+  // Autosave is considered active if either local autosave is enabled OR cloud auto-sync is active
+  const isAutosaveActive = Boolean(
+    isAutosaveEnabled || (Boolean(user) && isAutoCloudSyncEnabled)
+  );
 
   const handleToggleAutoCloudSync = () => {
     setIsAutoCloudSyncEnabled((prev) => {
@@ -691,6 +698,24 @@ export default function App() {
     });
   };
 
+  const handleOpenBackupSetup = () => {
+    setIsBackupSetupOpen(true);
+  };
+
+  const handleSetupLocalFileFromModal = async () => {
+    setIsAutosaveEnabled(true);
+    saveAutosaveEnabled(true);
+    await handleChooseSaveLocation();
+  };
+
+  const handleSetupCloudSyncFromModal = async () => {
+    setIsAutosaveEnabled(true);
+    saveAutosaveEnabled(true);
+    setIsAutoCloudSyncEnabled(true);
+    saveAutoCloudSyncEnabled(true);
+    await handleLogin();
+  };
+
   const handleChooseSaveLocation = async (): Promise<boolean> => {
     const handle = await pickSaveFileLocation();
     if (handle) {
@@ -1174,6 +1199,8 @@ export default function App() {
             currentUser={user}
             lang={lang}
             initialHighlightedCalloutId={highlightedCalloutId}
+            isAutosaveActive={isAutosaveActive}
+            onOpenBackupSetup={handleOpenBackupSetup}
           />
         </div>
       ) : (
@@ -1292,6 +1319,17 @@ export default function App() {
         onAddCustomGroup={handleAddCustomGroup}
         onDeleteCustomGroup={handleDeleteCustomGroup}
         lang={lang}
+        isAutosaveActive={isAutosaveActive}
+        onOpenBackupSetup={handleOpenBackupSetup}
+      />
+
+      {/* Quick Backup / Autosave Setup Modal */}
+      <BackupSetupModal
+        isOpen={isBackupSetupOpen}
+        onClose={() => setIsBackupSetupOpen(false)}
+        lang={lang}
+        onSetupLocalFile={handleSetupLocalFileFromModal}
+        onSetupCloudSync={handleSetupCloudSyncFromModal}
       />
 
       {/* Settings & Full Backup Modal */}

@@ -1,15 +1,26 @@
 {
-  "version": "3.149",
+  "version": "3.150",
   "major": 3,
-  "patch": 149,
-  "releaseDate": "2026-11-26",
-  "title": "Update v3.149: Sicherheitsabfrage beim Deaktivieren von Autosave",
-  "description": "Fügt eine direkte Sicherheitsabfrage beim Ausschalten von Autosave in den Einstellungen hinzu, um unbemerkten Datenverlust zu verhindern.",
+  "patch": 150,
+  "releaseDate": "2026-11-27",
+  "title": "Update v3.150: Warnhinweis bei deaktiviertem Autosave im Utility-Fenster & Karteneditor",
+  "description": "Zeigt eine dezente permanente Warnung mit direktem Aktivieren-Button in der Utility-Info und beim Anlegen neuer Karten, wenn kein Autosave aktiv ist.",
   "changes": [
-    "Sicherheitswarnung beim Deaktivieren von Autosave in den Einstellungen mit Option zum dauerhaften Ausblenden",
-    "Stellt sicher, dass das Ausschalten der automatischen Sicherung stets bewusst bestätigt werden muss"
+    "Permanenter dezenter Warnhinweis im Footer der Utility-Info (direkt über den Aktions-Buttons) bei deaktiviertem Autosave",
+    "Permanenter Warnhinweis im Footer des Karteneditors (beim Anlegen neuer Karten über Abbrechen/Speichern) bei deaktiviertem Autosave",
+    "Direkter Aktivieren-Button zum sofortigen Verknüpfen einer lokalen Backup-Datei oder Google Cloud-Sync"
   ],
   "history": [
+    {
+      "version": "3.150",
+      "releaseDate": "2026-11-27",
+      "title": "Warnhinweis bei deaktiviertem Autosave im Utility-Fenster & Karteneditor",
+      "changes": [
+        "Permanenter dezenter Warnhinweis im Footer der Utility-Info (direkt über den Aktions-Buttons) bei deaktiviertem Autosave",
+        "Permanenter Warnhinweis im Footer des Karteneditors (beim Anlegen neuer Karten über Abbrechen/Speichern) bei deaktiviertem Autosave",
+        "Direkter Aktivieren-Button zum sofortigen Verknüpfen einer lokalen Backup-Datei oder Google Cloud-Sync"
+      ]
+    },
     {
       "version": "3.149",
       "releaseDate": "2026-11-26",

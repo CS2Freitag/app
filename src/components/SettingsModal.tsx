@@ -24,6 +24,7 @@ import {
 import { MapData, Language } from '../types';
 import { useAppVersion } from '../services/versionService';
 import { selectRelevantChangelogEntries } from '../utils/changelogFilter';
+import { AutosaveDisableWarningModal } from './AutosaveDisableWarningModal';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -114,6 +115,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [backupCloudBeforeReset, setBackupCloudBeforeReset] = useState<boolean>(Boolean(currentUser));
   const [showDownloadConfirm, setShowDownloadConfirm] = useState<boolean>(false);
   const [isCheckingUploadConflict, setIsCheckingUploadConflict] = useState<boolean>(false);
+  const [showDisableAutosaveWarning, setShowDisableAutosaveWarning] = useState<boolean>(false);
 
   const fullBackupInputRef = useRef<HTMLInputElement>(null);
   const singleMapInputRef = useRef<HTMLInputElement>(null);
@@ -524,7 +526,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </span>
                 <button
                   type="button"
-                  onClick={onToggleAutosave}
+                  onClick={() => {
+                    if (isAutosaveEnabled) {
+                      const dontWarn =
+                        typeof window !== 'undefined' &&
+                        localStorage.getItem('cs2freitag_dont_warn_autosave_disable') === 'true';
+                      if (!dontWarn) {
+                        setShowDisableAutosaveWarning(true);
+                        return;
+                      }
+                    }
+                    onToggleAutosave?.();
+                  }}
                   className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                     isAutosaveEnabled ? 'bg-emerald-500' : 'bg-zinc-700'
                   }`}
@@ -1177,6 +1190,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
         )}
+        {/* Autosave Disable Warning Modal */}
+        <AutosaveDisableWarningModal
+          isOpen={showDisableAutosaveWarning}
+          onClose={() => setShowDisableAutosaveWarning(false)}
+          onConfirmDisable={(dontShowAgain) => {
+            if (dontShowAgain && typeof window !== 'undefined') {
+              localStorage.setItem('cs2freitag_dont_warn_autosave_disable', 'true');
+            }
+            onToggleAutosave?.();
+          }}
+          lang={lang}
+        />
       </div>
     </div>
   );
