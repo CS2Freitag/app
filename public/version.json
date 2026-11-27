@@ -1,24 +1,22 @@
 {
-  "version": "3.148",
+  "version": "3.149",
   "major": 3,
-  "patch": 148,
+  "patch": 149,
   "releaseDate": "2026-11-26",
-  "title": "Update v3.148: Intelligenter Backup-Assistent & Autosave-Schutz",
-  "description": "Fügt beim ersten Erstellen von Callouts, Bereichen oder Utilitys einen automatischen Sicherungs-Assistenten hinzu, falls weder lokales Datei-Autosave noch Cloud-Sync aktiv sind.",
+  "title": "Update v3.149: Sicherheitsabfrage beim Deaktivieren von Autosave",
+  "description": "Fügt eine direkte Sicherheitsabfrage beim Ausschalten von Autosave in den Einstellungen hinzu, um unbemerkten Datenverlust zu verhindern.",
   "changes": [
-    "Intelligenter Backup-Assistent schützt vor Datenverlust: Warnt beim ersten Erstellen von Inhalten, wenn kein Autosave/Cloud-Sync aktiv ist",
-    "Auswahl zwischen lokaler Backup-Datei (Autosave) und Google Cloud-Sync mit direktem Einrichtungs-Modus",
-    "Einmalige Sicherheitswarnung beim Deaktivieren von Sicherungen in den Einstellungen"
+    "Sicherheitswarnung beim Deaktivieren von Autosave in den Einstellungen mit Option zum dauerhaften Ausblenden",
+    "Stellt sicher, dass das Ausschalten der automatischen Sicherung stets bewusst bestätigt werden muss"
   ],
   "history": [
     {
-      "version": "3.148",
+      "version": "3.149",
       "releaseDate": "2026-11-26",
-      "title": "Intelligenter Backup-Assistent & Autosave-Schutz",
+      "title": "Sicherheitsabfrage beim Deaktivieren von Autosave",
       "changes": [
-        "Intelligenter Backup-Assistent schützt vor Datenverlust: Warnt beim ersten Erstellen von Inhalten, wenn kein Autosave/Cloud-Sync aktiv ist",
-        "Auswahl zwischen lokaler Backup-Datei (Autosave) und Google Cloud-Sync mit direktem Einrichtungs-Modus",
-        "Einmalige Sicherheitswarnung beim Deaktivieren von Sicherungen in den Einstellungen"
+        "Sicherheitswarnung beim Deaktivieren von Autosave in den Einstellungen mit Option zum dauerhaften Ausblenden",
+        "Stellt sicher, dass das Ausschalten der automatischen Sicherung stets bewusst bestätigt werden muss"
       ]
     },
     {
